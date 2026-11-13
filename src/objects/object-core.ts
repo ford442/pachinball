@@ -1,5 +1,5 @@
 // Main GameObjects orchestrator
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
@@ -142,7 +142,7 @@ export class GameObjects {
 
     const deathZoneVis = MeshBuilder.CreateBox('deathZoneVis', { width: 40, height: 0.1, depth: 4 }, this.scene)
     deathZoneVis.position.set(0, -2, -14)
-    const deathMat = new StandardMaterial('deathMat', this.scene)
+    const deathMat = createStandardMaterial(this.scene, 'deathMat')
     deathMat.emissiveColor = Color3.Red()
     deathMat.alpha = 0.2
     deathZoneVis.material = deathMat
@@ -209,7 +209,7 @@ export class GameObjects {
     }, this.scene)
     shooterRod.rotation.x = Math.PI / 2
     shooterRod.position.set(10.5, -0.2, -10)
-    const rodMat = new StandardMaterial('rodMat', this.scene)
+    const rodMat = createStandardMaterial(this.scene, 'rodMat')
     rodMat.diffuseColor = new Color3(0.7, 0.7, 0.8)
     rodMat.specularColor = new Color3(1, 1, 1)
     shooterRod.material = rodMat
@@ -232,7 +232,7 @@ export class GameObjects {
     }, this.scene)
     spring.position.set(10.5, -0.2, -11.5)
     spring.rotation.x = Math.PI / 2
-    const springMat = new StandardMaterial('springMat', this.scene)
+    const springMat = createStandardMaterial(this.scene, 'springMat')
     springMat.diffuseColor = new Color3(0.5, 0.5, 0.6)
     spring.material = springMat
 

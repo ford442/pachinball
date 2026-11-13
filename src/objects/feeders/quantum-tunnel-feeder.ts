@@ -1,4 +1,5 @@
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -93,7 +94,7 @@ export class QuantumTunnelFeeder {
     ring.position.copyFrom(pos)
     ring.rotation.y = rotY
 
-    const ringMat = new StandardMaterial(name + "_ringMat", this.scene)
+    const ringMat = createStandardMaterial(this.scene, name + "_ringMat")
     ringMat.emissiveColor = color
     ringMat.diffuseColor = Color3.Black()
     ring.material = ringMat
@@ -103,7 +104,7 @@ export class QuantumTunnelFeeder {
     disc.parent = ring
     disc.rotation.y = 0 // Relative to parent
 
-    const discMat = new StandardMaterial(name + "_discMat", this.scene)
+    const discMat = createStandardMaterial(this.scene, name + "_discMat")
     discMat.emissiveColor = color.scale(0.5)
     discMat.diffuseColor = Color3.Black()
     discMat.alpha = 0.8

@@ -1,5 +1,6 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -145,7 +146,7 @@ export class BallTrapBuilder {
     trapGate.position.z = 0.5 * scale
     trapGate.parent = trapRoot
 
-    const gateMat = new StandardMaterial('trapGateMat', this.scene)
+    const gateMat = createStandardMaterial(this.scene, 'trapGateMat')
     gateMat.emissiveColor = Color3.FromHexString(colorHex)
     gateMat.alpha = 0.6
     trapGate.material = gateMat

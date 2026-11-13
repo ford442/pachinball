@@ -1,5 +1,6 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -83,6 +84,10 @@ export class ScreenEffectsController {
     this.bloomPipeline = options.bloomPipeline
     this.accessibility = options.accessibility
     this.isEnhancedEffectsEnabled = options.isEnhancedEffectsEnabled
+    // The flash's material is built here, not on the first flash: that flash is entering FEVER, and
+    // nothing in play may create a material (#524). Its mesh stays lazy (a scene mesh costs a little
+    // every frame, flash or not), so the first flash adds a mesh but no material.
+    if (EffectsConfig.enableStateTransitionFlashes) this.createTransitionFlashMaterial()
   }
 
   setBloomPipeline(pipeline: BloomPipelineController | null): void {
@@ -330,6 +335,15 @@ export class ScreenEffectsController {
     this.transitionFlashMat?.dispose()
   }
 
+  private createTransitionFlashMaterial(): StandardMaterial {
+    const mat = createStandardMaterial(this.scene, 'transitionFlashMat')
+    mat.emissiveColor = Color3.White()
+    mat.alpha = 0
+    mat.disableLighting = true
+    this.transitionFlashMat = mat
+    return mat
+  }
+
   private createTransitionFlashOverlay(): void {
     // Create a full-screen quad positioned in front of cameras
     this.transitionFlashOverlay = MeshBuilder.CreatePlane(
@@ -341,11 +355,7 @@ export class ScreenEffectsController {
     this.transitionFlashOverlay.position.set(0.75, 5, -50)
     this.transitionFlashOverlay.rotation.y = Math.PI
 
-    this.transitionFlashMat = new StandardMaterial('transitionFlashMat', this.scene)
-    this.transitionFlashMat.emissiveColor = Color3.White()
-    this.transitionFlashMat.alpha = 0
-    this.transitionFlashMat.disableLighting = true
-    this.transitionFlashOverlay.material = this.transitionFlashMat
+    this.transitionFlashOverlay.material = this.transitionFlashMat ?? this.createTransitionFlashMaterial()
     this.transitionFlashOverlay.isVisible = false
 
     // Ensure it renders on top

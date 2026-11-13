@@ -1,5 +1,6 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -116,7 +117,7 @@ export class BumperBuilder {
       wireframeRing.position.set(x, 0.9 * scale, z)
       wireframeRing.rotation.x = Math.PI / 2
 
-      const wfMat = new StandardMaterial('bumpWireframeMat', this.scene)
+      const wfMat = createStandardMaterial(this.scene, 'bumpWireframeMat')
       wfMat.emissiveColor = Color3.FromHexString(colorHex)
       wfMat.disableLighting = true
       wfMat.wireframe = true

@@ -4,7 +4,8 @@
  * behind the glass LCD screen.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
@@ -50,7 +51,7 @@ export class DisplayPhysicalLayer {
     this.backdrop.rotation.y = Math.PI
     this.backdrop.position.z = -0.05
 
-    const backdropMat = new StandardMaterial('physicalBackdropMat', this.scene)
+    const backdropMat = createStandardMaterial(this.scene, 'physicalBackdropMat')
     backdropMat.diffuseColor = Color3.Black()
     backdropMat.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
     backdropMat.disableLighting = true
@@ -79,7 +80,7 @@ export class DisplayPhysicalLayer {
       drum.rotation.z = Math.PI / 2
       drum.position.set(cfg.x, 0, 0.08)
 
-      const mat = new StandardMaterial(`physicalDrumMat${i}`, this.scene)
+      const mat = createStandardMaterial(this.scene, `physicalDrumMat${i}`)
       mat.diffuseColor = Color3.Black()
       mat.emissiveColor = emissive(cfg.color, INTENSITY.NORMAL)
       mat.specularColor = color(cfg.color).scale(0.3)

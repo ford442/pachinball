@@ -1,6 +1,7 @@
 import type { AssetContainer } from '@babylonjs/core/assetContainer'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
@@ -141,7 +142,7 @@ export class NanoLoomFeeder {
     }, this.scene)
     frame.position.copyFrom(this.position)
 
-    const frameMat = new StandardMaterial("nanoLoomFrameMat", this.scene)
+    const frameMat = createStandardMaterial(this.scene, "nanoLoomFrameMat")
     frameMat.diffuseColor = Color3.FromHexString("#003333")
     frameMat.emissiveColor = Color3.FromHexString("#001111")
     frameMat.alpha = 0.3
@@ -156,13 +157,13 @@ export class NanoLoomFeeder {
     // Rotate to face sideways if needed, but for now vertical cylinder at intake pos
     intake.position.copyFrom(this.intakePosition)
 
-    const intakeMat = new StandardMaterial("nanoIntakeMat", this.scene)
+    const intakeMat = createStandardMaterial(this.scene, "nanoIntakeMat")
     intakeMat.emissiveColor = Color3.FromHexString("#00ffff")
     intakeMat.alpha = 0.5
     intake.material = intakeMat
     this._intakeMesh = intake
     // 3. Pins (The Hex Grid)
-    const pinMat = new StandardMaterial("nanoPinMat", this.scene)
+    const pinMat = createStandardMaterial(this.scene, "nanoPinMat")
     pinMat.emissiveColor = Color3.FromHexString("#00ff00")
 
     const startY = this.position.y + (this.config.height / 2) - 1.0 // Start near top

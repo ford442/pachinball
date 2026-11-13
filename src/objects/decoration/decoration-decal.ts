@@ -1,4 +1,4 @@
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -42,7 +42,7 @@ export function createNeonDecal(
     zOffset = -0.8
   } = options
 
-  const decalMat = new StandardMaterial(`neonDecal-${Date.now()}`, scene)
+  const decalMat = createStandardMaterial(scene, `neonDecal-${Date.now()}`)
   decalMat.diffuseTexture = new Texture(texturePath, scene)
   decalMat.diffuseTexture.hasAlpha = true
   decalMat.emissiveColor = color(PALETTE.CYAN).scale(emissiveIntensity)

@@ -1,6 +1,7 @@
 import type { AssetContainer } from '@babylonjs/core/assetContainer'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -132,7 +133,7 @@ export class PrismCoreFeeder {
     }, this.scene)
     this.innerMesh.position.copyFrom(this.position)
 
-    const innerMat = new StandardMaterial("prismInnerMat", this.scene)
+    const innerMat = createStandardMaterial(this.scene, "prismInnerMat")
     innerMat.emissiveColor = Color3.Green()
     innerMat.diffuseColor = Color3.Black()
     innerMat.alpha = 0.8
@@ -148,7 +149,7 @@ export class PrismCoreFeeder {
     this.outerMesh.position.copyFrom(this.position)
     this.outerMesh.rotation.z = Math.PI / 4 // Tilt slightly
 
-    const outerMat = new StandardMaterial("prismOuterMat", this.scene)
+    const outerMat = createStandardMaterial(this.scene, "prismOuterMat")
     outerMat.diffuseColor = Color3.FromHexString("#003300")
     outerMat.alpha = 0.3
     outerMat.wireframe = true
@@ -399,7 +400,7 @@ export class PrismCoreFeeder {
       }, this.scene)
       this.energyBloom.position.copyFrom(this.position)
 
-      const bloomMat = new StandardMaterial("prismBloomMat", this.scene)
+      const bloomMat = createStandardMaterial(this.scene, "prismBloomMat")
       bloomMat.emissiveColor = Color3.White()
       bloomMat.diffuseColor = Color3.Black()
       bloomMat.alpha = 0.5

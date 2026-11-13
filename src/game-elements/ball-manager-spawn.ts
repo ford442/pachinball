@@ -1,5 +1,4 @@
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -17,6 +16,7 @@ import {
 } from './ball-manager-context'
 import { COLLISION_GROUP_PRESETS } from './physics'
 import { getSoundSystem } from '../audio/sound-system'
+import { getSharedUnlitMaterial } from '../materials/material-basic'
 import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 
@@ -50,10 +50,8 @@ export function createMainBall(host: BallManagerHost): PhysicsBody {
   const ballRing = MeshBuilder.CreateTorus('ballRing', { diameter: diameter * 0.85, thickness: 0.015, tessellation: 32 }, host.scene)
   ballRing.parent = ball
   ballRing.rotation.x = Math.PI / 2
-  const ringMat = new StandardMaterial('ballRingMat', host.scene)
-  ringMat.emissiveColor = Color3.White()
-  ringMat.disableLighting = true
-  ballRing.material = ringMat
+  // Every ball's ring is the same white unlit material and nothing writes it: one per scene.
+  ballRing.material = getSharedUnlitMaterial(host.scene, 'ballRingMat', { emissive: Color3.White() })
 
   // Use Config for Spawn Point
   const spawn = GameConfig.ball.spawnMain
@@ -110,8 +108,7 @@ export function createMainBall(host: BallManagerHost): PhysicsBody {
 
   const trailWidth = GameConfig.ball.radius * 0.6
   const trail = new TrailMesh('ballTrail', ball, host.scene, trailWidth, 20, true)
-  const trailMat = new StandardMaterial('trailMat', host.scene)
-  trailMat.emissiveColor = Color3.FromHexString('#00ffff')
+  const trailMat = host.trailMaterialPool.acquire(Color3.FromHexString('#00ffff'))
   trail.material = trailMat
 
   // Store for velocity-based updates
@@ -168,8 +165,7 @@ export function spawnExtraBalls(host: BallManagerHost, count: number, position?:
     // Add velocity-based trail for extra balls
     const trailWidth = GameConfig.ball.radius * 0.4
     const trail = new TrailMesh(`trail_${i}`, b, host.scene, trailWidth, 15, true)
-    const trailMat = new StandardMaterial(`trailMat_${i}`, host.scene)
-    trailMat.emissiveColor = Color3.FromHexString('#00ffff')
+    const trailMat = host.trailMaterialPool.acquire(Color3.FromHexString('#00ffff'))
     trail.material = trailMat
     host.trails.set(body, trail)
     host.trailMaterials.set(trail, trailMat)
@@ -444,8 +440,7 @@ export function addTrailForBall(host: BallManagerHost, body: PhysicsBody, colorH
 
   const trailWidth = GameConfig.ball.radius * 0.6
   const trail = new TrailMesh(`trail_${body.handle}`, binding.mesh, host.scene, trailWidth, 20, true)
-  const trailMat = new StandardMaterial(`trailMat_${body.handle}`, host.scene)
-  trailMat.emissiveColor = Color3.FromHexString(colorHex)
+  const trailMat = host.trailMaterialPool.acquire(Color3.FromHexString(colorHex))
   trail.material = trailMat
 
   host.trails.set(body, trail)

@@ -332,3 +332,18 @@ export function resetMaterialLibrary(): void {
   materialLibrary?.dispose()
   materialLibrary = null
 }
+
+// ============================================================================
+// BASIC / TRANSIENT MATERIALS (#524): the only place StandardMaterial is constructed outside the
+// cabinet presets. Import from the modules directly where tree-shaking matters.
+// ============================================================================
+export {
+  createStandardMaterial,
+  createUnlitMaterial,
+  getSharedMaterial,
+  getSharedUnlitMaterial,
+  type StandardMaterialSpec,
+  type SharedMaterialSpec,
+} from './material-basic'
+export { getTransientUnlitMaterial, TRANSIENT_MATERIAL_NAME } from './material-transient'
+export { TrailMaterialPool } from './material-trail'

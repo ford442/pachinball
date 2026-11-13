@@ -852,6 +852,22 @@ describe('BallManager', () => {
       expect(reasons(gate)).toEqual(['ball:collect', 'ball:collect'])
     })
 
+    it('recycles trail materials: extra balls hand theirs back, a respawn builds none (#524)', () => {
+      const manager = makeManager()
+      manager.spawnExtraBalls(3)
+      expect(manager.trailMaterialPool.size).toBe(3)
+      expect(manager.trails.size).toBe(3)
+
+      manager.removeExtraBalls()
+      // The extra balls' ribbons used to outlive them; now they are disposed with the ball.
+      expect(manager.trails.size).toBe(0)
+      expect(manager.trailMaterials.size).toBe(0)
+      expect(manager.ballTrails.size).toBe(0)
+
+      manager.spawnExtraBalls(3)
+      expect(manager.trailMaterialPool.size).toBe(3)
+    })
+
     it('spawns and removes fine without a gate', () => {
       const manager = makeManager()
       expect(() => {

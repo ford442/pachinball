@@ -1,4 +1,5 @@
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { createStandardMaterial } from '../../materials/material-basic'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
@@ -112,7 +113,7 @@ export class GaussCannonFeeder {
     base.parent = this.rootNode
     base.position.y = 0 // Relative to root
 
-    const baseMat = new StandardMaterial("gaussBaseMat", this.scene)
+    const baseMat = createStandardMaterial(this.scene, "gaussBaseMat")
     baseMat.diffuseColor = Color3.FromHexString("#333333") // Dark Steel
     baseMat.specularColor = Color3.White()
     base.material = baseMat
@@ -139,7 +140,7 @@ export class GaussCannonFeeder {
          Matrix.Translation(0, 2.0, 0)
     )
 
-    const barrelMat = new StandardMaterial("gaussBarrelMat", this.scene)
+    const barrelMat = createStandardMaterial(this.scene, "gaussBarrelMat")
     barrelMat.diffuseColor = Color3.FromHexString("#555555")
     this.barrelMesh.material = barrelMat
 
@@ -156,7 +157,7 @@ export class GaussCannonFeeder {
         // Local Y ranges from 0 (pivot) to 4 (muzzle)
         coil.position.y = 1.0 + (i * 1.0)
 
-        const coilMat = new StandardMaterial(`gaussCoilMat_${i}`, this.scene)
+        const coilMat = createStandardMaterial(this.scene, `gaussCoilMat_${i}`)
         coilMat.emissiveColor = Color3.FromHexString("#000000") // Off initially
         coil.material = coilMat
     }

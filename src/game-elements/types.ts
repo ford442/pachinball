@@ -42,14 +42,32 @@ export interface CabinetLight {
   pointLight: PointLight
 }
 
+/**
+ * One live shard of a burst (#524). Plain numbers: shards are rows in a `TransientField`'s
+ * thin-instance buffers, not meshes with a material each.
+ */
 export interface ShardParticle {
-  mesh: Mesh
-  vel: import('@babylonjs/core/Maths/math.vector').Vector3
-  rotVel: import('@babylonjs/core/Maths/math.vector').Vector3        // Angular velocity for tumbling
+  x: number
+  y: number
+  z: number
+  vx: number
+  vy: number
+  vz: number
+  /** Euler rotation (x pitch, y yaw, z roll), integrated from the angular velocity below. */
+  rx: number
+  ry: number
+  rz: number
+  /** Angular velocity for tumbling */
+  rvx: number
+  rvy: number
+  rvz: number
   life: number
   maxLife: number        // For normalized life calculations
-  material: StandardMaterial | PBRMaterial
   initialScale: number   // Size variation (0.8-1.2x)
+  /** Tint, 0..1 (the emissive colour of the burst, clamped). */
+  r: number
+  g: number
+  b: number
 }
 
 export interface CaughtBall {

@@ -1,5 +1,6 @@
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -83,7 +84,7 @@ export function createCabinetLighting(scene: Scene, cabinetLights: CabinetLight[
     )
     strip.position.copyFrom(config.pos)
 
-    const mat = new StandardMaterial(`ledStripMat${idx}`, scene)
+    const mat = createStandardMaterial(scene, `ledStripMat${idx}`)
     mat.emissiveColor = emissive(config.color, config.intensity)
     mat.alpha = Math.min(0.8, config.intensity)
     strip.material = mat

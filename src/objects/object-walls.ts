@@ -1,4 +1,4 @@
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -58,7 +58,7 @@ export class WallBuilder {
     if (!GameConfig.camera.reducedMotion) {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, this.scene)
       flipperGlow.position.set(0, -0.95, -7)
-      const glowMat = new StandardMaterial('flipperGlowMat', this.scene)
+      const glowMat = createStandardMaterial(this.scene, 'flipperGlowMat')
       glowMat.diffuseColor = Color3.Black()
       glowMat.emissiveColor = Color3.FromHexString('#001133')
       glowMat.alpha = 0.3

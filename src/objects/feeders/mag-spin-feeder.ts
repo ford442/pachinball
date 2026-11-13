@@ -1,6 +1,7 @@
 import type { AssetContainer } from '@babylonjs/core/assetContainer'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
@@ -112,7 +113,7 @@ export class MagSpinFeeder {
     }, this.scene)
     well.position.copyFrom(this.position)
 
-    const wellMat = new StandardMaterial('magSpinMat', this.scene)
+    const wellMat = createStandardMaterial(this.scene, 'magSpinMat')
     wellMat.diffuseColor = Color3.Black()
     wellMat.emissiveColor = emissive(FEEDER_STYLES.MAG_SPIN.base, INTENSITY.NORMAL)
     wellMat.backFaceCulling = false
@@ -142,7 +143,7 @@ export class MagSpinFeeder {
       ring.position.copyFrom(this.position)
       ring.position.y += ringYOffsets[i]
 
-      const ringMat = new StandardMaterial(`magSpinRingMat${i}`, this.scene)
+      const ringMat = createStandardMaterial(this.scene, `magSpinRingMat${i}`)
       ringMat.emissiveColor = color(FEEDER_STYLES.MAG_SPIN.active)
       ring.material = ringMat
 

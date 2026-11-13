@@ -1,4 +1,5 @@
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -24,7 +25,7 @@ export function resetSharedMats(): void {
 function getSharedMat(scene: Scene, key: string, emissiveHex: string, intensity: number): StandardMaterial {
   if (!_sharedMats) _sharedMats = {}
   if (!_sharedMats[key]) {
-    const m = new StandardMaterial(`sharedDecor_${key}`, scene)
+    const m = createStandardMaterial(scene, `sharedDecor_${key}`)
     m.emissiveColor = emissive(emissiveHex, intensity)
     m.diffuseColor = Color3.Black()
     m.disableLighting = true

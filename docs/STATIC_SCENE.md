@@ -36,6 +36,13 @@ caster, or toggles meshes in bulk, call `invalidate` (or `hold` around async wor
   material changes render group, a particle system starts or stops, `scene.particlesEnabled` flips, or the camera moves or is
   replaced. Off with `?freezeMeshes=0`. Not `scene.freezeActiveMeshes()`: that waits for every particle system and texture to be
   ready, which never happens once the ball trail starts.
+- **Transient effects** are not frozen, and are not meshes-per-burst any more (#524): shards, ripple / impact rings and fever-trail
+  quads are four thin-instance fields (`TransientField`, `src/effects/transient-field.ts`) on one shared unlit material
+  (`getTransientUnlitMaterial`, built at boot; each field's mesh is built the first time it is shown, because every scene mesh
+  costs Babylon a little per frame even while disabled). A field is **disabled while it has no instances** (an empty thin-instanced mesh would
+  draw one ordinary mesh) and enabled while it has some; `RenderStateWatcher` hashes `isEnabled()`, so that toggle thaws the
+  active list by itself, with no `invalidate` call. A burst therefore appears at the next sample, one or two frames after
+  `spawn…`, and the gate refreezes after it, as it did when each burst added and disposed meshes.
 - **Static shadow map** (`ShadowRig`, `src/game/shadow-rig.ts`, #484): the key light's shadows are two generators, one for the
   cabinet (static, 2048², the per-tier technique) and one for everything that moves (dynamic, 1024² PCF, no blur pass). The rig is a
   gate target: the static map renders every frame until the first refreeze, then once per refreeze. Only an invalidation with

@@ -12,7 +12,8 @@ import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 // Side-effect: registers ShadowGeneratorSceneComponent on Scene
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -268,7 +269,7 @@ export class GameRenderer {
 
     const floor = MeshBuilder.CreateGround('arcadeFloor', { width: 120, height: 120 }, scene)
     floor.position.y = -5
-    const floorMat = new StandardMaterial('arcadeFloorMat', scene)
+    const floorMat = createStandardMaterial(scene, 'arcadeFloorMat')
     floorMat.diffuseColor = Color3.FromHexString('#08080c')
     floorMat.specularColor = Color3.FromHexString('#151520')
     floorMat.roughness = 0.9
@@ -277,7 +278,7 @@ export class GameRenderer {
     const backWall = MeshBuilder.CreatePlane('arcadeBackWall', { width: 100, height: 50 }, scene)
     backWall.position.set(0, 12, 40)
     backWall.rotation.x = Math.PI
-    const wallMat = new StandardMaterial('arcadeWallMat', scene)
+    const wallMat = createStandardMaterial(scene, 'arcadeWallMat')
     wallMat.diffuseColor = Color3.FromHexString('#050508')
     wallMat.roughness = 1.0
     backWall.material = wallMat
@@ -300,7 +301,7 @@ export class GameRenderer {
     // Deep base wash (cyan)
     const underBase = MeshBuilder.CreateBox('underBase', { width: 36, height: 0.18, depth: 49 }, scene)
     underBase.position.set(0.75, -5.05, 5)
-    const ubMat = new StandardMaterial('underBaseMat', scene)
+    const ubMat = createStandardMaterial(scene, 'underBaseMat')
     ubMat.diffuseColor = Color3.Black()
     ubMat.emissiveColor = color(PALETTE.CYAN).scale(0.18)
     ubMat.disableLighting = true
@@ -309,7 +310,7 @@ export class GameRenderer {
     // Hot inner core (magenta — gives the signature "premium machine" bloom kick)
     const underCore = MeshBuilder.CreateBox('underCore', { width: 26, height: 0.09, depth: 38 }, scene)
     underCore.position.set(0.75, -4.95, 5)
-    const ucMat = new StandardMaterial('underCoreMat', scene)
+    const ucMat = createStandardMaterial(scene, 'underCoreMat')
     ucMat.diffuseColor = Color3.Black()
     ucMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.55)
     ucMat.disableLighting = true
@@ -319,7 +320,7 @@ export class GameRenderer {
     // Gold edge "plasma" trim (very thin, high intensity)
     const underEdge = MeshBuilder.CreateBox('underEdge', { width: 38, height: 0.05, depth: 51 }, scene)
     underEdge.position.set(0.75, -4.88, 5)
-    const ueMat = new StandardMaterial('underEdgeMat', scene)
+    const ueMat = createStandardMaterial(scene, 'underEdgeMat')
     ueMat.diffuseColor = Color3.Black()
     ueMat.emissiveColor = color(PALETTE.GOLD).scale(0.75)
     ueMat.disableLighting = true
@@ -328,7 +329,7 @@ export class GameRenderer {
     // Side floor "spill" washes (classic arcade footlight feel)
     const leftSpill = MeshBuilder.CreateBox('spillL', { width: 1.6, height: 0.07, depth: 42 }, scene)
     leftSpill.position.set(-14.2, -4.55, 5)
-    const spillLMat = new StandardMaterial('spillLMat', scene)
+    const spillLMat = createStandardMaterial(scene, 'spillLMat')
     spillLMat.diffuseColor = Color3.Black()
     spillLMat.emissiveColor = color(PALETTE.CYAN).scale(0.35)
     spillLMat.disableLighting = true
@@ -336,7 +337,7 @@ export class GameRenderer {
 
     const rightSpill = MeshBuilder.CreateBox('spillR', { width: 1.6, height: 0.07, depth: 42 }, scene)
     rightSpill.position.set(15.7, -4.55, 5)
-    const spillRMat = new StandardMaterial('spillRMat', scene)
+    const spillRMat = createStandardMaterial(scene, 'spillRMat')
     spillRMat.diffuseColor = Color3.Black()
     spillRMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.32)
     spillRMat.disableLighting = true
@@ -345,7 +346,7 @@ export class GameRenderer {
     // --------------------------------------------------------------------
     // VERTICAL ARCADE PILLARS (the cabinet is framed by the environment)
     // --------------------------------------------------------------------
-    const pillarMat = new StandardMaterial('arcadePillarMat', scene)
+    const pillarMat = createStandardMaterial(scene, 'arcadePillarMat')
     pillarMat.diffuseColor = Color3.Black()
     pillarMat.emissiveColor = color(PALETTE.CYAN).scale(0.65)
     pillarMat.disableLighting = true
@@ -357,7 +358,7 @@ export class GameRenderer {
       new Vector3(-22, 9, 8),   new Vector3(22, 9, 8)
     ]
     // One shared core material (the six were identical) so the cores merge as well as the pillars.
-    const coreMat = new StandardMaterial('pillarCoreMat', scene)
+    const coreMat = createStandardMaterial(scene, 'pillarCoreMat')
     coreMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
     coreMat.disableLighting = true
     freezeUnlit(coreMat)
@@ -381,7 +382,7 @@ export class GameRenderer {
     // --------------------------------------------------------------------
     // CEILING NEON TUBES (classic dark arcade atmosphere)
     // --------------------------------------------------------------------
-    const ceilingMat = new StandardMaterial('ceilingNeonMat', scene)
+    const ceilingMat = createStandardMaterial(scene, 'ceilingNeonMat')
     ceilingMat.diffuseColor = Color3.Black()
     ceilingMat.emissiveColor = color(PALETTE.GOLD).scale(0.5)
     ceilingMat.disableLighting = true
@@ -404,7 +405,7 @@ export class GameRenderer {
     const gridPanel = MeshBuilder.CreatePlane('backGrid', { width: 42, height: 22 }, scene)
     gridPanel.position.set(0, 13, 39.4)
     gridPanel.rotation.x = Math.PI
-    const gridMat = new StandardMaterial('backGridMat', scene)
+    const gridMat = createStandardMaterial(scene, 'backGridMat')
     gridMat.diffuseColor = Color3.FromHexString('#0a0a18')
     gridMat.emissiveColor = color(PALETTE.PURPLE).scale(0.25)
     gridMat.disableLighting = true
@@ -413,7 +414,7 @@ export class GameRenderer {
     // Vertical data "waterfall" lines on the back wall: alternating cyan / magenta, so two shared
     // materials (they were seven identical-per-colour ones) and two merged meshes.
     const dataFallMats = [PALETTE.MAGENTA, PALETTE.CYAN].map((hex, k) => {
-      const mat = new StandardMaterial(k === 0 ? 'dataFallMagentaMat' : 'dataFallCyanMat', scene)
+      const mat = createStandardMaterial(scene, k === 0 ? 'dataFallMagentaMat' : 'dataFallCyanMat')
       mat.emissiveColor = color(hex).scale(0.55)
       mat.disableLighting = true
       return freezeUnlit(mat)
@@ -432,7 +433,7 @@ export class GameRenderer {
     const logo = MeshBuilder.CreateTorus('backLogo', { diameter: 7, thickness: 0.25, tessellation: 24 }, scene)
     logo.position.set(0, 18, 39.3)
     logo.rotation.x = Math.PI
-    const logoMat = new StandardMaterial('backLogoMat', scene)
+    const logoMat = createStandardMaterial(scene, 'backLogoMat')
     logoMat.emissiveColor = color(PALETTE.GOLD).scale(0.85)
     logoMat.disableLighting = true
     logo.material = freezeUnlit(logoMat)
