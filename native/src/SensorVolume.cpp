@@ -90,7 +90,7 @@ void PhysicsWorld::emitSensorOverlap(BodyView& body, int sensorIndex, const Vec3
 
   Vec3 localNormal;
   if (inside || distSq < SENSOR_EPSILON_SQ) {
-    float shallow;
+    float shallow = 0.f;
     deepestVolumeNormal(sensor.shape, localPoint, sensor.halfExtents, localNormal, shallow);
   } else {
     localNormal = delta / std::sqrt(distSq);

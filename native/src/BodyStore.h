@@ -17,27 +17,27 @@ public:
   BodyView() = default;
   BodyView(BodyStore* store, int denseIndex, int publicId);
 
-  int  getId()       const { return publicId_; }
-  bool isActive()    const;
+  [[nodiscard]] int  getId()       const { return publicId_; }
+  [[nodiscard]] bool isActive()    const;
   void setActive(bool v);
 
-  BodyType getType()    const;
-  Shape    getShape()   const;
-  float    getRadius()  const;
-  float    getCapsuleHalfHeight() const;
-  Vec3     getBoxHalfExtents() const;
-  float    getMass()    const;
-  float    getInvMass() const;
-  float    getInvInertia() const;
-  float    getRestitution()   const;
-  float    getLinearDamping() const;
-  float    getFriction()      const;
-  float    getAngularDamping() const;
+  [[nodiscard]] BodyType getType()    const;
+  [[nodiscard]] Shape    getShape()   const;
+  [[nodiscard]] float    getRadius()  const;
+  [[nodiscard]] float    getCapsuleHalfHeight() const;
+  [[nodiscard]] Vec3     getBoxHalfExtents() const;
+  [[nodiscard]] float    getMass()    const;
+  [[nodiscard]] float    getInvMass() const;
+  [[nodiscard]] float    getInvInertia() const;
+  [[nodiscard]] float    getRestitution()   const;
+  [[nodiscard]] float    getLinearDamping() const;
+  [[nodiscard]] float    getFriction()      const;
+  [[nodiscard]] float    getAngularDamping() const;
 
-  Vec3 getPosition()        const;
-  Vec3 getVelocity()        const;
-  Vec3 getAngularVelocity() const;
-  Quat getRotation()        const;
+  [[nodiscard]] Vec3 getPosition()        const;
+  [[nodiscard]] Vec3 getVelocity()        const;
+  [[nodiscard]] Vec3 getAngularVelocity() const;
+  [[nodiscard]] Quat getRotation()        const;
 
   void setPosition(const Vec3& p);
   void setVelocity(const Vec3& v);
@@ -50,15 +50,15 @@ public:
   void applyImpulseAt(const Vec3& impulse, const Vec3& worldPoint);
   void clearForces();
 
-  uint32_t getMembership() const;
-  uint32_t getFilter()     const;
+  [[nodiscard]] uint32_t getMembership() const;
+  [[nodiscard]] uint32_t getFilter()     const;
   void setCollisionGroups(uint32_t membership, uint32_t filter);
 
   void integrate(float dt, const Vec3& gravity);
   void wake();
 
-  int denseIndex() const { return denseIndex_; }
-  bool valid() const { return store_ != nullptr && denseIndex_ >= 0; }
+  [[nodiscard]] int denseIndex() const { return denseIndex_; }
+  [[nodiscard]] bool valid() const { return store_ != nullptr && denseIndex_ >= 0; }
 
 private:
   BodyStore* store_      = nullptr;
@@ -79,8 +79,8 @@ public:
   int create(HandleTable& handles, const RigidBodyDesc& desc);
   bool remove(HandleTable& handles, int publicId);
 
-  int denseCount() const { return static_cast<int>(denseToPublicId_.size()); }
-  int publicIdAt(int denseIndex) const { return denseToPublicId_[static_cast<std::size_t>(denseIndex)]; }
+  [[nodiscard]] int denseCount() const { return static_cast<int>(denseToPublicId_.size()); }
+  [[nodiscard]] int publicIdAt(int denseIndex) const { return denseToPublicId_[static_cast<std::size_t>(denseIndex)]; }
 
   BodyView view(int denseIndex);
   BodyView viewById(HandleTable& handles, int publicId);
@@ -95,27 +95,27 @@ public:
   void integrateAll(float dt, const Vec3& gravity);
   void updateSleep(float linearThreshold, float angularThreshold, int framesRequired);
 
-  int activeCount() const;
+  [[nodiscard]] int activeCount() const;
 
   // Broadphase / tests — raw SoA access
-  float posX(int i) const { return posX_[static_cast<std::size_t>(i)]; }
-  float posY(int i) const { return posY_[static_cast<std::size_t>(i)]; }
-  float posZ(int i) const { return posZ_[static_cast<std::size_t>(i)]; }
-  float velX(int i) const { return velX_[static_cast<std::size_t>(i)]; }
-  float velY(int i) const { return velY_[static_cast<std::size_t>(i)]; }
-  float velZ(int i) const { return velZ_[static_cast<std::size_t>(i)]; }
-  float radius(int i) const { return radius_[static_cast<std::size_t>(i)]; }
-  float capsuleHalfHeight(int i) const { return capsuleHalfHeight_[static_cast<std::size_t>(i)]; }
-  Vec3 boxHalfExtents(int i) const {
+  [[nodiscard]] float posX(int i) const { return posX_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float posY(int i) const { return posY_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float posZ(int i) const { return posZ_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float velX(int i) const { return velX_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float velY(int i) const { return velY_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float velZ(int i) const { return velZ_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float radius(int i) const { return radius_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] float capsuleHalfHeight(int i) const { return capsuleHalfHeight_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] Vec3 boxHalfExtents(int i) const {
     const std::size_t j = static_cast<std::size_t>(i);
     return {boxHalfX_[j], boxHalfY_[j], boxHalfZ_[j]};
   }
-  uint8_t type(int i) const { return type_[static_cast<std::size_t>(i)]; }
-  uint8_t shape(int i) const { return shape_[static_cast<std::size_t>(i)]; }
-  bool isActive(int i) const { return active_[static_cast<std::size_t>(i)] != 0; }
-  bool isAwake(int i) const { return isActive(i); }
-  uint32_t membership(int i) const { return membership_[static_cast<std::size_t>(i)]; }
-  uint32_t filter(int i) const { return filter_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] uint8_t type(int i) const { return type_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] uint8_t shape(int i) const { return shape_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] bool isActive(int i) const { return active_[static_cast<std::size_t>(i)] != 0; }
+  [[nodiscard]] bool isAwake(int i) const { return isActive(i); }
+  [[nodiscard]] uint32_t membership(int i) const { return membership_[static_cast<std::size_t>(i)]; }
+  [[nodiscard]] uint32_t filter(int i) const { return filter_[static_cast<std::size_t>(i)]; }
 
 private:
   void appendSlot(int publicId, const RigidBodyDesc& desc);

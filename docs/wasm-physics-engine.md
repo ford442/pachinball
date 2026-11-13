@@ -66,9 +66,12 @@ impulse**, **Coulomb friction** (geometric-mean combine `μ = sqrt(μ_a μ_b)`),
 
 ```
 native/
-├── CMakeLists.txt               Emscripten + native (Catch2) build config
+├── CMakeLists.txt               Emscripten + native (Catch2, libFuzzer) build config
+├── .clang-tidy                  clang-tidy checks (`npm run lint:native`; warnings are errors in CI)
+├── .clang-format                Changed-lines formatter config (`npm run format:native`; not a gate)
 ├── src/
 │   ├── MathTypes.h              Vec3, Quat, Transform
+│   ├── Boundary.h               Input checks at the API edge: int → enum, rotations, directions (#520 row 10)
 │   ├── BodyDesc.h               BodyType / Shape enums + RigidBodyDesc (createRigidBody descriptor)
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
 │   ├── BodyStore.h / .cpp       SoA body storage (the only body model) + BodyView
@@ -94,25 +97,30 @@ native/
 │   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
 │   ├── SolverConstants.h        Constants shared across resolver TUs (one definition — unity-build safe)
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
-└── tests/                       Catch2 (native build only)
-    ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
-    ├── hinge_friction_test.cpp  Friction / spin / rolling resistance + hinges
-    ├── static_shapes_test.cpp
-    ├── adventure_geometry_test.cpp
-    ├── kinematic_mover_test.cpp
-    ├── sensor_volume_test.cpp
-    ├── collision_filter_test.cpp
-    ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
-    ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
-    ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
-    ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
-    ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
-    ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
-    ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
-    ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
-    ├── broadphase_test.cpp      Cell coordinates clamp before the int cast: playfield cells unchanged, NaN / ±inf / 1e25 finite (#487)
-    ├── correctness_bugs_test.cpp #504 §1: box face normals (z depth, −Y), snapshot WorldParams validation, setRotation wakes
-    └── test_helpers.hpp         Shared test utilities
+├── tests/                       Catch2 (native build only)
+│   ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
+│   ├── hinge_friction_test.cpp  Friction / spin / rolling resistance + hinges
+│   ├── static_shapes_test.cpp
+│   ├── adventure_geometry_test.cpp
+│   ├── kinematic_mover_test.cpp
+│   ├── sensor_volume_test.cpp
+│   ├── collision_filter_test.cpp
+│   ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
+│   ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
+│   ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
+│   ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
+│   ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
+│   ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
+│   ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
+│   ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
+│   ├── broadphase_test.cpp      Cell coordinates clamp before the int cast: playfield cells unchanged, NaN / ±inf / 1e25 finite (#487)
+│   ├── correctness_bugs_test.cpp #504 §1: box face normals (z depth, −Y), snapshot WorldParams validation, setRotation wakes
+│   ├── correctness_520_test.cpp #520 §1 rows 8–10, 12: restore validation, rawDt clamp, boundary sanitising, hinge lifetime
+│   └── test_helpers.hpp         Shared test utilities
+└── fuzz/                        libFuzzer targets (clang, ASan + UBSan; `npm run fuzz`)
+    ├── fuzz_common.hpp          Input reader, invariant hook, table builder matching a blob's static counts
+    ├── fuzz_snapshot_restore.cpp restore() on untrusted bytes → 8 steps → hash; corpus: golden tapes' frame-0 snapshots
+    └── fuzz_command_stream.cpp  PhysicsWorkerCommand-shaped streams; own snapshot always restores, replay is deterministic
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
@@ -1343,10 +1351,42 @@ the first configure unless an installed Catch2 3.x is found
 | `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests. `float-cast-overflow` is outside both compilers' `undefined` group, so it is named; CI runs this tree with clang |
 | `PACHINBALL_UNITY_BUILD` | `OFF` | Unity-builds `pachinball_physics_native` (library only — the test files each define their own helpers). `compile-db` forces it `OFF`; `check:compile-db` rejects `unity_*.cxx` entries. Keep file-scope constants unique per TU or in `SolverConstants.h` |
 | `PACHINBALL_CCACHE` | `OFF` | Uses `ccache` as `CMAKE_CXX_COMPILER_LAUNCHER` when found (both trees); warns and builds without it otherwise |
+| `PACHINBALL_FUZZ` | `OFF` | Clang only. Builds `fuzz_snapshot_restore` and `fuzz_command_stream` from `native/fuzz/`: `-fsanitize=fuzzer-no-link` (coverage) on the library, `-fsanitize=fuzzer` (libFuzzer's `main`) on each target. `npm run fuzz` configures `native/build-fuzz` with it, `PACHINBALL_SANITIZE=ON`, tests off, at `-O1` |
 
 ```bash
 npm run test:native:release  # native/build-release, -O3 — the golden traces must match the Debug tree
-CXX=clang++ npm run test:native:san  # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan + float-cast-overflow, any report fails
+CXX=clang++ npm run test:native:san  # native/build-san at -O1, PACHINBALL_SANITIZE=ON, ASan + UBSan + float-cast-overflow, any report fails
+npm run compile-db && npm run lint:native  # clang-tidy over native/src + native/fuzz; any diagnostic fails
+CXX=clang++ npm run fuzz             # both libFuzzer targets, 60 s each (--seconds N, --only <target>)
+```
+
+The sanitizer tree builds at `-O1 -fno-omit-frame-pointer` (#520 §5): ASan's
+recommended level, and nearer the optimised code that ships than `-O0`. The
+golden traces are the same constants there as at `-O0` and `-O3`.
+
+### Fuzzing (#520 §5)
+
+`fuzz_snapshot_restore` feeds `restore()` the bytes a replay verifier would
+receive. For each input it builds a table with the blob's own per-family static
+counts and patches the blob's static hash to that table's, so a real tape's
+frame-0 snapshot (the seed corpus, from `tests/replays/*.json`) decodes all the
+way through and mutations land in the bodies, hinges and manifold. It aborts
+when a refused restore changes the world, when a restored world will not
+restore its own snapshot or re-serialises to different bytes, or when a fresh
+world and one with history step the same blob to different state hashes.
+
+`fuzz_command_stream` decodes the input as a stream of `PhysicsWorkerCommand`
+types (the worker recovery log's vocabulary) with table-scale arguments; the
+entry points that sanitise their input are also fed NaN, ±inf and arbitrary
+bits. At every `SerializeSnapshot` the world must restore its own blob, a
+refused `RestoreSnapshot` must leave it untouched, and the same stream run in a
+second world must end in the same bytes and hash. Its first minute found a
+hinge limit of 2.3e24 rad spinning a blade until its rotation overflowed to
+`(0, 0, 0, 0)`; both halves of that are now rows of the input contract below.
+
+```bash
+./native/build-fuzz/fuzz_snapshot_restore native/build-fuzz/artifacts/<finding>   # reproduce
+PACHINBALL_FUZZ_TRACE=1 ./native/build-fuzz/fuzz_command_stream <finding>         # + the ops it ran
 ```
 
 This lets you iterate on solver logic with fast compile times using your
@@ -1382,6 +1422,14 @@ old code hit UB, aliased a handle, or exposed a platform-dependent NaN.
 | A broadphase coordinate that is NaN, ±inf or past ±1e8 cells | `cellX` / `cellZ` clamp to `±CELL_COORD_LIMIT` (1e8 cells, 44,000 km) before the cast; NaN goes to cell 0. Not clamped to the grid extent, so no playfield body changes cell | `broadphase_test.cpp` |
 | `WorldParams::maxSubsteps` NaN or outside [1, 64] | NaN → the default 8; everything else clamped to [1, 64]. Applied in the constructor (stored sanitised) and again at the cast in `step()` (a restored snapshot keeps its params bit for bit). No binding takes `WorldParams` today; the constructor is where it enters | `maxSubsteps is validated at the boundary` |
 | A dynamic body whose position, rotation, velocity or angular velocity is not finite | Frozen after integration (before the broadphase and solver see it) and again after the solve: back to its substep-start pose (origin / identity if that was not finite), velocities and forces zeroed, asleep via the existing active flag. Recorded as `NaNQuarantine{bodyId, step, substep}` (`lastNaNQuarantines()`, Embind `getNaNQuarantineCount()` / `getNaNQuarantineBodyId(i)`), not in the contact buffer. The engine only freezes; the game decides what the ball means | `a NaN body is quarantined…`, `a body created at a non-finite pose…` |
+| `step(rawDt)` with a negative, NaN or −inf `rawDt` (#520 row 9) | A zero-length tick. A negative dt used to drive the accumulator below zero for good; NaN read as a full `1/30` s tick | `a negative rawDt cannot…`, `a NaN rawDt is a zero-length tick…` |
+| Accumulated time past one capped tick (#520 row 9) | Clamped to `maxAccumulator(params)` = `fixedTimestep · ⌊maxSubsteps⌋` after the substep loop. Only a world whose cap is below the `1/30` s one call adds (never the defaults, 8 · 1/60) reaches it; the debt used to grow without bound | `the accumulator stays within maxSubsteps fixed steps` |
+| A snapshot blob, every column (#520 row 8) | `restore()` refuses (`Corrupt`, world untouched) an accumulator outside `[0, maxAccumulator]` (NaN froze the world, +inf ran every substep of every tick); any non-finite body float; a non-unit body rotation; a body radius / half-extent outside `[0, 10]` m; an inverse mass or inertia that differs from the one re-derived from (type, shape, mass, dimensions); a hinge whose id is out of order or ≥ `nextHingeId`, whose body is not in the blob, or with a non-finite anchor, non-unit axis or rest rotation, a limit past ±π, a negative motor torque or a non-positive Baumgarte factor; a non-finite or non-unit kinematic target, a repeated target or driven id; a non-finite mover pose / velocity or force-field vector; a manifold out of pair-key order or with a negative pin index. Each is what a world's own setters can store, so a world's own snapshot always restores (`fuzz_command_stream` checks it at every serialize). Manifold floats are not checked: they only feed Exit events, never the solver | `restore refuses…` (five cases) |
+| An int → enum at the Embind boundary, or an unnamed enum in a descriptor (#520 row 10) | `Boundary.h`: `bodyTypeFromInt` / `shapeFromInt` / `volumeShapeFromInt` / `forceSpaceFromInt` and the core's `sanitized()` map anything unnamed to the default it already behaved as (`Dynamic`, `Sphere`, `Box`, `World`, `Directional`). A bare `static_cast` to a `uint8_t`-backed enum truncated (258 → `Box`) and kept unnamed values, which the snapshot decoder then refused. Sanitise, not refuse: a refused create would skip an id `WasmIdShadow` already handed out. `setBodyType` ignores an unnamed type, as its binding does | `int → enum conversions…`, `a body built from an out-of-range enum…`, `an out-of-range volume shape or force space…` |
+| A rotation entering the engine (#520 row 10) | `sanitizedRotation`: within `1e-4` of unit length (any caller's float32 rounding) it is kept bit for bit; otherwise normalised (scaled by its largest component first), zero or non-finite → identity. Applied to `setBodyRotation`, static boxes / capsules, movers, sensors, force fields and kinematic targets; cylinders, cones and pin fields already normalised unconditionally and still do. `Quat::rotate` is Rodrigues' formula, which skews and scales a non-unit input | `a non-unit static box rotation…`, `a zero or non-finite rotation…` |
+| A plane normal (#520 row 10) | Normalised the same way; zero or non-finite (or a non-finite distance) is refused and counted in `getDroppedStaticCount()` — a plane has no handle, so refusing it desyncs nothing. `(0, 2, 0)` sank a ball to half its radius | `a non-unit plane normal…`, `a plane with no direction…` |
+| A non-finite runtime value that is never quarantined (#520 row 10) | Ignored: `setGravity`, `setRollingResistance` (also `< 0`), `setForceFieldVector`, a kinematic target's position (`setNextKinematicTransform` drops the push). A mover's start pose and a field's vector at creation fall back to the origin / zero. `createHinge` falls back per field (anchor → body position, axis → +Y, NaN limit → ±π, non-finite motor → 0, Baumgarte → 0.2) and clamps limits to ±π; `setHingeMotor` zeroes a non-finite target or torque | `non-finite gravity or rolling resistance…`, `a hinge limit past ±π…` |
+| A dynamic body whose rotation is finite but not unit (#520 row 8) | Quarantined like a NaN one: a quaternion that overflows in `integrate()` normalises to `(0, 0, 0, 0)`, which the finite check let through | `an angular velocity that overflows the rotation…` |
 | A NaN anywhere the hash reads | `SnapshotHasher::f32` hashes every NaN as `0x7FC00000`, so payloads (which differ between WASM engines and native) never reach `getStateHash()` / `staticContentHash()`. `SnapshotWriter::f32` keeps the raw bits; `-0.0f` is not canonicalised. `run-wasm-parity.mjs` checks a `0xffffffff`-payload native world against the bundle's | `state hash: writes the NaN quarantine parity fixture` |
 
 `droppedStatics_` stays part of `staticContentHash()`, as it was for every
@@ -1423,7 +1471,9 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
 | `native_release_ctest` | **BLOCKING** (since #519) | cmake, g++ | `npm run test:native:release` — the same Catch2 suite at `-O3`; the golden traces must not move with the optimisation level |
 | `native_arm64_ctest` | **BLOCKING** (since #519) | cmake, g++ on `ubuntu-24.04-arm` | `test:native` and `test:native:release` on aarch64, where an unchecked `a*b+c` would fuse into FMA |
-| `sanitizer_ctest` | **BLOCKING** | cmake, clang-18 + compiler-rt | `CXX=clang++-18 npm run test:native:san` — ASan/UBSan + `float-cast-overflow` Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
+| `sanitizer_ctest` | **BLOCKING** | cmake, clang-18 + compiler-rt | `CXX=clang++-18 npm run test:native:san` — ASan/UBSan + `float-cast-overflow` Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug` at `-O1`) |
+| `native_tidy` | **BLOCKING** (#520) | cmake, g++, clang-tidy-18 | `compile-db`, then `CLANG_TIDY=clang-tidy-18 npm run lint:native` — `native/.clang-tidy` over `native/src` (not `bindings.cpp`) and `native/fuzz`, every diagnostic an error |
+| `fuzz` | **BLOCKING** (#520) | cmake, clang-18 + compiler-rt | `CXX=clang++-18 npm run fuzz` — `fuzz_snapshot_restore` and `fuzz_command_stream`, 60 s each under ASan + UBSan; findings uploaded as `fuzz-findings` |
 | `wasm_parity` | **BLOCKING** | emsdk (`.emsdk-version`) | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
 Every job that installs Emscripten (`wasm_parity` and `replay_goldens` here,

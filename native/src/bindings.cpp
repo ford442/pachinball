@@ -5,9 +5,14 @@
  *
  * Contact callbacks use embind val (setContactCallbackJS), not addFunction.
  * JS reads contact/transform buffers via Module.HEAPF32.
+ *
+ * Every int → enum conversion goes through Boundary.h (#520 row 10): a bare
+ * static_cast to a uint8_t-backed enum truncates (258 → Box) and keeps any
+ * unnamed value, which the snapshot decoder then refuses.
  */
 
 #include <emscripten/bind.h>
+#include "Boundary.h"
 #include "PhysicsWorld.h"
 #include <cstdint>
 #include <vector>
@@ -119,8 +124,8 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.radius        = radius;
           desc.restitution   = restitution;
           desc.linearDamping = linearDamping;
-          desc.type          = static_cast<BodyType>(bodyType);
-          desc.shape         = static_cast<Shape>(shape);
+          desc.type = bodyTypeFromInt(bodyType);
+          desc.shape = shapeFromInt(shape);
           desc.capsuleHalfHeight = capsuleHalfHeight;
           desc.friction          = friction;
           desc.angularDamping    = angularDamping;
@@ -146,7 +151,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.radius         = Vec3{hx, hy, hz}.length();
           desc.restitution    = restitution;
           desc.linearDamping  = linearDamping;
-          desc.type           = static_cast<BodyType>(bodyType);
+          desc.type = bodyTypeFromInt(bodyType);
           desc.friction       = friction;
           desc.angularDamping = angularDamping;
           return self.createRigidBody(desc);
@@ -166,7 +171,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     // 2 Kinematic. Out-of-range values are ignored rather than cast blindly.
     .function("setBodyType", optional_override([](PhysicsWorld& self, int id, int type) {
         if (type < 0 || type > static_cast<int>(BodyType::Kinematic)) return;
-        self.setBodyType(id, static_cast<BodyType>(type));
+        self.setBodyType(id, bodyTypeFromInt(type));
       }))
     .function("getBodyType", &PhysicsWorld::getBodyType)
 
@@ -259,7 +264,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.halfExtents = {hx, hy, hz};
           desc.rotation = {qx, qy, qz, qw};
           desc.force = {fx, fy, fz};
-          desc.space = static_cast<ForceSpace>(space);
+          desc.space = forceSpaceFromInt(space);
           desc.acceleration = acceleration;
           return self.addForceField(desc);
         }))
@@ -304,7 +309,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
         float qx, float qy, float qz, float qw,
         float restitution, float friction) -> int {
           KinematicMoverDesc desc;
-          desc.shape = static_cast<VolumeShape>(shape);
+          desc.shape = volumeShapeFromInt(shape);
           desc.position = {px, py, pz};
           desc.halfExtents = {hx, hy, hz};
           desc.rotation = {qx, qy, qz, qw};
@@ -331,7 +336,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
         float hx, float hy, float hz,
         float qx, float qy, float qz, float qw) -> int {
           SensorVolumeDesc desc;
-          desc.shape = static_cast<VolumeShape>(shape);
+          desc.shape = volumeShapeFromInt(shape);
           desc.center = {px, py, pz};
           desc.halfExtents = {hx, hy, hz};
           desc.rotation = {qx, qy, qz, qw};

@@ -72,12 +72,12 @@ struct PinField {
   Vec3 aabbMax = Vec3::zero();
 
   /** Local-frame centre of lattice slot (row, col). */
-  Vec3 localPin(int row, int col) const {
+  [[nodiscard]] Vec3 localPin(int row, int col) const {
     return {static_cast<float>(col) * desc.spacingX + ((row & 1) ? desc.rowOffsetX : 0.f),
             0.f,
             static_cast<float>(row) * desc.spacingZ};
   }
-  Vec3 worldPin(int row, int col) const {
+  [[nodiscard]] Vec3 worldPin(int row, int col) const {
     return desc.origin + desc.rotation.rotate(localPin(row, col));
   }
 };

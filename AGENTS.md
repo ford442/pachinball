@@ -63,8 +63,14 @@ npm run test:native
 # Same suite at -O3 (native/build-release); the golden traces must match Debug.
 npm run test:native:release
 
-# Same suite under ASan + UBSan (native/build-san); any sanitizer report fails.
+# Same suite under ASan + UBSan at -O1 (native/build-san); any sanitizer report fails.
 npm run test:native:san
+
+# clang-tidy (native/.clang-tidy) over native/src + native/fuzz; any diagnostic fails (after compile-db).
+npm run lint:native
+
+# libFuzzer targets under ASan + UBSan, 60 s each (clang + compiler-rt; `-- --seconds N`).
+npm run fuzz
 
 # Build C++ physics to WASM (requires Emscripten)
 npm run build:wasm

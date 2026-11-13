@@ -6,6 +6,7 @@
 #include "ForceField.h"
 #include "CollisionFilter.h"
 #include "PhysicsWorld.h"
+#include "Boundary.h"
 
 #include <cmath>
 
@@ -31,7 +32,13 @@ int forceFieldIndex(int fieldId, std::size_t count) {
 
 int PhysicsWorld::addForceField(const ForceFieldDesc& desc) {
   if (fields_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
-  fields_.push_back(desc);
+  ForceFieldDesc d = desc;
+  d.space = sanitized(desc.space);
+  d.mode = sanitized(desc.mode);
+  d.rotation = sanitizedRotation(desc.rotation);
+  // The vector is runtime state (snapshotted): it must stay finite.
+  if (!isFiniteVec3(d.force)) d.force = Vec3::zero();
+  fields_.push_back(d);
   return FORCE_FIELD_ID_BASE - (static_cast<int>(fields_.size()) - 1);
 }
 
@@ -43,8 +50,9 @@ void PhysicsWorld::setForceFieldEnabled(int fieldId, bool enabled) {
 
 void PhysicsWorld::setForceFieldVector(int fieldId, float fx, float fy, float fz) {
   const int idx = forceFieldIndex(fieldId, fields_.size());
-  if (idx < 0) return;
-  fields_[static_cast<std::size_t>(idx)].force = {fx, fy, fz};
+  const Vec3 force{fx, fy, fz};
+  if (idx < 0 || !isFiniteVec3(force)) return;
+  fields_[static_cast<std::size_t>(idx)].force = force;
 }
 
 void PhysicsWorld::applyForceFields() {

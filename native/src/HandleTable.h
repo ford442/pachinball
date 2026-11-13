@@ -39,19 +39,19 @@ public:
   }
 
   /** @returns dense index, or -1 if id is dead / invalid. */
-  int findDenseIndex(int id) const {
+  [[nodiscard]] int findDenseIndex(int id) const {
     if (id < 0 || static_cast<std::size_t>(id) >= slots_.size()) return -1;
     const Slot& slot = slots_[static_cast<std::size_t>(id)];
     return slot.denseIndex;
   }
 
-  uint16_t generation(int id) const {
+  [[nodiscard]] uint16_t generation(int id) const {
     if (id < 0 || static_cast<std::size_t>(id) >= slots_.size()) return 0;
     return slots_[static_cast<std::size_t>(id)].generation;
   }
 
-  int nextId() const { return nextId_; }
-  int slotCount() const { return nextId_; }
+  [[nodiscard]] int nextId() const { return nextId_; }
+  [[nodiscard]] int slotCount() const { return nextId_; }
 
 private:
   std::vector<Slot> slots_;

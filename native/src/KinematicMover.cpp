@@ -107,9 +107,9 @@ void PhysicsWorld::resolveSphereVsMover(BodyView& body, int moverIndex) {
   if (!inside && distSq >= radius * radius) return;
 
   Vec3 localNormal;
-  float penetration;
+  float penetration = 0.f;
   if (inside || distSq < MOVER_EPSILON_SQ) {
-    float shallow;
+    float shallow = 0.f;
     deepestVolumeNormal(mover.shape, localCenter, mover.halfExtents, localNormal, shallow);
     penetration = radius + shallow;
   } else {
@@ -168,9 +168,9 @@ void PhysicsWorld::resolveCapsuleVsMover(BodyView& body, int moverIndex) {
   if (!inside && distSq >= radius * radius) return;
 
   Vec3 localNormal;
-  float penetration;
+  float penetration = 0.f;
   if (inside || distSq < MOVER_EPSILON_SQ) {
-    float shallow;
+    float shallow = 0.f;
     deepestVolumeNormal(mover.shape, segPtLocal, mover.halfExtents, localNormal, shallow);
     penetration = radius + shallow;
   } else {

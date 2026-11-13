@@ -18,7 +18,9 @@ npm run compile-db        # Configure-only: writes native/build-native/compile_c
 npm run check:compile-db  # Fail if that database misses a native TU, mixes -O levels, or contains em++ commands
 npm run test:native       # compile-db + C++ Catch2 tests (incl. golden traces: any numeric drift fails)
 npm run test:native:release  # same suite at -O3 (native/build-release); golden traces must match Debug
-npm run test:native:san   # Catch2 under ASan + UBSan (native/build-san); any report fails
+npm run test:native:san   # Catch2 under ASan + UBSan at -O1 (native/build-san); any report fails
+npm run lint:native       # clang-tidy (native/.clang-tidy) over native/src + native/fuzz; any diagnostic fails (after compile-db)
+npm run fuzz              # libFuzzer: fuzz_snapshot_restore (corpus: golden tapes' frame-0 snapshots) + fuzz_command_stream, 60 s each, ASan + UBSan (clang + compiler-rt)
 npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMake / config / sources
 npm run build:wasm        # Emscripten Release → public/wasm/. Fails on any emcc but .emsdk-version (emsdk repo commit: .emsdk-commit); PACHINBALL_ALLOW_EMSDK_MISMATCH=1 for experiments, never for shipped builds or tapes
 npm run test:wasm-parity  # WASM bundle vs native C++ reference

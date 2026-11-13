@@ -290,8 +290,9 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
       for (int bodyDense : dynamics) {
         if (!bodies.isAwake(bodyDense)) continue;
         for (const StaticRef& ref : sit->second) {
-          Pair::Type ptype;
-          uint32_t refMembership, refFilter;
+          Pair::Type ptype = Pair::BodySensor;
+          uint32_t refMembership = 0;
+          uint32_t refFilter = 0;
           if (ref.kind == StaticRef::Box) {
             ptype = Pair::BodyBox;
             refMembership = boxes[static_cast<std::size_t>(ref.index)].membership;

@@ -8,6 +8,7 @@
  * All functions here are PhysicsWorld methods — declared in PhysicsWorld.h.
  */
 #include "PhysicsWorld.h"
+#include "Boundary.h"
 #include "KinematicMover.h"
 
 #include <cmath>
@@ -15,18 +16,6 @@
 #include <cstring>
 
 namespace pachinball {
-
-namespace {
-
-bool isFiniteVec(const Vec3& v) {
-  return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-}
-
-bool isFiniteQuat(const Quat& q) {
-  return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w);
-}
-
-} // namespace
 
 void PhysicsWorld::freeTransformBuffer() {
   if (transformBuffer_) {
@@ -79,7 +68,10 @@ void PhysicsWorld::scatterTransforms() {
 
 float PhysicsWorld::step(float rawDt) {
   constexpr float MAX_DT = 1.f / 30.f;
-  float dt = (rawDt < MAX_DT) ? rawDt : MAX_DT;
+  // Negative, NaN and -inf are a zero-length tick (#520 row 9): a negative dt
+  // used to drive the accumulator below zero for good, and NaN — which fails
+  // every comparison — read as a full MAX_DT tick.
+  const float dt = !(rawDt > 0.f) ? 0.f : (rawDt < MAX_DT ? rawDt : MAX_DT);
 
   accumulator_ += dt;
   quarantines_.clear();
@@ -104,6 +96,12 @@ float PhysicsWorld::step(float rawDt) {
     ++substepsDone;
     ++stepCount_;
   }
+  // Keep the debt within one capped tick (maxAccumulator). Only a world whose
+  // cap is below the MAX_DT a call can add (maxSubsteps · fixedTimestep < 1/30)
+  // ever reaches it — never the defaults (8 · 1/60) — so a healthy world steps
+  // exactly as before, and restore() can refuse anything past it.
+  const float debtCap = maxAccumulator(params_);
+  if (accumulator_ > debtCap) accumulator_ = debtCap;
 
   if (substepsDone > 0) {
     contactListener_.flushEvents();
@@ -139,16 +137,19 @@ void PhysicsWorld::quarantineNonFinite(int substepIndex) {
   for (int i = 0; i < bodies_.denseCount(); ++i) {
     BodyView body = bodies_.view(i);
     if (body.getType() != BodyType::Dynamic) continue;
-    if (isFiniteVec(body.getPosition()) && isFiniteQuat(body.getRotation()) &&
-        isFiniteVec(body.getVelocity()) && isFiniteVec(body.getAngularVelocity())) continue;
+    // A rotation that is finite but no longer unit is as broken as a NaN one:
+    // a quaternion that overflowed in integrate() normalises to (0, 0, 0, 0).
+    if (isFiniteVec3(body.getPosition()) && isUnitQuat(body.getRotation()) && isFiniteVec3(body.getVelocity()) &&
+        isFiniteVec3(body.getAngularVelocity()))
+      continue;
 
     const std::size_t si = static_cast<std::size_t>(i);
     Vec3 position = si < prevPositions_.size() ? prevPositions_[si] : Vec3::zero();
     Quat rotation = si < substepStartRotations_.size() ? substepStartRotations_[si] : Quat::identity();
     // A pose that was already non-finite when the substep began (created or
     // set that way between steps) has nowhere to go back to.
-    if (!isFiniteVec(position)) position = Vec3::zero();
-    if (!isFiniteQuat(rotation)) rotation = Quat::identity();
+    if (!isFiniteVec3(position)) position = Vec3::zero();
+    if (!isUnitQuat(rotation)) rotation = Quat::identity();
 
     body.setPosition(position);
     body.setRotation(rotation);
