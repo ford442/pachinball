@@ -1,41 +1,41 @@
 /**
- * Game Physics Controller — Physics stepping, collision processing, nudge/tilt, ball loss.
+ * Game Physics Controller — construction, the fixed step and its pacer.
  *
- * This file is now a thin orchestrator. Fixed-step order, collision dispatch,
- * scoring hooks, mesh interpolation, and the WASM mirror each live in focused
- * modules under `src/game/physics/`.
+ * This file is a thin orchestrator: it owns the controller's lifetime, `stepFixed` (the frame
+ * scheduler's `physics` phase) and the fixed-step accumulator. The rest of the frame lives in
+ * focused modules under `src/game/physics/`, one per scheduler phase or concern:
+ *
+ * - `sim-phase.ts` — `updateSim`, the `sim` phase.
+ * - `visual-phase.ts` — `updateVisuals`, the `visuals` phase.
+ * - `step-gameplay.ts` — what runs once per fixed step after the engine step.
+ * - `nudge-tilt.ts` — nudge, tilt warnings and the tilt penalty.
+ * - `wasm-bridges.ts` — the mirror / owner bridge and its rebuild.
+ * - `replay-snapshot-sync.ts` — the frame-0 world snapshot.
+ * - collision dispatch, scoring hooks, mesh interpolation and the WASM mirror / owner themselves.
  */
 
-import type { PhysicsHost } from './types'
+import type { PhysicsFrameState, PhysicsHost } from './types'
 import { MeshInterpolationSystem } from './mesh-interpolation'
-import { WasmMirror } from './wasm-mirror'
-import { WasmOwner, type AdventureTrackState } from './wasm-owner'
+import type { WasmMirror } from './wasm-mirror'
+import type { WasmOwner } from './wasm-owner'
+import { WasmBridges } from './wasm-bridges'
 import { ScoringBridge } from './scoring-bridge'
 import { CollisionDispatcher, reportContactFault } from './collision-dispatch'
+import { NudgeTilt } from './nudge-tilt'
+import { StepGameplay } from './step-gameplay'
+import { updateSimPhase } from './sim-phase'
+import { VisualPhase } from './visual-phase'
+import { ReplaySnapshotSync } from './replay-snapshot-sync'
+import { routePhysicsEvents } from './physics-event-routes'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
 import { FIXED_TIMESTEP, GameSimClock } from '../../core/sim-clock'
 
-import { type InputFrame, type ReplayRecorder, type ReplayRunner } from '../../game-elements'
-import { BallType, GAME_TUNING, GameConfig } from '../../config'
-import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
-import { DisplayState } from '../../display/display-types'
-import { CameraMode } from '../../game-elements'
-import { QualityTier } from '../../game-elements/visual-language'
-
-/** Shared surface for mirror and owner WASM bridges. */
-import type { WasmContactBridge } from './collision-dispatch'
+import type { InputFrame, ReplayRecorder, ReplayRunner } from '../../game-elements'
 import { createTimerScope } from '../../core/timers'
 import { isFixedStepReplay } from '../../replay/replay-recorder'
-import {
-  applyReplaySnapshot,
-  captureReplayFingerprint,
-  linkedBodyIds,
-  NO_SNAPSHOT_ENGINE,
-  showReplayDivergenceToast,
-  type ReplaySnapshotResult,
-} from '../../replay/replay-snapshot'
+import type { ReplaySnapshotResult } from '../../replay/replay-snapshot'
 
 export type StepInputActions = {
   handleFlipperLeft: (p: boolean) => void
@@ -44,20 +44,7 @@ export type StepInputActions = {
   updatePlungerFrame?: (dt: number) => void
 }
 
-interface TrailInfo {
-  body: PhysicsBody
-  mesh: Mesh
-  type: BallType
-}
-
-/** Shared empty list for "no ball manager", so the fallback allocates nothing. Never mutated. */
-const NO_BODIES: PhysicsBody[] = []
-const NO_STUCK_BODIES: readonly PhysicsBody[] = []
-
-// Scratch vectors for the per-frame paths. Every consumer copies what it keeps (checked:
-// CameraController clones, DynamicWorld and the atmosphere only read).
-const scratchBallPos = new Vector3()
-const scratchBallVel = new Vector3()
+// Scratch vector for the per-frame ghost placement; the ghost renderer copies what it keeps.
 const scratchGhostPos = new Vector3()
 
 /** The row a tick records when no input arrived: every field "no change". */
@@ -74,15 +61,23 @@ export class GamePhysicsController {
   private readonly timers = createTimerScope()
   private readonly host: PhysicsHost
 
-  /** WASM bridge for mirror or owner mode. */
-  private wasmBridge: WasmContactBridge | null = null
-  private wasmMirror: WasmMirror | null = null
-  private wasmOwner: WasmOwner | null = null
-  private lastReplaySnapshot: ReplaySnapshotResult | null = null
+  /** The mirror / owner WASM bridge and its rebuild (`wasm-bridges.ts`). */
+  private readonly wasm: WasmBridges
+  /** The C++ owner, or null (also read by the e2e specs as `physicsController.wasmOwner`). */
+  private get wasmOwner(): WasmOwner | null {
+    return this.wasm.owner
+  }
+  private get wasmMirror(): WasmMirror | null {
+    return this.wasm.mirror
+  }
+  private readonly replaySnapshots: ReplaySnapshotSync
 
   private readonly scoringBridge: ScoringBridge
   private readonly collisionDispatcher: CollisionDispatcher
   private readonly meshInterpolation = new MeshInterpolationSystem()
+  private readonly nudgeTilt: NudgeTilt
+  private readonly gameplay: StepGameplay
+  private readonly visualPhase: VisualPhase
   /**
    * Gameplay clock (#441): nudge cooldown, tilt, ball-save, combo / streak
    * windows, gold swarms and plunger charge all read this, never wall time.
@@ -90,21 +85,8 @@ export class GamePhysicsController {
   readonly simClock = new GameSimClock()
   /** Render time not yet consumed by a fixed step (s); its fraction of a step is the mesh alpha. */
   private stepAccumulator = 0
-  /** What `stepFixed` measured this frame, for `updateSim` / `updateVisuals`. */
-  private frameDt = 0
-  /** False when this frame ran no step (not PLAYING): the sim and visual updates skip it. */
-  private frameStepped = false
-  /** Alpha the meshes were last drawn with; `getBallPosition` and the camera use the same blend. */
-  private renderAlpha = 1
-  /** Reused per frame (#488 §5): the camera policy, the trail list and its records. */
-  private readonly cameraPolicy: { reducedMotion: boolean; photosensitiveMode: boolean; qualityTier: QualityTier } = {
-    reducedMotion: false,
-    photosensitiveMode: false,
-    qualityTier: QualityTier.MEDIUM,
-  }
-  private readonly trailInfos: TrailInfo[] = []
-  private readonly trailInfoPool: TrailInfo[] = []
-  private readonly trailMeshByBody = new Map<PhysicsBody, Mesh>()
+  /** What `stepFixed` measured this frame, for `updateSim` / `updateVisuals` (and the mesh alpha). */
+  private readonly frame: PhysicsFrameState = { dt: 0, stepped: false, alpha: 1 }
   // Bound once: step() takes them every tick (#505 §D). Per-contact isolation (#503 A3): a throw
   // on one Rapier event must not drop the rest of that step's events.
   private readonly onCollision = (h1: number, h2: number, started: boolean): void => {
@@ -122,53 +104,19 @@ export class GamePhysicsController {
     }
   }
 
-  private readonly onCaughtBallBeep = (): void => {
-    this.host.effects?.playBeep(440)
-  }
-  private eventBusUnsubscribers: Array<() => void> = []
+  private eventBusUnsubscribers: Array<() => void>
 
   constructor(host: PhysicsHost) {
     this.host = host
+    this.wasm = new WasmBridges(host)
+    this.replaySnapshots = new ReplaySnapshotSync(host, this.simClock, () => this.wasm.owner)
     this.scoringBridge = new ScoringBridge(host)
-    this.collisionDispatcher = new CollisionDispatcher(host, this.scoringBridge, () => this.wasmBridge)
+    this.collisionDispatcher = new CollisionDispatcher(host, this.scoringBridge, () => this.wasm.bridge)
+    this.nudgeTilt = new NudgeTilt(host, this.simClock, this.timers)
+    this.gameplay = new StepGameplay(host, this.simClock, this.scoringBridge, this.nudgeTilt, () => this.rebuildHandleCaches())
+    this.visualPhase = new VisualPhase(host, this.meshInterpolation, this.frame)
 
-    // Route 'effect:flash' to EffectsSystem (respects accessibility guards internally)
-    this.eventBusUnsubscribers.push(
-      host.eventBus.on('effect:flash', (data) => {
-        if (data.color) {
-          this.host.effects?.flashVignette(data.color, data.duration * 1000)
-        }
-      })
-    )
-
-    // Route 'effect:shake' to EffectsSystem
-    this.eventBusUnsubscribers.push(
-      host.eventBus.on('effect:shake', (data) => {
-        if (!this.host.accessibility.reducedMotion) {
-          this.host.effects?.addCameraShake(data.amount)
-        }
-      })
-    )
-
-    // Route WASM contacts to the same dispatcher used for Rapier collisions, as one batch per
-    // drained buffer (#488 §5): with no per-contact subscriber left, the engines build no
-    // per-contact payloads at all. The dispatcher maps WASM ids back to the bodies scoring expects.
-    this.eventBusUnsubscribers.push(
-      host.eventBus.on('wasm:physics:contacts', (batch) => {
-        this.collisionDispatcher.onWasmContactBatch(batch)
-      })
-    )
-
-    // A dead physics worker's world moved in-process (#503 A2): tell the bus, and the player.
-    host.physics.setEngineSwitchListener?.((change) => {
-      this.host.eventBus.emit('physics:engine-switched', { ...change })
-    })
-    this.eventBusUnsubscribers.push(
-      host.eventBus.on('physics:engine-switched', () => {
-        this.host.uiManager?.showMessage('Physics worker stopped — switched to in-process physics', 4000)
-      }),
-      () => host.physics.setEngineSwitchListener?.(null),
-    )
+    this.eventBusUnsubscribers = routePhysicsEvents(host, this.collisionDispatcher)
   }
 
   /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
@@ -182,76 +130,13 @@ export class GamePhysicsController {
     this.eventBusUnsubscribers = []
   }
 
-  /**
-   * The C++ flipper hinges the owner drives, or null when physics does not run an owner mode.
-   * In an owner mode these hinges are the only thing that moves a flipper (there is no Rapier
-   * joint motor to fall back on), and they exist only once `rebuildHandleCaches()` has run.
-   */
+  /** The C++ flipper hinges the owner drives, or null off an owner mode (see `WasmBridges`). */
   getWasmFlipperHingeCount(): number | null {
-    if (!(this.host.physics.isWasmOwnerMode?.() ?? false)) return null
-    return this.wasmOwner?.getFlipperHinges().length ?? 0
+    return this.wasm.getFlipperHingeCount()
   }
 
   rebuildHandleCaches(): void {
-    const wasmActive = this.host.physics.isWasmActive?.() ?? false
-    const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
-
-    if (wasmActive) {
-      const engine = this.host.physics.getWasmEngine?.()
-      if (engine) {
-        engine.init(this.host.eventBus)
-        if (isOwner) {
-          this.wasmMirror?.clear()
-          this.wasmMirror = null
-          // PhysicsSystem builds the table world whenever it runs an owner mode.
-          const tableWorld = this.host.physics.getWasmTableWorld?.() ?? null
-          if (!this.wasmOwner && tableWorld) {
-            this.wasmOwner = new WasmOwner(engine, tableWorld)
-            this.wasmOwner.setTableScope(() => [
-              ...(this.host.gameObjects?.getWasmExportBodies() ?? []),
-              // Ball traps (#420): the funnel is a C++ cone and the chamber a
-              // sensor sphere; the trap sits well clear of the plunger lane.
-              ...(this.host.ballTrapBuilder?.getBodies() ?? []),
-              // MagSpin's well (#420 leftover): a C++ axis-pull field, not geometry.
-              ...(this.host.magSpinFeeder?.getBodies() ?? []),
-              // Zone volumes (scenario zones, obstacle footprints): C++ sensor volumes
-              // that report ball begin/end contacts to ZoneTriggerSystem.
-              ...(this.host.zoneTriggerSystem?.getSensorBodies() ?? []),
-            ])
-          }
-          this.wasmBridge = this.wasmOwner
-          if (this.wasmOwner) {
-            const adventureActive = this.host.adventureMode?.isActive() ?? false
-            this.wasmOwner.rebuild(
-              [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body),
-              this.adventureTrackState(adventureActive),
-            )
-            this.attachAdventureBridge()
-            this.host.physics.setWasmDebugColliders?.(this.wasmOwner.getDebugColliders())
-          }
-        } else {
-          this.wasmOwner?.dispose()
-          this.wasmOwner = null
-          this.host.physics.setWasmDebugColliders?.([])
-          if (!this.wasmMirror) {
-            this.wasmMirror = new WasmMirror(engine)
-          }
-          this.wasmBridge = this.wasmMirror
-          this.wasmMirror.rebuild(
-            this.host.ballManager?.getBallBodies() || [],
-            this.host.gameObjects?.getBumperBodies() || [],
-            this.host.gameObjects?.getBumperVisuals() || []
-          )
-        }
-      }
-    } else {
-      this.wasmMirror?.clear()
-      this.wasmOwner?.dispose()
-      this.wasmMirror = null
-      this.wasmOwner = null
-      this.wasmBridge = null
-      this.host.physics.setWasmDebugColliders?.([])
-    }
+    this.wasm.rebuild()
 
     // Built last so owner mode keys every set on the WASM ids the rebuild just assigned.
     this.collisionDispatcher.rebuildHandleCaches()
@@ -261,42 +146,17 @@ export class GamePhysicsController {
     // reset here — portals may already be active when the cache is rebuilt.
   }
 
-  /**
-   * Whether WASM owns the active adventure track, and what stopped it if not.
-   * Exposed for the E2E cutover check and the debug HUD.
-   */
+  /** Whether WASM owns the active adventure track, and what stopped it if not (E2E cutover check, debug HUD). */
   getAdventureOwnership(): {
     owned: boolean
     unsupported: ReadonlyArray<{ reason: string; index?: number; label?: string }>
   } {
-    return {
-      owned: this.wasmOwner?.isAdventureOwned() ?? false,
-      unsupported: this.wasmOwner?.getAdventureUnsupported() ?? [],
-    }
+    return this.wasm.getAdventureOwnership()
   }
 
-  /**
-   * Table colliders the C++ world is not simulating, each with a reason
-   * (shape it cannot represent, or outside the owner table scope). Empty off
-   * the owner path. Exposed for the debug HUD.
-   */
+  /** Table colliders the C++ world is not simulating, each with a reason; empty off the owner path (debug HUD). */
   getTableUnexported(): ReadonlyArray<{ bodyHandle: number; colliderIndex: number; shape: string; reason: string }> {
-    return this.wasmOwner?.getTableUnsupported() ?? []
-  }
-
-  /**
-   * Install the WASM-backed overlap/impulse bridge on a running adventure
-   * track so zone effects read C++ sensor contacts. Without it AdventureMode
-   * answers overlaps analytically through `world.intersectionPair`.
-   *
-   * Called from rebuildHandleCaches, which already runs on adventure start,
-   * end and track switch — exactly the moments the static world changes.
-   */
-  private attachAdventureBridge(): void {
-    const adventureMode = this.host.adventureMode
-    const owner = this.wasmOwner
-    if (!owner || !adventureMode) return
-    adventureMode.setPhysicsBridge(adventureMode.isActive() && owner.isAdventureOwned() ? owner.getPhysicsBridge() : null)
+    return this.wasm.getTableUnexported()
   }
 
   /**
@@ -358,50 +218,7 @@ export class GamePhysicsController {
 
   /** Outcome of the last replay's frame-0 snapshot check (null until a replay plays). */
   getLastReplaySnapshotResult(): ReplaySnapshotResult | null {
-    return this.lastReplaySnapshot
-  }
-
-  /**
-   * Frame-0 world snapshot (#422), taken and restored at the same point: after
-   * this frame's inputs have driven flippers / movers, right before the step.
-   * Recording fingerprints the world once frame 0 is on the tape; playback
-   * restores that snapshot, and says so on screen when it cannot.
-   */
-  private syncReplaySnapshot(isOwner: boolean, runner: ReplayRunner | null, recorder: ReplayRecorder | null): void {
-    const engine = isOwner ? this.host.physics.getWasmEngine?.() ?? null : null
-    const world = isOwner ? this.host.physics.getWasmTableWorld?.() ?? null : null
-    if (recorder?.isRecording() && recorder.getFrameCount() > 0 && !recorder.hasWorldFingerprint()) {
-      recorder.attachWorldFingerprint(captureReplayFingerprint(engine, world))
-    }
-    const check = runner?.isPlaying() ? runner.takeSnapshotCheck() : null
-    if (!check) return
-    // The spectator's ids were allocated by its own earlier games; when they
-    // differ from the recording's, the restore renames the C++ bodies and the
-    // TS links follow (#441).
-    const live = { bodyIds: linkedBodyIds(world), hinges: this.wasmOwner?.getFlipperHinges() ?? [] }
-    const res = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, live, check, (remap) => {
-      world?.renameLinkedIds(remap.bodies)
-      this.wasmOwner?.renameIds(remap.bodies, remap.hinges)
-    })
-    this.lastReplaySnapshot = res
-    // Bodies that do not pair up by role mean the table descriptors differ:
-    // refuse the replay instead of letting a ghost drift under a toast (#444).
-    if (res.outcome === 'id-layout') runner?.reject(res.outcome, res.message ?? res.outcome)
-    // The restore moved the engine's step counter to the recorder's; the
-    // gameplay clock carries on from where it was. (The worker client already
-    // reports the snapshot's counter while its restore is in flight.)
-    if (res.outcome === 'restored') this.simClock.resync(this.host.physics)
-    showReplayDivergenceToast(res)
-    // Worker path: the status arrives with the worker's reply.
-    void res.settled?.then((final) => {
-      if (this.lastReplaySnapshot !== res) return
-      this.lastReplaySnapshot = final
-      if (final.outcome !== 'restored') {
-        // Refused: the world (and its counter) were left as they were.
-        this.simClock.resync(this.host.physics)
-        showReplayDivergenceToast(final)
-      }
-    })
+    return this.replaySnapshots.getLast()
   }
 
   /** Flippers and plunger are driven by the input actions; only the nudge is applied here. */
@@ -416,21 +233,8 @@ export class GamePhysicsController {
    * live one (no step ran, the world may have been repositioned).
    */
   private syncMeshes(alpha: number, snap = false): void {
-    this.renderAlpha = alpha
+    this.frame.alpha = alpha
     this.meshInterpolation.syncMeshes(alpha, this.host.gameObjects?.getBindings() || [], snap)
-  }
-
-
-  /** Snapshot of the built adventure track for the C++ exporter, or null when adventure is not running. */
-  private adventureTrackState(adventureActive: boolean): AdventureTrackState | null {
-    const adventure = this.host.adventureMode
-    if (!adventureActive || !adventure) return null
-    return {
-      epoch: adventure.getColliderEpoch(),
-      descriptors: adventure.getColliderDescriptors(),
-      unexported: adventure.getUnexportedColliders(),
-      bodyForDescriptor: (index) => adventure.getBodyForDescriptor(index),
-    }
   }
 
   /** Drain the live input once (`update()` first: it re-queues held keys). */
@@ -490,7 +294,7 @@ export class GamePhysicsController {
       owner.beginStep(driveDt)
     }
 
-    this.syncReplaySnapshot(owner !== null, runner, recorder)
+    this.replaySnapshots.sync(owner !== null, runner, recorder)
 
     const alpha = this.host.physics.step(physicsDt, this.onCollision, this.onContactForce)
 
@@ -502,97 +306,11 @@ export class GamePhysicsController {
       const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
       this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
     }
-    this.tickJackpot()
-    this.tickStepMechanisms(driveDt)
-    this.stepGameplay(driveDt)
+    this.gameplay.tickJackpot()
+    this.gameplay.tickStepMechanisms(driveDt)
+    this.gameplay.stepGameplay(driveDt)
     this.host.afterFixedStep?.()
     return alpha
-  }
-
-  /**
-   * Gameplay that reads or moves the ball, once per fixed step after the engine step: feeders and
-   * their captures, caught balls, stuck detection, combo / tilt / power-up windows, adventure
-   * obstacles (#519 A1). These ran per step on the branch the golden tapes were recorded on; the
-   * merge that brought in the frame scheduler (#488 §4) put them in the render-frame `sim` phase,
-   * which the headless verifier (`stepFixed` only) never runs — so a MagSpin capture happened
-   * live and never on verification, and any run with one was rejected.
-   */
-  private stepGameplay(dt: number): void {
-    const ballManager = this.host.ballManager
-    const currentBallBodies = ballManager?.getBallBodies() ?? NO_BODIES
-    this.host.adventureMode?.update(dt, currentBallBodies)
-
-    this.host.gameObjects?.updateTargets(dt)
-
-    this.host.magSpinFeeder?.update(dt, currentBallBodies)
-    this.host.nanoLoomFeeder?.update(dt, currentBallBodies)
-    this.host.prismCoreFeeder?.update(dt, currentBallBodies)
-    this.host.gaussCannon?.update(dt, currentBallBodies)
-    this.host.quantumTunnel?.update(dt, currentBallBodies)
-
-    ballManager?.updateCaughtBalls(dt, this.onCaughtBallBeep)
-
-    const stuckBalls = ballManager?.updateStuckDetection(dt) ?? NO_STUCK_BODIES
-    for (const stuckBall of stuckBalls) {
-      if (stuckBall === ballManager?.getBallBody()) {
-        ballManager?.resetBall()
-      } else {
-        ballManager?.removeBall(stuckBall)
-      }
-    }
-    if (stuckBalls.length > 0) {
-      this.rebuildHandleCaches()
-    }
-
-    // Small gold ball lifetimes (cleanup expired)
-    ballManager?.updateSmallGoldBallLifetimes(dt)
-
-    this.scoringBridge.updateCombo(dt)
-    this.tickTilt(dt)
-
-    if (this.host.powerupActive) {
-      this.host.powerupTimer -= dt
-      if (this.host.powerupTimer <= 0) this.host.powerupActive = false
-    }
-  }
-
-  /** Gates, traps, launchers and adventure clocks: once per physics tick, at that tick's dt. */
-  private tickStepMechanisms(dt: number): void {
-    const { host } = this
-    for (const state of host.trapStates) host.ballTrapBuilder?.updateTrap(state, dt)
-    for (const state of host.launcherStates) host.launcherBuilder?.updateLauncher(state, dt)
-    for (const state of host.gateStates) host.movingGateBuilder?.updateGate(state, dt)
-    host.stepAdventureProgression?.(dt)
-  }
-
-  /**
-   * Advance the jackpot phase clock by this tick. It runs here, once per fixed
-   * step, so a phase change (and the end of the sequence) lands on its own sim
-   * step on every client — not on whichever render frame happens to follow it.
-   */
-  private tickJackpot(): void {
-    const effects = this.host.effects
-    if (!effects) return
-    if (effects.isJackpotActive) effects.advanceJackpotToStep(this.simClock.liveSteps())
-    // Also catches a JACKPOT display state raised with no sequence behind it
-    // (the solid-gold pulse): it ends on the tick that raised it.
-    this.finishJackpotIfDone()
-  }
-
-  /**
-   * Leave the JACKPOT display state once the sequence is over. The display
-   * state gates hologram catches and fever (`handleBumperCollision`), so this
-   * is gameplay and runs on the step the sequence ends; the render-frame call
-   * only catches a sequence that ended outside a tick.
-   */
-  private finishJackpotIfDone(): void {
-    const effects = this.host.effects
-    if (!effects || effects.isJackpotActive || this.host.display?.getDisplayState() !== DisplayState.JACKPOT) return
-    this.host.eventBus.emit('jackpot:end')
-    this.host.eventBus.emit('display:set', DisplayState.IDLE)
-    effects.setAtmosphereState('IDLE')
-    // Restore bumpers to normal lighting after sequence
-    this.host.gameObjects?.setBumperState('IDLE')
   }
 
   /**
@@ -636,7 +354,7 @@ export class GamePhysicsController {
       // stored pose to it, so a body repositioned here does not blend from a stale pose.
       this.syncMeshes(1, true)
       if (replaying) this.placeGhost()
-      this.frameStepped = false
+      this.frame.stepped = false
       return
     }
 
@@ -647,7 +365,7 @@ export class GamePhysicsController {
     const owner = isOwner ? this.wasmOwner : null
     if (owner) {
       // Pick up a track switch or a table edit before the step.
-      owner.syncAdventureTrack(this.adventureTrackState(this.host.adventureMode?.isActive() ?? false))
+      owner.syncAdventureTrack(this.wasm.adventureTrackState(this.host.adventureMode?.isActive() ?? false))
       owner.syncStatics()
       this.host.physics.setMirrorOverheadMs?.(0)
     } else if (wasmActive) {
@@ -707,11 +425,11 @@ export class GamePhysicsController {
     if (replaying) this.placeGhost()
 
     const dt = Math.min(rawDt, 1 / 30)
-    this.frameDt = dt
+    this.frame.dt = dt
     // Commit the steps the engine took this frame to the sim clock (simClockSteps(), debounce);
-    // per-step gameplay already ran with the fixed dt in stepGameplay.
+    // per-step gameplay already ran with the fixed dt in `StepGameplay`.
     this.simClock.advance(this.host.physics, dt)
-    this.frameStepped = true
+    this.frame.stepped = true
   }
 
   /** Put the ghost ball where the primary ball is drawn this frame (after the mesh sync, same blend). */
@@ -722,122 +440,14 @@ export class GamePhysicsController {
     if (pos) ghost.updatePosition(pos)
   }
 
-  /**
-   * Frame-scheduler `sim` phase: what follows the fixed steps once per render frame and does not
-   * move the ball or the score — the dynamic world's zone reveal, the map manager, and the
-   * jackpot exit for a sequence that ended outside a tick. Gameplay runs per step in
-   * `stepGameplay` (#519 A1).
-   */
+  /** Frame-scheduler `sim` phase (`sim-phase.ts`). */
   updateSim(): void {
-    // Nothing here may move a body: `dynamicWorld` only steers the camera target and zone
-    // visuals. Body-moving updates run per tick (`tickStepMechanisms` / `stepGameplay`).
-    if (!this.frameStepped) return
-    const dt = this.frameDt
-
-    // Dynamic world
-    const mainBall = this.host.ballManager?.getBallBody()
-    if (this.host.dynamicWorld && mainBall) {
-      this.host.dynamicWorld.update(this.meshInterpolation.getInterpolatedPosition(mainBall, this.renderAlpha, scratchBallPos), dt)
-    }
-
-    this.host.mapManager?.update(dt)
-
-    this.finishJackpotIfDone()
+    updateSimPhase(this.host, this.meshInterpolation, this.frame)
   }
 
-  /**
-   * Frame-scheduler `visuals` phase: camera, effects, trails and the backbox — everything the
-   * coming `scene.render()` shows, computed from this frame's sim state.
-   */
+  /** Frame-scheduler `visuals` phase (`visual-phase.ts`). */
   updateVisuals(): void {
-    if (!this.frameStepped) return
-    const dt = this.frameDt
-    const { effects } = this.host
-    const ballManager = this.host.ballManager
-    const ballBody = ballManager?.getBallBody() ?? null
-    // The camera, atmosphere and follow target use the position the ball mesh is drawn at.
-    const ballPos = ballBody ? this.meshInterpolation.getInterpolatedPosition(ballBody, this.renderAlpha, scratchBallPos) : undefined
-
-    // Camera controller
-    if (this.host.cameraController && ballBody && ballPos) {
-      const lifecycleMode = this.host.getCameraMode()
-      const cameraMode = this.host.isCameraFollowMode ? CameraMode.BALL_FOLLOW : lifecycleMode
-
-      if (cameraMode === CameraMode.ADVENTURE) {
-        this.host.cameraController.resetDynamicState()
-      } else {
-        const vel = ballBody.linvel()
-        this.cameraPolicy.reducedMotion = this.host.accessibility.reducedMotion
-        this.cameraPolicy.photosensitiveMode = this.host.accessibility.maxCameraShakeIntensity <= 0
-        this.cameraPolicy.qualityTier = this.host.qualityTier
-        this.host.cameraController.update(
-          dt,
-          ballPos,
-          scratchBallVel.set(vel.x, vel.y, vel.z),
-          cameraMode,
-          this.cameraPolicy,
-        )
-      }
-      if (this.host.isCameraFollowMode && this.host.tableCam) {
-        const targetY = ballPos.y + 2.5
-        this.host.tableCam.target.y += (targetY - this.host.tableCam.target.y) * dt * 5
-      }
-    }
-
-    this.host.gameObjects?.updateBumpers(dt)
-
-    effects?.updateShards(dt)
-    effects?.updateBloom()
-    effects?.updateCabinetLighting()
-    effects?.updateSlotLighting()
-    effects?.updateAtmosphere(dt, ballPos)
-
-    ballManager?.updateTrailEffects()
-    ballManager?.updateGoldBallGlow(dt)
-
-    const ballBodies = ballManager?.getBallBodies() ?? NO_BODIES
-    const isFever = effects?.currentLightingMode === 'fever'
-    effects?.update(dt, ballBodies, isFever)
-    if (effects) effects.updateTrails(this.collectTrailInfos(ballBodies))
-
-    const jackpotPhase = effects?.jackpotPhase || 0
-    this.host.display?.update(dt, jackpotPhase)
-
-    // Drive bumper JACKPOT visuals during the Cyber-Shock sequence (especially phase 3 meltdown)
-    if (effects?.isJackpotActive) {
-      this.host.gameObjects?.setBumperState('JACKPOT')
-    }
-  }
-
-  /**
-   * The balls that have a mesh, with their type, for the trail effect. One reused array and one
-   * reused record per slot; the bindings are walked once (a map from body to mesh), not once per ball.
-   */
-  private collectTrailInfos(ballBodies: readonly PhysicsBody[]): TrailInfo[] {
-    const out = this.trailInfos
-    out.length = 0
-    const ballManager = this.host.ballManager
-    if (!ballManager) return out
-    const meshByBody = this.trailMeshByBody
-    meshByBody.clear()
-    for (const binding of ballManager.getBindings()) {
-      if (binding.mesh) meshByBody.set(binding.rigidBody, binding.mesh as Mesh)
-    }
-    for (const body of ballBodies) {
-      const mesh = meshByBody.get(body)
-      if (!mesh) continue
-      let record = this.trailInfoPool[out.length]
-      if (!record) {
-        record = { body, mesh, type: BallType.STANDARD }
-        this.trailInfoPool.push(record)
-      }
-      record.body = body
-      record.mesh = mesh
-      record.type = ballManager.getBallType(body) || BallType.STANDARD
-      out.push(record)
-    }
-    meshByBody.clear()
-    return out
+    this.visualPhase.update()
   }
 
   getBallMeshForBody(body: PhysicsBody): Mesh | null {
@@ -848,71 +458,14 @@ export class GamePhysicsController {
   getBallPosition(out: Vector3): Vector3 | null {
     const body = this.host.ballManager?.getBallBody()
     if (!body) return null
-    return this.meshInterpolation.getInterpolatedPosition(body, this.renderAlpha, out)
+    return this.meshInterpolation.getInterpolatedPosition(body, this.frame.alpha, out)
   }
 
   applyNudge(direction: { x: number; y: number; z: number }): void {
-    if (this.host.nudgeState.tiltActive) {
-      this.host.hapticManager?.tiltWarning()
-      return
-    }
-    const ballBody = this.host.ballManager?.getBallBody()
-    if (!ballBody) return
-
-    const now = this.simClock.liveMs()
-    if (now - this.host.nudgeState.lastNudgeTime < GAME_TUNING.timing.nudgeCooldownMs) {
-      this.host.nudgeState.tiltWarnings++
-      if (this.host.nudgeState.tiltWarnings >= GameConfig.nudge.maxTiltWarnings) {
-        this.triggerTilt()
-        return
-      }
-    }
-    this.host.nudgeState.lastNudgeTime = now
-
-    const impulse = {
-      x: direction.x * getPhysicsTuningValue('nudgeForce'),
-      y: getPhysicsTuningValue('nudgeVerticalBoost'),
-      z: direction.z * getPhysicsTuningValue('nudgeForce'),
-    }
-    ballBody.applyImpulse(impulse, true)
-
-    const nudgeDirection = direction.x > 0 ? 'right' : direction.x < 0 ? 'left' : 'up'
-    this.host.hapticManager?.nudge(nudgeDirection)
-
-    if (!this.host.accessibility.reducedMotion) {
-      this.host.effects?.addCameraShake(0.03)
-    }
+    this.nudgeTilt.applyNudge(direction)
   }
 
   triggerTilt(): void {
-    this.host.nudgeState.tiltActive = true
-    this.host.nudgeState.tiltWarningActive = false
-    // The penalty ends on the sim clock (`tickTilt`), never a timer: a replay
-    // must lock and release the flippers on the same step the live run did.
-    this.host.nudgeState.tiltPenaltyUntilMs = this.simClock.liveMs() + GameConfig.nudge.tiltPenaltyTime
-    this.host.tiltActive = true
-    this.host.effects?.setBloomEnergy(3.0)
-    // Cosmetic only — the bloom pulse may stay on wall time.
-    this.timers.setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
-    this.host.effects?.playBeep(150)
-    this.host.hapticManager?.tiltWarning()
-  }
-
-  /**
-   * Per-frame tilt bookkeeping on the sim clock: release the tilt penalty once
-   * it has run, and bleed off warnings (one per sim second) after
-   * `tiltDecayTime` without a nudge.
-   */
-  private tickTilt(simDt: number): void {
-    const state = this.host.nudgeState
-    const now = this.simClock.liveMs()
-    if (state.tiltActive && now >= state.tiltPenaltyUntilMs) {
-      state.tiltActive = false
-      state.tiltWarnings = 0
-      this.host.tiltActive = false
-    }
-    if (now - state.lastNudgeTime > GameConfig.nudge.tiltDecayTime && state.tiltWarnings > 0) {
-      state.tiltWarnings = Math.max(0, state.tiltWarnings - simDt)
-    }
+    this.nudgeTilt.triggerTilt()
   }
 }

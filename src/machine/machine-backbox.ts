@@ -1,6 +1,6 @@
 /**
  * A machine's backbox clips mapped onto `GameConfig.backbox` (#506 Slice A).
- * Its own small module: `game-systems-init.ts` (entry chunk) calls it, while
+ * Its own small module: `game/init/register-rendering.ts` (entry chunk) calls it, while
  * the loader and schema stay in the lazy machine chunk.
  */
 

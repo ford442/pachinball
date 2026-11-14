@@ -115,8 +115,8 @@ On the gameplay clock (#441):
 
 | What | Where |
 |------|-------|
-| Nudge cooldown, tilt warnings, warning decay | `physics-controller.ts` `applyNudge` / `tickTilt` |
-| Tilt penalty (no `setTimeout`; released in `tickTilt` each frame) | `physics-controller.ts` `triggerTilt` |
+| Nudge cooldown, tilt warnings, warning decay | `nudge-tilt.ts` `applyNudge` / `tickTilt` |
+| Tilt penalty (no `setTimeout`; released in `tickTilt` each frame) | `nudge-tilt.ts` `triggerTilt` |
 | Ball-save grace | `ball-manager-context.ts` `nowMs()`, `scoring-bridge.ts` |
 | Combo chain / bumper combo / gold-streak windows | `scoring-bridge.ts` `nowSeconds()` |
 | Gold swarm quick-collect bonus | `ball-manager-gold.ts` `collectBall` |
@@ -260,4 +260,4 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
    rejects, headless verifier + golden tape corpus (`tests/replays/`).~~
 6. ~~#444 Slice E: live spectate — fingerprinted tape chunks, a spectator one
    chunk behind; fixed steps do no GPU work.~~
-7. Done: every per-frame `dt` consumer that pushes a body runs once per fixed tick at `FIXED_TIMESTEP` — feeders, captures, caught balls, targets and `adventureMode.update` in `stepGameplay` (#519 A1), gates / traps / launchers in `tickStepMechanisms`, and the plunger spring at the head of `runTick`. The render-frame `sim` phase (`updateSim`) keeps only the dynamic world camera / zone visuals and the map manager, which move no body. Feeder ring / barrel animation and the vibration `Math.random()` only touch meshes.
+7. Done: every per-frame `dt` consumer that pushes a body runs once per fixed tick at `FIXED_TIMESTEP` — feeders, captures, caught balls, targets and `adventureMode.update` in `stepGameplay` (#519 A1; `step-gameplay.ts`), gates / traps / launchers in `tickStepMechanisms`, and the plunger spring at the head of `runTick`. The render-frame `sim` phase (`updateSim`) keeps only the dynamic world camera / zone visuals and the map manager, which move no body. Feeder ring / barrel animation and the vibration `Math.random()` only touch meshes.

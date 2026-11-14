@@ -323,8 +323,8 @@ Each frame runs its phases in order, every system in registration order within i
 |---|---|
 | `input` | latency display |
 | `physics` | `physicsController.stepFixed()` — input drain, the fixed steps this frame owes, and per step: the engine step, then traps / launchers / moving gates, feeders, captures, stuck balls, combo / tilt / power-up, adventure obstacles; then mesh interpolation |
-| `sim` | `physicsController.updateSim()` (dynamic-world zone reveal, map manager, a jackpot exit outside a tick), adventure mode |
-| `visuals` | `physicsController.updateVisuals()` (camera, effects, trails, backbox), cabinet lighting, spinners |
+| `sim` | `physicsController.updateSim()` (`sim-phase.ts`; dynamic-world zone reveal, map manager, a jackpot exit outside a tick), adventure mode |
+| `visuals` | `physicsController.updateVisuals()` (`visual-phase.ts`; camera, effects, trails, backbox), cabinet lighting, spinners |
 | `render` | `scene.render()` |
 | `hud` | countdown, perf monitor, debug HUD |
 | `idle` | dynamic resolution's frame-time sample |

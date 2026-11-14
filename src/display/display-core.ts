@@ -14,14 +14,12 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import {
   DisplayState,
   type DisplayConfig,
+  type CRTEffectParams,
   DEFAULT_DISPLAY_CONFIG,
   getStateConfig,
 } from './display-types'
 import { PALETTE, QualityTier } from '../game-elements/visual-language'
-import {
-  type AccessibilityConfig,
-  detectAccessibility,
-} from '../game-elements/accessibility-config'
+import { type AccessibilityConfig, detectAccessibility } from '../game-elements/accessibility-config'
 import { DisplayShaderLayer } from './display-shader'
 import { DisplayReelsLayer, type ReelsRenderTelemetrySnapshot } from './display-reels'
 import { SlotMachine } from './slot-machine'
@@ -32,33 +30,22 @@ import { DisplayPhysicalLayer } from './display-physical'
 import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
 import { DisplayStateMachine } from './display-state-machine'
 import { BackboxBorderGlow } from './display-border-glow'
-import type { CRTEffectParams } from './display-types'
 import type { EventBus } from '../core/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
 import { DisplayOverlay } from './display-overlay'
-import { DISPLAY_LAYER_Z } from './display-layer-depth'
-import {
-  planBackboxGraph,
-  type BackboxGraphFlags,
-  type BackboxGraphPlan,
-} from './backbox-graph-plan'
-import type { BackboxFrameGraph, BackboxGraphInfo, BackboxLayerSource } from './backbox-frame-graph'
+import { DisplayBackboxGraph, type BackboxGraphReport } from './display-backbox-graph'
+import { CharacterTakeLoader } from './display-character-take'
+import { LcdTransientText } from './display-lcd-text'
+import { applyStateMedia, lightingModeForState } from './display-state-presentation'
+import type { BackboxFrameGraph } from './backbox-frame-graph'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import { isSoftwareRasterizer } from '../engine/software-rasterizer'
+
+export type { BackboxGraphStatus, BackboxGraphReport } from './display-backbox-graph'
 
 export interface DisplaySystemOptions {
   /** `?nopp=1`: the backbox graph is the composite and nothing else (no CRT, no jackpot pass). */
   noPostProcess?: boolean
-}
-
-export type BackboxGraphStatus = 'idle' | 'pending' | 'built' | 'failed'
-
-/** What `getBackboxGraphInfo()` reports: the plan always, the built graph once it exists. */
-export interface BackboxGraphReport {
-  status: BackboxGraphStatus
-  error: string | null
-  plan: BackboxGraphPlan
-  graph: BackboxGraphInfo | null
 }
 
 export class DisplaySystem {
@@ -76,23 +63,22 @@ export class DisplaySystem {
   private reelsLayer: DisplayReelsLayer
   private videoLayer: DisplayVideoLayer
   private imageLayer: DisplayImageLayer
-  // Lazily imported on the first non-empty characterLayer (keeps it off the entry chunk).
-  private characterLayer: DisplayCharacterLayer | null = null
-  private characterLayerLoading = false
-  private characterRequest: { url: string; state: DisplayState } = { url: '', state: DisplayState.IDLE }
+  // The character take (lazily imported on the first non-empty characterLayer, off the entry chunk).
+  private readonly characterTake: CharacterTakeLoader
+  private get characterLayer(): DisplayCharacterLayer | null {
+    return this.characterTake.layer
+  }
   private backboxRoot: TransformNode | null = null
-  private disposed = false
   private lcdOverlayLayer: DisplayLcdOverlayLayer
   private stateMachine: DisplayStateMachine
 
   // Backbox Frame Graph (#461): the layers above composed into one texture on one plane.
   // Lazily imported, like the character layer, so its Babylon tasks stay off the entry chunk.
-  private readonly noPostProcess: boolean
-  private readonly softwareRaster: boolean
-  private backboxGraph: BackboxFrameGraph | null = null
-  private backboxGraphStatus: BackboxGraphStatus = 'idle'
-  private backboxGraphError: string | null = null
-  private staticSceneGate: Pick<StaticSceneGate, 'invalidate'> | null = null
+  private readonly backbox: DisplayBackboxGraph
+  /** The built graph (null until it exists); read by the e2e probes (`display.backboxGraph`). */
+  get backboxGraph(): BackboxFrameGraph | null {
+    return this.backbox.getGraph()
+  }
 
   // Border glow
   private borderGlow: BackboxBorderGlow | null = null
@@ -112,20 +98,8 @@ export class DisplaySystem {
   private trackThemePrimary: string = PALETTE.CYAN
   private trackThemeAccent: string = PALETTE.GOLD
 
-  // Drain / ball-lost flash mode state machine
-  private _displayMode: 'normal' | 'drain' = 'normal'
-  private _drainTimer = 0
-  private _flashCycleTime = 0
-  private _currentSplashIndex = 0
-
-  // Temporary text overlay (combo multiplier, ball save, bonus tally)
-  private _temporaryText = ''
-  private _temporaryTextTimer = 0
-
-  // Bonus tally count-up animation
-  private _bonusTallyTarget = 0
-  private _bonusTallyDisplay = 0
-  private _bonusTallyAnimating = false
+  // Drain reaction, temporary text and the bonus tally (Layer 3 LCD text)
+  private readonly lcdText: LcdTransientText
 
   // Slot machine mini-game (created when event bus is wired)
   private slotMachine: SlotMachine | null = null
@@ -139,8 +113,6 @@ export class DisplaySystem {
     options: DisplaySystemOptions = {}
   ) {
     this.scene = scene
-    this.noPostProcess = options.noPostProcess ?? false
-    this.softwareRaster = isSoftwareRasterizer(engine)
     this.config = { ...DEFAULT_DISPLAY_CONFIG, ...config }
     this.qualityTier = qualityTier ?? QualityTier.MEDIUM
     this.accessibility = accessibility ?? detectAccessibility()
@@ -157,12 +129,33 @@ export class DisplaySystem {
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
     this.imageLayer = new DisplayImageLayer(scene, this.config)
     this.lcdOverlayLayer = new DisplayLcdOverlayLayer(scene, this.config, this.qualityTier)
-    this.lcdOverlayLayer.setAccessibility(
-      this.accessibility.reducedMotion,
-      this.accessibility.flashFrequencyMax <= 1
-    )
+    this.lcdOverlayLayer.setAccessibility(this.accessibility.reducedMotion, this.accessibility.flashFrequencyMax <= 1)
     this.lcdOverlayLayer.setDisplayOverlay(this.overlay)
-
+    this.lcdText = new LcdTransientText(this.lcdOverlayLayer, () => this.isPhotosafeMode())
+    this.characterTake = new CharacterTakeLoader({
+      scene,
+      config: this.config,
+      getAccessibility: () => this.accessibility,
+      getBackboxRoot: () => this.backboxRoot,
+      lcdOverlayLayer: this.lcdOverlayLayer,
+    })
+    this.backbox = new DisplayBackboxGraph({
+      scene,
+      config: this.config,
+      qualityTier: this.qualityTier,
+      noPostProcess: options.noPostProcess ?? false,
+      softwareRaster: isSoftwareRasterizer(engine),
+      getAccessibility: () => this.accessibility,
+      layers: {
+        physical: this.physicalLayer,
+        shader: this.shaderLayer,
+        reels: this.reelsLayer,
+        video: this.videoLayer,
+        image: this.imageLayer,
+        lcd: this.lcdOverlayLayer,
+        getCharacter: () => this.characterLayer,
+      },
+    })
   }
 
   public getQualityTier(): QualityTier {
@@ -172,153 +165,22 @@ export class DisplaySystem {
   setAccessibility(accessibility: AccessibilityConfig): void {
     this.accessibility = accessibility
     this.shaderLayer.setAccessibilityScanlineFactor?.(accessibility.scanlineIntensity)
-    this.lcdOverlayLayer.setAccessibility(
-      accessibility.reducedMotion,
-      accessibility.flashFrequencyMax <= 1
-    )
-    this.characterLayer?.setAccessibility(
-      accessibility.reducedMotion,
-      accessibility.flashFrequencyMax <= 1
-    )
-    this.syncBackboxGraphPlan()
+    this.lcdOverlayLayer.setAccessibility(accessibility.reducedMotion, accessibility.flashFrequencyMax <= 1)
+    this.characterLayer?.setAccessibility(accessibility.reducedMotion, accessibility.flashFrequencyMax <= 1)
+    this.backbox.syncPlan()
   }
 
   /** Thawed when the backbox graph moves layer meshes off the scene camera's layer mask. */
   setStaticSceneGate(gate: Pick<StaticSceneGate, 'invalidate'> | null): void {
-    this.staticSceneGate = gate
-  }
-
-  private backboxGraphFlags(): BackboxGraphFlags {
-    return {
-      photosensitive: this.accessibility.photosensitiveMode === true,
-      reducedMotion: this.accessibility.reducedMotion,
-      noPostProcess: this.noPostProcess,
-      softwareRaster: this.softwareRaster,
-    }
-  }
-
-  private backboxGraphPlan(): BackboxGraphPlan {
-    return planBackboxGraph(this.backboxGraphFlags(), this.qualityTier, this.config.width / this.config.height)
-  }
-
-  private backboxLayerSources(): BackboxLayerSource[] {
-    return [
-      { id: 'physical', meshes: () => this.physicalLayer.getMeshes() },
-      { id: 'grid', meshes: () => this.shaderLayer.getMeshes() },
-      { id: 'reels', meshes: () => this.reelsLayer.getMeshes() },
-      { id: 'video', meshes: () => this.videoLayer.getMeshes() },
-      { id: 'image', meshes: () => this.imageLayer.getMeshes() },
-      { id: 'character', meshes: () => this.characterLayer?.getMeshes() ?? [] },
-      { id: 'lcd', meshes: () => this.lcdOverlayLayer.getMeshes() },
-    ]
-  }
-
-  /** Build the backbox graph once the layers exist. Until it is ready, nothing is composited. */
-  private startBackboxGraph(root: TransformNode): void {
-    const plan = this.backboxGraphPlan()
-    this.shaderLayer.setJackpotStill(plan.effects.includes('jackpotStill'))
-    this.backboxGraphStatus = 'pending'
-    this.backboxGraphError = null
-    import('../frame-graph-runtime')
-      .then(({ BackboxFrameGraph }) => {
-        if (this.disposed) return null
-        return BackboxFrameGraph.create(
-          {
-            scene: this.scene,
-            root,
-            displayWidth: this.config.width,
-            displayHeight: this.config.height,
-            planeZ: DISPLAY_LAYER_Z.COMPOSITE,
-            layers: this.backboxLayerSources(),
-            effects: this.shaderLayer.getEffectPasses(),
-            onLayerMasksChanged: () => this.staticSceneGate?.invalidate('backbox-graph'),
-          },
-          plan
-        )
-      })
-      .then((graph) => {
-        if (!graph) return
-        if (this.disposed) {
-          graph.dispose()
-          return
-        }
-        this.backboxGraph = graph
-        this.backboxGraphStatus = 'built'
-        console.log(`[Display] Backbox graph built: ${graph.getInfo().nodes.join(' → ')}`)
-        // Accessibility may have changed while the graph was compiling.
-        this.syncBackboxGraphPlan()
-      })
-      .catch((err: unknown) => {
-        // The graph handed the layer meshes back to the scene camera when it failed.
-        this.backboxGraphStatus = 'failed'
-        this.backboxGraphError = err instanceof Error ? err.message : String(err)
-        console.warn('[Display] Backbox graph failed to build:', err)
-      })
-  }
-
-  /** Rebuild the graph when the node set changes (photosensitive / reduced motion toggled). */
-  private syncBackboxGraphPlan(): void {
-    const plan = this.backboxGraphPlan()
-    this.shaderLayer.setJackpotStill(plan.effects.includes('jackpotStill'))
-    const graph = this.backboxGraph
-    if (!graph) return
-    graph.rebuild(plan).then(() => {
-      if (this.backboxGraph !== graph) return
-      this.backboxGraphStatus = 'built'
-      this.backboxGraphError = null
-    }).catch((err: unknown) => {
-      this.backboxGraphStatus = 'failed'
-      this.backboxGraphError = err instanceof Error ? err.message : String(err)
-      console.warn('[Display] Backbox graph rebuild failed:', err)
-    })
+    this.backbox.setStaticSceneGate(gate)
   }
 
   /** The backbox graph's plan and, once built, its node list (debug HUD, e2e). */
   getBackboxGraphInfo(): BackboxGraphReport {
-    return {
-      status: this.backboxGraphStatus,
-      error: this.backboxGraphError,
-      plan: this.backboxGraphPlan(),
-      graph: this.backboxGraph?.getInfo() ?? null,
-    }
+    return this.backbox.getInfo()
   }
 
-  /** Route a state's characterLayer to the character plane, loading its chunk on first use. */
-  private requestCharacterTake(url: string, state: DisplayState): void {
-    this.characterRequest = { url, state }
-    if (this.characterLayer) {
-      this.characterLayer.setTake(url, state)
-      return
-    }
-    if (!url.trim() || this.characterLayerLoading) return
-    this.characterLayerLoading = true
-    import('./display-character')
-      .then(({ DisplayCharacterLayer }) => {
-        if (this.disposed) return
-        // A loaded take suppresses the LCD walk-by; a missing one leaves it running.
-        const layer = new DisplayCharacterLayer(this.scene, this.config, (active) =>
-          this.lcdOverlayLayer.setCharacterTakeActive(active)
-        )
-        layer.setAccessibility(
-          this.accessibility.reducedMotion,
-          this.accessibility.flashFrequencyMax <= 1
-        )
-        if (this.backboxRoot) layer.createLayer(this.backboxRoot, this.config)
-        this.characterLayer = layer
-        layer.setTake(this.characterRequest.url, this.characterRequest.state)
-      })
-      .catch((err: unknown) => {
-        // The LCD walk-by stays the fallback.
-        console.warn('[Display] Character layer chunk failed to load:', err)
-      })
-      .finally(() => {
-        this.characterLayerLoading = false
-      })
-  }
-
-  /**
-   * Create the backbox display at the specified position
-   */
+  /** Create the backbox display at the specified position */
   createBackbox(position: Vector3): void {
     this.backboxPosition = position.clone()
     // Use void expression to suppress "declared but never read" warning
@@ -338,12 +200,12 @@ export class DisplaySystem {
     this.backboxRoot = backboxRoot
     this.characterLayer?.createLayer(backboxRoot, this.config)
     // setDisplayState skips the state already current, so the boot (IDLE / attract) take is requested here.
-    this.requestCharacterTake(getStateConfig(this.config, this.currentState).characterLayer ?? '', this.currentState)
+    this.characterTake.requestTake(getStateConfig(this.config, this.currentState).characterLayer ?? '', this.currentState)
     this.lcdOverlayLayer.createLayer(backboxRoot, this.config)
     this.lcdOverlayLayer.setTrackTheme(this.trackThemePrimary, this.trackThemeAccent)
 
     // One composite of every layer above, on the one plane the scene camera sees.
-    this.startBackboxGraph(backboxRoot)
+    this.backbox.start(backboxRoot)
 
     // Initialise border glow on the cabinet backbox mesh (built by cabinet preset).
     // It lights the cabinet frame (a scene mesh around the glass), so it is not a graph layer.
@@ -366,29 +228,17 @@ export class DisplaySystem {
     }
   }
 
-  /**
-   * Trigger the "Drain / Ball Lost" display reaction.
-   * Call this from the physics loop when a ball enters the drain zone.
-   */
+  /** Trigger the "Drain / Ball Lost" display reaction (call it when a ball enters the drain zone). */
   public triggerDrainReaction(): void {
-    this._displayMode = 'drain'
-    this._drainTimer = 2.0
-    this._flashCycleTime = 0
-    this._currentSplashIndex = 0
-    this.lcdOverlayLayer.setDrainMode(true, this._flashCycleTime, this._currentSplashIndex)
+    this.lcdText.triggerDrainReaction()
   }
 
-  /**
-   * Returns true while the drain/ball-lost animated overlay is active.
-   * Useful for callers that need to suppress other UI updates during the sequence.
-   */
+  /** True while the drain / ball-lost overlay is active (callers may suppress other UI meanwhile). */
   public isDrainReactionActive(): boolean {
-    return this._displayMode === 'drain'
+    return this.lcdText.isDrainReactionActive()
   }
 
-  /**
-   * Main update loop
-   */
+  /** Main update loop */
   update(dt: number, jackpotPhase?: number): void {
     this.globalTime += dt
     this.jackpotPhase = jackpotPhase ?? 0
@@ -424,41 +274,7 @@ export class DisplaySystem {
       this.overlay.update(dt)
     }
 
-    if (this._displayMode === 'drain') {
-      this._drainTimer -= dt
-      this._flashCycleTime += dt
-      const newIndex = Math.floor(this._flashCycleTime / 0.3) % 2
-      if (!this.isPhotosafeMode() || newIndex !== this._currentSplashIndex) {
-        this._currentSplashIndex = newIndex
-        this.lcdOverlayLayer.setDrainMode(true, this._flashCycleTime, this._currentSplashIndex)
-      }
-      if (this._drainTimer <= 0) {
-        this._displayMode = 'normal'
-        this._drainTimer = 0
-        this._flashCycleTime = 0
-        this.lcdOverlayLayer.setDrainMode(false)
-      }
-    }
-
-    if (this._temporaryTextTimer > 0) {
-      this._temporaryTextTimer -= dt
-      if (this._temporaryTextTimer <= 0 && !this._bonusTallyAnimating) {
-        this._temporaryText = ''
-        this.lcdOverlayLayer.setTemporaryText('')
-      }
-    }
-
-    if (this._bonusTallyAnimating) {
-      const animDurationS = 1.5
-      const step = Math.max(1, Math.ceil(this._bonusTallyTarget * dt / animDurationS))
-      this._bonusTallyDisplay = Math.min(this._bonusTallyTarget, this._bonusTallyDisplay + step)
-      this._temporaryText = `BONUS ${Math.round(this._bonusTallyDisplay)}`
-      this.lcdOverlayLayer.setTemporaryText(this._temporaryText)
-      if (this._bonusTallyDisplay >= this._bonusTallyTarget) {
-        this._bonusTallyAnimating = false
-        this._temporaryTextTimer = 2.0
-      }
-    }
+    this.lcdText.update(dt)
   }
 
   /** Returns true when reduced motion or a low flash-frequency cap is requested. */
@@ -466,9 +282,7 @@ export class DisplaySystem {
     return this.accessibility.reducedMotion || this.accessibility.flashFrequencyMax <= 1
   }
 
-  /**
-   * Set the current display state
-   */
+  /** Set the current display state */
   setDisplayState(state: DisplayState, jackpotPhase = 0): void {
     const changed = this.stateMachine.requestState(state)
     this.jackpotPhase = jackpotPhase
@@ -479,38 +293,12 @@ export class DisplaySystem {
 
     const media = getStateConfig(this.config, state)
 
-    this.shaderLayer.setBackgroundVisible(media.showShaderBackground ?? true)
-    this.reelsLayer.setVisible(media.showReels ?? true)
-    this.physicalLayer.setVisible(media.showShaderBackground ?? true)
+    applyStateMedia(
+      { shader: this.shaderLayer, reels: this.reelsLayer, physical: this.physicalLayer, video: this.videoLayer, image: this.imageLayer },
+      media,
+    )
 
-    if (media.shaderParams) {
-      this.shaderLayer.setShaderParams(media.shaderParams)
-    }
-
-    // The character take is its own plane over this stack; it never takes the video / image slot.
-    const videoUrl = media.videoPath || ''
-    const imageUrl = media.imagePath || ''
-
-    if (videoUrl) {
-      this.videoLayer.loadVideo(videoUrl)
-      this.videoLayer.setVisible(true)
-    } else {
-      this.videoLayer.setVisible(false)
-    }
-
-    if (imageUrl) {
-      this.imageLayer.loadImage(imageUrl, media.opacity ?? 1.0)
-      this.imageLayer.setVisible(true)
-    } else {
-      this.imageLayer.setVisible(false)
-    }
-
-    if (!videoUrl && !imageUrl) {
-      this.shaderLayer.setBackgroundVisible(true)
-      this.reelsLayer.setVisible(true)
-    }
-
-    this.requestCharacterTake(media.characterLayer ?? '', state)
+    this.characterTake.requestTake(media.characterLayer ?? '', state)
 
     this.physicalLayer.onStateChange(state)
     this.shaderLayer.onStateChange(state)
@@ -519,55 +307,31 @@ export class DisplaySystem {
     this.lcdOverlayLayer.onStateChange(state)
     this.borderGlow?.onDisplaySet(state)
 
-    const lightingMode = this.lightingModeForState(state)
+    const lightingMode = lightingModeForState(state)
     this._effectsSystem?.setLightingMode(lightingMode, lightingMode === 'reach' ? 2.5 : lightingMode === 'fever' ? 4.0 : 0)
   }
 
-  private lightingModeForState(state: DisplayState): 'normal' | 'reach' | 'fever' | 'hit' {
-    switch (state) {
-      case DisplayState.REACH:
-      case DisplayState.PORTAL_OPEN:
-      case DisplayState.ESCAPE:
-        return 'reach'
-      case DisplayState.FEVER:
-      case DisplayState.JACKPOT:
-        return 'fever'
-      default:
-        return 'normal'
-    }
-  }
-
-  /**
-   * Get the current display state
-   */
+  /** Get the current display state */
   getDisplayState(): DisplayState {
     return this.currentState
   }
 
-  /**
-   * Trigger slot machine spin
-   */
+  /** Trigger slot machine spin */
   triggerSlotSpin(): void {
     this.reelsLayer.startSpin()
   }
 
-  /**
-   * Set video source URL
-   */
+  /** Set video source URL */
   setVideoSource(url: string): void {
     this.videoLayer.loadVideo(url)
   }
 
-  /**
-   * Enable/disable CRT effect
-   */
+  /** Enable/disable CRT effect */
   setCRTEffectEnabled(enabled: boolean): void {
     this.shaderLayer.setCRTEffectEnabled(enabled)
   }
 
-  /**
-   * Set CRT effect parameters
-   */
+  /** Set CRT effect parameters */
   setCRTEffectParams(params: Partial<CRTEffectParams>): void {
     this.shaderLayer.setCRTEffectParams(params)
   }
@@ -584,9 +348,7 @@ export class DisplaySystem {
     this.shaderLayer.setScanlineIntensityMultiplier(multiplier)
   }
 
-  /**
-   * Load and play a story video from URL
-   */
+  /** Load and play a story video from URL */
   loadAndPlayVideo(url: string): void {
     if (!url) {
       console.log('[Display] No video URL provided, skipping video playback')
@@ -595,22 +357,13 @@ export class DisplaySystem {
     this.videoLayer.loadVideo(url)
   }
 
-  /**
-   * Set story text for adventure mode
-   */
+  /** Set story text for adventure mode */
   setStoryText(text: string): void {
     this.lcdOverlayLayer.setStoryText(text)
   }
 
-  /**
-   * Show zone entry story
-   */
-  showZoneStory(
-    zoneName: string,
-    storyText: string,
-    videoUrl?: string,
-    enableCRT = true
-  ): void {
+  /** Show zone entry story */
+  showZoneStory(zoneName: string, storyText: string, videoUrl?: string, enableCRT = true): void {
     console.log(`[Display] Zone entry: ${zoneName}`)
     this.setStoryText(storyText)
 
@@ -621,17 +374,13 @@ export class DisplaySystem {
     this.setCRTEffectEnabled(enableCRT)
   }
 
-  /**
-   * Trigger a CRT flash effect
-   */
+  /** Trigger a CRT flash effect */
   triggerCRTFlash(): void {
     // Flash effect implementation
     console.log('[Display] CRT flash triggered')
   }
 
-  /**
-   * Set track info for adventure mode
-   */
+  /** Set track info for adventure mode */
   setTrackInfo(trackName: string, progress = 0): void {
     const pct = Math.max(0, Math.min(1, progress))
     const bar = '█'.repeat(Math.round(pct * 10)).padEnd(10, '░')
@@ -644,27 +393,19 @@ export class DisplaySystem {
     this.lcdOverlayLayer.setTrackTheme(primaryHex, accentHex)
   }
 
-  /**
-   * Check if using WGSL shaders
-   */
+  /** Check if using WGSL shaders */
   isUsingWGSL(): boolean {
     return this.useWGSL
   }
 
-  // ============================================================================
-  // SLOT MACHINE
-  // ============================================================================
+  // Slot machine and reels
 
-  /**
-   * Configure the slot machine with settings
-   */
+  /** Configure the slot machine with settings */
   public configureSlotMachine(config: Partial<import('./slot-types').SlotMachineConfig>): void {
     this.slotMachine?.configure(config)
   }
 
-  /**
-   * Wire a live score provider for HYBRID / SCORE activation gating.
-   */
+  /** Wire a live score provider for HYBRID / SCORE activation gating. */
   public setSlotScoreProvider(provider: () => number): void {
     this.slotMachine?.setScoreProvider(provider)
   }
@@ -685,16 +426,12 @@ export class DisplaySystem {
     return this.slotMachine?.tryActivate(score) ?? false
   }
 
-  /**
-   * Start a slot machine spin.
-   */
+  /** Start a slot machine spin. */
   public startSlotSpin(): void {
     this.slotMachine?.forceSpin()
   }
 
-  /**
-   * Force the next spin to land on the supplied symbols (debug / tests).
-   */
+  /** Force the next spin to land on the supplied symbols (debug / tests). */
   public setSlotDebugForce(symbols: import('./slot-types').SlotSymbol[]): void {
     this.slotMachine?.setDebugForceResult(symbols)
   }
@@ -716,18 +453,9 @@ export class DisplaySystem {
     return this.reelsLayer.isSpinning()
   }
 
-  /**
-   * Start a long benchmark spin for Phase 1 telemetry capture (debug / tests).
-   * Bypasses slot-machine gating so reel draw/upload cost can be sampled in isolation.
-   */
+  /** Start a long benchmark spin for reel draw/upload telemetry (debug / tests; bypasses slot-machine gating). */
   public debugStartReelsBenchmarkSpin(): void {
-    this.reelsLayer.setVisible(true)
-    this.reelsLayer.startSpin({
-      autoStop: true,
-      spinDuration: 2.0,
-      reelSpeeds: [14, 16, 12],
-      stopDelays: [0, 0.35, 0.7],
-    })
+    this.reelsLayer.startBenchmarkSpin()
   }
 
   /**
@@ -744,38 +472,12 @@ export class DisplaySystem {
       this.setDisplayState(state)
     })
 
-    bus.on('combo:multiplier:changed', (data) => {
-      if (data.multiplier > 1) {
-        this._temporaryText = `MULTIPLIER x${data.multiplier}`
-        this._temporaryTextTimer = 1.5
-        this.lcdOverlayLayer.setTemporaryText(this._temporaryText)
-      }
-    })
-
-    bus.on('ball:save:triggered', () => {
-      this._temporaryText = 'BALL SAVED'
-      this._temporaryTextTimer = 2.0
-      this.lcdOverlayLayer.setTemporaryText(this._temporaryText)
-    })
-
-    bus.on('bonus:tally:start', (data) => {
-      this._bonusTallyTarget = data.totalBonus
-      this._bonusTallyDisplay = 0
-      this._bonusTallyAnimating = true
-    })
-
-    bus.on('bonus:tally:complete', () => {
-      this._bonusTallyAnimating = false
-      this._temporaryTextTimer = 2.0
-    })
+    this.lcdText.subscribeToEvents(bus)
   }
 
-  /**
-   * Dispose all resources
-   */
+  /** Dispose all resources */
   dispose(): void {
-    this.backboxGraph?.dispose()
-    this.backboxGraph = null
+    this.backbox.dispose()
     this.slotMachine?.dispose()
     this.borderGlow?.dispose()
     this.physicalLayer.dispose()
@@ -783,17 +485,12 @@ export class DisplaySystem {
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
     this.imageLayer.dispose()
-    this.disposed = true
-    this.characterLayer?.dispose()
-    this.characterLayer = null
+    this.characterTake.dispose()
     this.lcdOverlayLayer.dispose()
   }
 
   /** The character take URL currently requested and whether it has loaded (tests / e2e). */
   getCharacterTakeState(): { url: string; active: boolean } {
-    return {
-      url: this.characterLayer?.getTakeUrl() ?? this.characterRequest.url.trim(),
-      active: this.characterLayer?.isTakeActive() ?? false,
-    }
+    return this.characterTake.getState()
   }
 }

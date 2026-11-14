@@ -422,6 +422,20 @@ export class DisplayReelsLayer {
   }
 
   /**
+   * Start a long benchmark spin for Phase 1 telemetry capture (debug / tests).
+   * Bypasses slot-machine gating so reel draw/upload cost can be sampled in isolation.
+   */
+  startBenchmarkSpin(): void {
+    this.setVisible(true)
+    this.startSpin({
+      autoStop: true,
+      spinDuration: 2.0,
+      reelSpeeds: [14, 16, 12],
+      stopDelays: [0, 0.35, 0.7],
+    })
+  }
+
+  /**
    * Begin a spin. With no arguments the legacy auto-stop behavior is preserved.
    */
   startSpin(options?: SpinOptions): void {

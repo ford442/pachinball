@@ -221,7 +221,7 @@ export class GameSlotAdventure {
    * never diverge (dual-state would require both to stay in sync on every code path,
    * which is error-prone and was the root cause of the original rebuild gap).
    *
-   * Called by the onTrackAdvanced callback wired in GameSystemsInitializer, which
+   * Called by the onTrackAdvanced callback wired in `init/register-campaign.ts`, which
    * receives the next track ID straight from AdventureTrackProgression after a
    * portal entry finalises the completed track.
    */

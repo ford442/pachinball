@@ -10,7 +10,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 |------|------|
 | [`src/main.ts`](../src/main.ts) | Application bootstrap — Babylon engine (WebGPU-first), physics preload (`preloadPhysicsSystem()`: the C++ bundle by default, Rapier only for `rapier` / `wasm-mirror`), `Game` instantiation |
 | [`src/game.ts`](../src/game.ts) | Main game orchestrator — wires subsystems, render loop, state machine |
-| [`src/game/game-systems-init.ts`](../src/game/game-systems-init.ts) | Subsystem initialization (physics, adventure, campaign, display, etc.) |
+| [`src/game/game-systems-init.ts`](../src/game/game-systems-init.ts) | Subsystem initialization: the order of the `registerX(game)` stages in [`src/game/init/`](../src/game/init/) (rendering, gameplay, obstacles, campaign, adventure events, static scene, scene build, managers) |
 
 ### Core Subsystems
 

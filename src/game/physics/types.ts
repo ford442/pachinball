@@ -44,6 +44,19 @@ export function freshNudgeState(): NudgeState {
   return { tiltWarnings: 0, lastNudgeTime: Number.NEGATIVE_INFINITY, tiltActive: false, tiltWarningActive: false, tiltPenaltyUntilMs: 0 }
 }
 
+/**
+ * What `stepFixed` measured this frame, shared by the controller (writer) and the `sim` / `visuals`
+ * phases (readers). One object, so the phases need no back-reference to the controller.
+ */
+export interface PhysicsFrameState {
+  /** Frame delta the sim clock advanced by (s), capped at `MAX_FRAME_DT`. */
+  dt: number
+  /** False when this frame ran no step (not PLAYING): the sim and visual updates skip it. */
+  stepped: boolean
+  /** Alpha the meshes were last drawn with; `getBallPosition` and the camera use the same blend. */
+  alpha: number
+}
+
 export interface PhysicsHost {
   readonly engine: Engine | WebGPUEngine
   readonly physics: PhysicsSystem

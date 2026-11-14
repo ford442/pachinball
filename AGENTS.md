@@ -193,7 +193,13 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 #### `src/game/physics/` — Physics engine seam
 | File | Responsibility |
 |------|----------------|
-| `physics-controller.ts` | Main physics step orchestrator; routes to Rapier or WASM backends. |
+| `physics-controller.ts` | Construction, `stepFixed` and the fixed-step pacer; routes to Rapier or WASM backends. |
+| `sim-phase.ts` / `visual-phase.ts` | The scheduler's `sim` (`updateSim`) and `visuals` (`updateVisuals`) phases. |
+| `step-gameplay.ts` | Per-fixed-step gameplay after the engine step: feeders, captures, stuck balls, combo / power-up windows, gates / traps / launchers, jackpot clock. |
+| `nudge-tilt.ts` | Nudge, tilt warnings and the tilt penalty, on the sim clock. |
+| `wasm-bridges.ts` | The mirror / owner WASM bridge and its rebuild (`rebuildHandleCaches`). |
+| `replay-snapshot-sync.ts` | Frame-0 world snapshot: fingerprint on record, restore on playback. |
+| `physics-event-routes.ts` | The EventBus routes the controller owns (effects, WASM contact batches, worker fallback). |
 | `wasm-mirror.ts` | WASM mirrors ball+bumper subset; Rapier stays authoritative and its bodies remain handles. |
 | `wasm-owner.ts` | WASM owns balls, the table scope, flipper hinges and adventure tracks; bodies are `WasmBody`s keyed on WASM public ids (no Rapier). |
 | `collision-dispatch.ts` | Handle-space collision routing to scoring handlers. |
@@ -201,7 +207,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 
 #### `src/display/` — Backbox display system (barrel: `src/display/index.ts`)
 Replaces the old monolithic `display.ts`.
-- **`display-core.ts`** — Main `DisplaySystem` class.
+- **`display-core.ts`** — Main `DisplaySystem` class: the state machine and the public API. The backbox Frame Graph lifecycle (`display-backbox-graph.ts`), the lazy character take (`display-character-take.ts`), the drain / temporary-text / bonus-tally LCD state (`display-lcd-text.ts`) and a state's layer visibility + lighting (`display-state-presentation.ts`) live beside it.
 - **`display-reels.ts`** — Slot-machine reel animation (Canvas2D fallback).
 - **`display-shader.ts`** — WGSL shader reel layer (WebGPU path).
 - **`display-video.ts`** — HTMLVideoElement layer for attract/jackpot/fever/reach/adventure clips.
@@ -367,7 +373,7 @@ When the campaign loop (STATIONARY_TABLE ↔ EXTENDED_MAP) is involved, the foll
 
 6. **Portal sensor handles must be unregistered on ALL deactivation paths.**
    - `deactivateExitPortal()` MUST emit `PORTAL_DEACTIVATED` with `{ handle, id }`
-   - Handler in `game-systems-init.ts` MUST call `unregisterClosedPortal()` (`src/game/portal-sensor-lifecycle.ts`), which drops both the dispatcher handle and the portal's zone
+   - Handler in `src/game/init/register-adventure-events.ts` (the PORTAL_DEACTIVATED case) MUST call `unregisterClosedPortal()` (`src/game/portal-sensor-lifecycle.ts`), which drops both the dispatcher handle and the portal's zone
    - This covers `switchToTrack()`, `switchZone()`, `end()` and `activateExitPortal()` replacement paths (`tests/portal-deactivation-paths.test.ts`)
    - Portal entry is contact-driven (the C++ sensor's begin contact → `ZoneTriggerSystem` → `onPortalContact` → `enterExitPortal`); never sample a ball position for it
 
