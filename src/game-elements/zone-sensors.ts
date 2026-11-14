@@ -16,7 +16,7 @@
  */
 
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
-import { COLLISION_GROUP_PRESETS } from './physics'
+import { COLLISION_GROUP_PRESETS } from '../core/collision-groups'
 import { ZONE_MAX_Y, ZONE_MIN_Y, type ZoneBounds, type ZoneSensorSink } from './zone-trigger-system'
 
 /** A box never gets thinner than this, so a degenerate zone still has a volume. */

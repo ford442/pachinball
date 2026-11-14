@@ -1,4 +1,6 @@
 // Main EffectsSystem orchestrator
+import type { Vec3Like } from '../core/vec3-scalar'
+import { asVector3 } from './as-vector3'
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
@@ -245,8 +247,8 @@ export class EffectsSystem {
     this.shardEffects?.spawnShardBurst(pos, colorHex)
   }
 
-  spawnImpactRing(position: Vector3, normal: Vector3, color: string): void {
-    this.shardEffects?.spawnImpactRing(position, normal, color)
+  spawnImpactRing(position: Vec3Like, normal: Vec3Like, color: string): void {
+    this.shardEffects?.spawnImpactRing(asVector3(position), asVector3(normal), color)
   }
 
   updateShards(dt: number): void {
@@ -426,7 +428,8 @@ export class EffectsSystem {
     this.performanceController.forcePerformanceTierReview()
   }
 
-  spawnEnhancedBumperImpact(pos: Vector3, intensity: 'light' | 'medium' | 'heavy' = 'medium'): void {
+  spawnEnhancedBumperImpact(position: Vec3Like, intensity: 'light' | 'medium' | 'heavy' = 'medium'): void {
+    const pos = asVector3(position)
     this.spawnShardBurst(pos)
 
     if (!this.performanceController.areEnhancedEffectsEnabled() || !EffectsConfig.enableEnhancedBumperImpact) {
@@ -513,9 +516,9 @@ export class EffectsSystem {
     this.particleEffects.initBumperSparkPool(size)
   }
 
-  spawnBumperSpark(position: Vector3, color?: string): void {
+  spawnBumperSpark(position: Vec3Like, color?: string): void {
     const trackColor = this.getTrackHitColor()
-    this.particleEffects.spawnBumperSpark(position, color ?? trackColor ?? undefined)
+    this.particleEffects.spawnBumperSpark(asVector3(position), color ?? trackColor ?? undefined)
   }
 
   spawnTrail(): void {
@@ -526,8 +529,8 @@ export class EffectsSystem {
     this.particleEffects.spawnJackpotBurst(position)
   }
 
-  spawnFloatingNumber(value: number, worldPosition: Vector3): void {
-    this.floatingEffects?.spawnFloatingNumber(value, worldPosition)
+  spawnFloatingNumber(value: number, worldPosition: Vec3Like): void {
+    this.floatingEffects?.spawnFloatingNumber(value, asVector3(worldPosition))
   }
 
   shakeCamera(config: { intensity: number; duration: number; decay: number }): void {
@@ -593,7 +596,7 @@ export class EffectsSystem {
     this.trailEffects?.updateTrails(balls, this.qualityTier)
   }
 
-  triggerImpactFlash(worldPosition: Vector3, intensity: number, colorHex = '#44aaff'): void {
-    this.impactEffects?.triggerImpactFlash(worldPosition, intensity, colorHex)
+  triggerImpactFlash(worldPosition: Vec3Like, intensity: number, colorHex = '#44aaff'): void {
+    this.impactEffects?.triggerImpactFlash(asVector3(worldPosition), intensity, colorHex)
   }
 }

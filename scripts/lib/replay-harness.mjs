@@ -178,16 +178,7 @@ async function runInPage({ mode, scenario, replay, ghostStride, throwOnContact }
     await g.playReplay(replay)
     if (throwOnContact) {
       // Self-test only (services/replay-verifier/selftest.mjs): the first contact handler throws.
-      const dispatcher = g.physicsController.collisionDispatcher
-      const dispatch = dispatcher.dispatchWasmPair.bind(dispatcher)
-      let thrown = false
-      dispatcher.dispatchWasmPair = (...args) => {
-        if (!thrown) {
-          thrown = true
-          throw new Error('injected contact fault')
-        }
-        return dispatch(...args)
-      }
+      g.physicsController.injectContactFaultOnce()
     }
   }
   if (!g.stateManager.isPlaying()) return fail('start', 'the game did not reach PLAYING')

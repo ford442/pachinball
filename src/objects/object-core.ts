@@ -11,7 +11,8 @@ import { getMaterialLibrary } from '../materials'
 import type { PhysicsApi, PhysicsBody, PhysicsImpulseJoint, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
-import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { TargetBank } from '../table/target-bank'
+import { authorDeathZone, authorPlungerBody, PLUNGER_REST_Z } from '../table/table-colliders'
 import { FlipperBuilder } from './object-flippers'
 import { BumperBuilder } from './object-bumpers'
 import { WallBuilder } from './object-walls'
@@ -30,7 +31,8 @@ export class GameObjects {
   private bindings: PhysicsBinding[] = []
   private bumperVisuals: BumperVisual[] = []
   private bumperBodies: PhysicsBody[] = []
-  private targetBodies: PhysicsBody[] = []
+  /** Targets' up / respawn state (`TargetBank`, shared with the headless replay table, #528). */
+  private readonly targets = new TargetBank(() => this.config.gameplay.targetRespawnTime)
   /**
    * Every pachinko pin collider's body. The lattice mesh is bound to the first only (one binding
    * per lattice), so the table enable/disable and the C++ export walk this list for the rest.
@@ -43,13 +45,11 @@ export class GameObjects {
    */
   private railBodies: PhysicsBody[] = []
   private targetMeshes: Mesh[] = []
-  private targetActive: boolean[] = []
-  private targetRespawnTimer: number[] = []
   private flipperLeftJoint: PhysicsImpulseJoint | null = null
   private flipperRightJoint: PhysicsImpulseJoint | null = null
   private deathZoneBody: PhysicsBody | null = null
   private plungerBody: PhysicsBody | null = null
-  private plungerRestZ = -9.8
+  private plungerRestZ = PLUNGER_REST_Z
   private pinballMeshes: AbstractMesh[] = []
   private tableBodiesEnabled = true
 
@@ -129,16 +129,7 @@ export class GameObjects {
   }
 
   createDeathZone(): void {
-    this.deathZoneBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(0, -2, -14)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(20, 2, 2)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      this.deathZoneBody
-    )
+    this.deathZoneBody = authorDeathZone(this.world, this.rapier)
 
     const deathZoneVis = MeshBuilder.CreateBox('deathZoneVis', { width: 40, height: 0.1, depth: 4 }, this.scene)
     deathZoneVis.position.set(0, -2, -14)
@@ -159,17 +150,7 @@ export class GameObjects {
    */
   createPlungerBody(): void {
     // Plunger tip rests just behind the ball spawn (ball spawns at z=-9)
-    this.plungerBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.kinematicPositionBased()
-        .setTranslation(10.5, 0.5, this.plungerRestZ)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.3, 0.3, 0.4)
-        .setRestitution(0.9)
-        .setFriction(0.1)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      this.plungerBody
-    )
+    this.plungerBody = authorPlungerBody(this.world, this.rapier, this.plungerRestZ)
   }
 
   getPlungerBody(): PhysicsBody | null {
@@ -284,10 +265,8 @@ export class GameObjects {
   ): void {
     const result = this.pachinkoBuilder.createPachinkoField(center, width, height, pinPositions, pinLattice, seededField)
     this.bindings.push(...result.bindings)
-    this.targetBodies.push(...result.targetBodies)
+    for (const body of result.targetBodies) this.targets.add(body)
     this.targetMeshes.push(...result.targetMeshes)
-    this.targetActive.push(...result.targetActive)
-    this.targetRespawnTimer.push(...result.targetRespawnTimer)
     this.pinballMeshes.push(...result.meshes)
     this.pinBodies.push(...result.pinBodies)
     this.refs.pins = result.pins
@@ -314,10 +293,8 @@ export class GameObjects {
       (b) => slingshotBodies.has(b) && !!this.world.getRigidBody(b.handle),
     )
     this.refs.bumpers.clear()
-    this.targetBodies = []
+    this.targets.clear()
     this.targetMeshes = []
-    this.targetActive = []
-    this.targetRespawnTimer = []
     this.pinBodies = []
     this.refs.pins = []
 
@@ -343,18 +320,14 @@ export class GameObjects {
   }
 
   updateTargets(dt: number): void {
-    for (let i = 0; i < this.targetActive.length; i++) {
-      if (!this.targetActive[i]) {
-        this.targetRespawnTimer[i] -= dt
-        if (this.targetRespawnTimer[i] <= 0) {
-          this.targetActive[i] = true
-          this.targetMeshes[i].isVisible = true
-        }
-      } else {
+    this.targets.update(
+      dt,
+      (i) => { this.targetMeshes[i].isVisible = true },
+      (i) => {
         const pulse = Math.sin(performance.now() * 0.005) * 0.1 + 1
         this.targetMeshes[i].scaling.set(pulse, pulse, pulse)
-      }
-    }
+      },
+    )
   }
 
   activateBumperHit(body: PhysicsBody): void {
@@ -373,19 +346,14 @@ export class GameObjects {
   }
 
   deactivateTarget(body: PhysicsBody): boolean {
-    const idx = this.targetBodies.indexOf(body)
-    if (idx !== -1 && this.targetActive[idx]) {
-      this.targetActive[idx] = false
-      this.targetMeshes[idx].isVisible = false
-      this.targetRespawnTimer[idx] = this.config.gameplay.targetRespawnTime
-      return true
-    }
-    return false
+    const idx = this.targets.deactivate(body)
+    if (idx === -1) return false
+    this.targetMeshes[idx].isVisible = false
+    return true
   }
 
   resetTargets(): void {
-    this.targetActive.fill(true)
-    this.targetRespawnTimer.fill(0)
+    this.targets.reset()
     this.targetMeshes.forEach(m => {
       m.isVisible = true
       m.scaling.set(1, 1, 1)
@@ -405,7 +373,7 @@ export class GameObjects {
   }
 
   getTargetBodies(): PhysicsBody[] {
-    return this.targetBodies
+    return this.targets.bodies
   }
 
   getDeathZoneBody(): PhysicsBody | null {
@@ -469,7 +437,7 @@ export class GameObjects {
     for (const body of this.railBodies) {
       bodies.add(body)
     }
-    for (const body of this.targetBodies) {
+    for (const body of this.targets.bodies) {
       bodies.add(body)
     }
     for (const flipper of this.refs.flippers.values()) {
@@ -547,10 +515,8 @@ export class GameObjects {
     this.bindings = []
     this.bumperVisuals = []
     this.bumperBodies = []
-    this.targetBodies = []
+    this.targets.clear()
     this.targetMeshes = []
-    this.targetActive = []
-    this.targetRespawnTimer = []
     this.pinBodies = []
     this.railBodies = []
     this.pinballMeshes = []

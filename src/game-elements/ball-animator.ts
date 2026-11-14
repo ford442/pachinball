@@ -1,4 +1,5 @@
 import { Animation } from '@babylonjs/core/Animations/animation'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { ElasticEase, EasingFunction } from '@babylonjs/core/Animations/easing'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -23,7 +24,9 @@ export class BallAnimator {
    * @param impactNormal - The normal vector of the collision (direction of impact)
    * @param intensity - Impact intensity (0-1), typically derived from velocity
    */
-  animateBallImpact(mesh: Mesh, impactNormal: Vector3, intensity: number): void {
+  animateBallImpact(mesh: Mesh, normal: Vec3Like, intensity: number): void {
+    // Gameplay hands a plain normal (#528); this owns its own copy (`normalize()` below is in place).
+    const impactNormal = new Vector3(normal.x, normal.y, normal.z)
     // Clamp intensity to valid range
     const clampedIntensity = Math.max(0, Math.min(1, intensity))
     

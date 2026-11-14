@@ -92,3 +92,26 @@ export function sphereTouchesVolume(
   }
   return dx * dx + dy * dy + dz * dz <= radius * radius
 }
+
+/**
+ * `Quaternion.FromEulerAngles(x, y, z)` (yaw y, pitch x, roll z; Babylon's y-x-z order) with the
+ * same operations in the same order, so builders that author a rotated collider get the identical
+ * bits with or without Babylon loaded (#528: the table is authored in Node by the headless runner).
+ */
+export function quatFromEulerAngles(x: number, y: number, z: number): PhysicsRotation {
+  const halfRoll = z * 0.5
+  const halfPitch = x * 0.5
+  const halfYaw = y * 0.5
+  const sinRoll = Math.sin(halfRoll)
+  const cosRoll = Math.cos(halfRoll)
+  const sinPitch = Math.sin(halfPitch)
+  const cosPitch = Math.cos(halfPitch)
+  const sinYaw = Math.sin(halfYaw)
+  const cosYaw = Math.cos(halfYaw)
+  return {
+    x: cosYaw * sinPitch * cosRoll + sinYaw * cosPitch * sinRoll,
+    y: sinYaw * cosPitch * cosRoll - cosYaw * sinPitch * sinRoll,
+    z: cosYaw * cosPitch * sinRoll - sinYaw * sinPitch * cosRoll,
+    w: cosYaw * cosPitch * cosRoll + sinYaw * sinPitch * sinRoll,
+  }
+}

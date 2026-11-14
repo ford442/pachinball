@@ -13,6 +13,7 @@ import type {
   QuantumTunnelFeeder,
 } from '../objects/feeders'
 import type { EffectsSystem } from '../effects'
+import type { SimDisplayState } from './sim-display-state'
 import type { DisplaySystem } from '../display'
 import type { AdventureTrackType } from '../adventure'
 import { MagSpinState } from '../objects/feeders/mag-spin-feeder'
@@ -40,6 +41,8 @@ export interface AdventureManagerConfig {
 export interface AdventureManagerSystems {
   effects: EffectsSystem | null
   display: DisplaySystem | null
+  /** The backbox state gameplay reads (#528); set alongside `display` when a zone sets it directly. */
+  displayState: SimDisplayState
   ballManager: BallManager | null
   soundSystem: SoundSystem
 }
@@ -255,6 +258,7 @@ export class AdventureManager {
             this.systems.effects?.playBeep(300)
             this.systems.effects?.setLightingMode('reach', 2.0)
             this.systems.effects?.setAtmosphereState('REACH')
+            this.systems.displayState.set(DisplayState.REACH)
             this.systems.display?.setDisplayState(DisplayState.REACH)
             this.config.onReachTriggered?.()
             this.config.onScoreAward?.(500, 'MagSpin Capture')

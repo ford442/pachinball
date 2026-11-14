@@ -1,4 +1,4 @@
-import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { BallType } from '../config'
 import type { EventBus } from '../core/event-bus'
 import {
@@ -185,7 +185,7 @@ export class SoundSystem {
     await decodeLocalSampleBank(this.asSamplesState())
   }
 
-  private playLocalSampleKey(key: AudioSampleKey, volume = 1, position?: Vector3, playbackRate = 1): boolean {
+  private playLocalSampleKey(key: AudioSampleKey, volume = 1, position?: Vec3Like, playbackRate = 1): boolean {
     return playLocalSampleKey(this.asSamplesState(), key, volume, position, playbackRate)
   }
 
@@ -210,14 +210,14 @@ export class SoundSystem {
     return getEffectiveMusicVolume(this.asContextState())
   }
 
-  playSample(category: SampleCategory, position?: Vector3, volume = 1): void {
+  playSample(category: SampleCategory, position?: Vec3Like, volume = 1): void {
     playSample(this.asSamplesState(), category, position, volume)
   }
 
   playImpact(
     category: ImpactCategory,
     velocity: number,
-    options: ImpactVoiceOptions & { position?: Vector3 } = {},
+    options: ImpactVoiceOptions & { position?: Vec3Like } = {},
   ): void {
     playImpact(this.asSynthState(), category, velocity, options, {
       usesSampleBank: () => this.usesSampleBank(),

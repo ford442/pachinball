@@ -8,7 +8,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { GameConfig } from '../../config'
-import { COLLISION_GROUP_PRESETS } from '../../game-elements/physics'
+import { authorRailColliders } from '../../table/table-colliders'
 import { getMaterialLibrary } from '../../materials'
 import type { PhysicsBinding } from '../../game-elements/types'
 
@@ -46,36 +46,13 @@ export class DecorationBuilder {
    * Idempotent; returns the four bodies. The cosmetic pass binds its meshes to them.
    */
   createRailColliders(): PhysicsBody[] {
-    this.railBodies ??= {
-      left: this.createRailCollider(-11.8, 0.8, 5, 0.6, 1.2, 16, 0.5),
-      right: this.createRailCollider(12.8, 0.8, 5, 0.6, 1.2, 16, 0.5),
-      leftFlipper: this.createRailCollider(-7, 0.3, -8, 0.3, 0.6, 4, 0.4, -0.15),
-      rightFlipper: this.createRailCollider(8.5, 0.3, -8, 0.3, 0.6, 4, 0.4, 0.15),
+    if (!this.railBodies) {
+      this.railBodies = authorRailColliders(this.world, this.rapier)
+      const { left, right, leftFlipper, rightFlipper } = this.railBodies
+      this.rigidBodies.push(left, right, leftFlipper, rightFlipper)
     }
     const { left, right, leftFlipper, rightFlipper } = this.railBodies
     return [left, right, leftFlipper, rightFlipper]
-  }
-
-  private createRailCollider(
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    restitution: number,
-    halfYaw?: number,
-  ): PhysicsBody {
-    const placed = this.rapier.RigidBodyDesc.fixed().setTranslation(px, py, pz)
-    const desc = halfYaw === undefined
-      ? placed
-      : placed.setRotation(new this.rapier.Quaternion(0, Math.sin(halfYaw), 0, Math.cos(halfYaw)))
-    const body = this.world.createRigidBody(desc)
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(hx, hy, hz)
-        .setRestitution(restitution)
-        .setFriction(0.1)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      body
-    )
-    this.rigidBodies.push(body)
-    return body
   }
 
   /** Bind a rail mesh to its collider (hit lookups find the mesh through the binding). */

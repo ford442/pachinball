@@ -1,22 +1,50 @@
 import { simClockMs } from '../core/sim-clock'
-import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
-import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
-import type { Scene } from '@babylonjs/core/scene'
-import type { TrailMaterialPool } from '../materials/material-trail'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
+import type { Vec3Like } from '../core/vec3-scalar'
 import type { BallType } from '../config'
 import { getPhysicsTuningValue } from './physics-tuning'
 import type { BallSaveSystem } from './ball-save-system'
-import type { PhysicsBinding, BallData } from './types'
-import type { QualityTier } from './visual-language'
+import type { BallData } from './types'
 
-export interface BallTrailData {
-  mesh: TrailMesh
-  material: StandardMaterial
-  baseWidth: number
-  isFading: boolean
+/**
+ * What a ball looks like when it joins play. The sim (`BallManager` and its helpers) decides the
+ * body; the view (`BallPresentation`, never loaded by the headless replay runner, #528) builds the
+ * mesh, binding, trail and light from this.
+ */
+export type BallVisualSpec =
+  /** The boot-time main ball: chrome sphere, core, ring, light and trail. */
+  | { kind: 'main'; position: Vec3Like }
+  /** A multiball extra ball (`index` within the spawn batch). */
+  | { kind: 'extra'; index: number; position: Vec3Like }
+  /** The main ball rebuilt by `resetBall` when no ball is left. */
+  | { kind: 'reset' }
+  /** A ball of a tier (`createBallOfType`), with the tier's trail colour. */
+  | { kind: 'typed'; type: BallType; trailColor: string }
+  /** One small ball of a gold swarm. */
+  | { kind: 'swarm'; type: BallType; index: number; radius: number }
+
+/**
+ * The presentation half of the ball manager. Every method is cosmetic: none may move a body or
+ * change what the sim reads. `null` on the headless replay runner.
+ */
+export interface BallView {
+  /** A body joined play: create its mesh and binding (and trail / light as the spec says). */
+  spawned(body: PhysicsBody, spec: BallVisualSpec): void
+  /** A ball left play (its body is already removed): dispose its mesh, binding and trail. */
+  removed(body: PhysicsBody): void
+  /** `removeExtraBalls`: drop the extra balls' leftover main-ball bindings, keeping `keep`'s. */
+  removedExtras(keep: PhysicsBody | null): void
+  /** Dispose the trail of a body that left play without its binding (extra-ball sweep). */
+  disposeTrail(body: PhysicsBody): void
+  /** A hologram bumper caught the ball / let it go. */
+  caught(body: PhysicsBody): void
+  released(body: PhysicsBody): void
+  /** Burst of particles where a gold ball (or swarm) appeared. */
+  spawnEffect(position: Vec3Like, type: BallType, swarmBurst: boolean): void
+  /** Gold ball spawn chime. */
+  goldBallSpawned(type: BallType): void
+  /** Equipped campaign skin, applied whenever the ball is reset. */
+  applyCampaignRewards(): void
 }
 
 export interface MultiballState {
@@ -37,33 +65,17 @@ export interface BallStuckTracker {
   stuckTime: number
 }
 
-export interface BallMaterialLibrary {
-  qualityTier: QualityTier
-  getEnhancedChromeBallMaterial(): PBRMaterial
-  getExtraBallMaterial(): PBRMaterial
-  getGoldPlatedBallMaterial(): PBRMaterial
-  getSolidGoldBallMaterial(): PBRMaterial
-  updateBallMaterialColor(material: PBRMaterial, mapColorHex: string): void
-}
-
 export interface BallManagerHost {
-  scene: Scene
   world: PhysicsWorldSink
   rapier: PhysicsApi
+  /** The presentation half, or null when nothing is drawn (headless replay, #528). */
+  readonly view: BallView | null
   ballBody: PhysicsBody | null
   ballBodies: PhysicsBody[]
-  caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }>
-  bindings: PhysicsBinding[]
-  matLib: BallMaterialLibrary
-  trails: Map<PhysicsBody, TrailMesh>
-  trailMaterials: Map<TrailMesh, StandardMaterial>
-  /** Recycles the per-ball trail materials: a ball's trail takes one, its removal hands it back (#524). */
-  trailMaterialPool: TrailMaterialPool
-  ballTrails: Map<PhysicsBody, BallTrailData>
+  caughtBalls: Array<{ body: PhysicsBody; targetPos: Vec3Like; timer: number }>
   ballDataMap: Map<PhysicsBody, BallData>
   goldBallCount: number
   onGoldBallCollected?: (type: BallType, points: number) => void
-  glowTime: number
   smallGoldBallLifetimes: Map<PhysicsBody, number>
   smallGoldBallSpawnTime: Map<PhysicsBody, number>
   swarmGroups: Map<number, SwarmGroup>
@@ -77,12 +89,9 @@ export interface BallManagerHost {
 
   removeBall(body: PhysicsBody): void
   createMainBall(): PhysicsBody
-  createBallOfType(type: BallType, position?: Vector3, playEffect?: boolean): PhysicsBody
-  spawnRandomBall(position?: Vector3): PhysicsBody
-  spawnSmallGoldBallSwarm(position?: Vector3, baseType?: BallType): PhysicsBody[]
-  addTrailForBall(body: PhysicsBody, colorHex: string): void
-  playSpawnEffect(position: Vector3, type: BallType, swarmBurst?: boolean): void
-  applyBallSkin(skinId: string): void
+  createBallOfType(type: BallType, position?: Vec3Like, playEffect?: boolean): PhysicsBody
+  spawnRandomBall(position?: Vec3Like): PhysicsBody
+  spawnSmallGoldBallSwarm(position?: Vec3Like, baseType?: BallType): PhysicsBody[]
   endMultiball(): void
 }
 

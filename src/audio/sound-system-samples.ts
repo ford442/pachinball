@@ -1,4 +1,4 @@
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Vec3Like } from '../core/vec3-scalar'
 import {
   getJackpotPhaseSampleKey,
   getLocalAudioPath,
@@ -133,7 +133,7 @@ export function playLocalSampleKey(
   state: SoundSystemSamplesState,
   key: AudioSampleKey,
   volume = 1,
-  position?: Vector3,
+  position?: Vec3Like,
   playbackRate = 1,
 ): boolean {
   if (!state.isInitialized || !state.audioContext || !state.sfxGain) return false
@@ -174,7 +174,7 @@ export function playLocalSampleKey(
 export function playSample(
   state: SoundSystemSamplesState,
   category: SampleCategory,
-  position?: Vector3,
+  position?: Vec3Like,
   volume = 1,
 ): void {
   if (!state.isInitialized || !state.audioContext || !state.sfxGain) return

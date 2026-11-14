@@ -1,6 +1,6 @@
 import type { PhysicsBody } from '../../core/physics-api'
 
-import type { BumperVisual } from '../../game-elements/types'
+import type { BumperRef } from '../../game-elements/types'
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import type { WasmContactBridge } from './collision-dispatch'
@@ -34,7 +34,7 @@ export class WasmMirror implements WasmContactBridge {
   rebuild(
     ballBodies: PhysicsBody[],
     bumperBodies: PhysicsBody[],
-    bumperVisuals: BumperVisual[]
+    bumperVisuals: readonly BumperRef[]
   ): void {
     this.clear()
 
@@ -49,14 +49,14 @@ export class WasmMirror implements WasmContactBridge {
     }
 
     // Map bumper visuals by body handle so we can recover the original scale/radius.
-    const visualByBody = new Map<number, BumperVisual>()
+    const visualByBody = new Map<number, BumperRef>()
     for (const vis of bumperVisuals) {
       visualByBody.set(vis.body.handle, vis)
     }
 
     for (const body of bumperBodies) {
       const vis = visualByBody.get(body.handle)
-      const scale = vis ? vis.mesh.scaling.x : 1.0
+      const scale = vis?.mesh ? vis.mesh.scaling.x : 1.0
       const radius = 0.4 * scale
       const id = this.engine.createBody({
         position: body.translation(),

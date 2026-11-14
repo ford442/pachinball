@@ -1,11 +1,10 @@
-import { Texture } from '@babylonjs/core/Materials/Textures/texture'
-import { Color4 } from '@babylonjs/core/Maths/math.color'
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
+/**
+ * Gold balls — the sim half: swarm spawns, lifetimes and collection. Their particles and glow are
+ * `BallView`'s (`ball-presentation.ts`). No Babylon import (#528).
+ */
 import type { PhysicsBody } from '../core/physics-api'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { BallType, GameConfig } from '../config'
-import { pulse } from './visual-language'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { getDensityForMass, nowMs, type BallManagerHost } from './ball-manager-context'
 
@@ -23,114 +22,6 @@ export function cleanupSwarmTrackingOnRemove(host: BallManagerHost, body: Physic
     host.swarmGroups.delete(swarmId)
   }
   host.ballSwarmId.delete(body)
-}
-
-/**
- * Create a simple circular particle texture.
- */
-export function createParticleTexture(host: BallManagerHost, colorHex: string): Texture {
-  const size = 64
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')!
-
-  // Draw circle
-  ctx.beginPath()
-  ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2)
-  ctx.fillStyle = colorHex
-  ctx.fill()
-
-  // Add glow
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-  gradient.addColorStop(0, colorHex)
-  gradient.addColorStop(0.5, colorHex + '80')
-  gradient.addColorStop(1, colorHex + '00')
-  ctx.fillStyle = gradient
-  ctx.fill()
-
-  const texture = new Texture(
-    canvas.toDataURL(),
-    host.scene,
-  )
-  return texture
-}
-
-/**
- * Play visual effect when a gold ball spawns.
- */
-export function playSpawnEffect(host: BallManagerHost, position: Vector3, type: BallType, swarmBurst = false): void {
-  if (type === BallType.STANDARD) return
-
-  const isSolidGold = type === BallType.SOLID_GOLD
-
-  // Create particle system for spawn burst
-  const particleSystem = new ParticleSystem(
-    `spawnEffect_${type}_${Date.now()}`,
-    swarmBurst ? (isSolidGold ? 90 : 60) : (isSolidGold ? 50 : 20),
-    host.scene,
-  )
-
-  // Particle texture
-  particleSystem.particleTexture = createParticleTexture(host, isSolidGold ? '#ffb700' : '#ffd700')
-
-  // Emitter position
-  particleSystem.emitter = position
-
-  // Particle colors
-  if (isSolidGold) {
-    particleSystem.color1 = new Color4(1, 0.76, 0.15, 1) // Rich gold
-    particleSystem.color2 = new Color4(1, 0.9, 0.4, 1) // Lighter gold
-    particleSystem.colorDead = new Color4(1, 0.7, 0, 0) // Fade to transparent
-  } else {
-    particleSystem.color1 = new Color4(0.95, 0.87, 0.65, 1) // Light gold
-    particleSystem.color2 = new Color4(1, 0.95, 0.8, 1) // Even lighter
-    particleSystem.colorDead = new Color4(0.9, 0.8, 0.5, 0) // Fade out
-  }
-
-  // Size
-  particleSystem.minSize = 0.05
-  particleSystem.maxSize = isSolidGold ? 0.2 : 0.1
-
-  // Lifetime
-  particleSystem.minLifeTime = 0.3
-  particleSystem.maxLifeTime = isSolidGold ? 1.0 : 0.6
-
-  // Emission
-  particleSystem.emitRate = isSolidGold ? 100 : 50
-  particleSystem.targetStopDuration = isSolidGold ? 0.3 : 0.2
-
-  // Direction and speed
-  particleSystem.direction1 = new Vector3(-1, 1, -1)
-  particleSystem.direction2 = new Vector3(1, 1, 1)
-  particleSystem.minEmitPower = swarmBurst ? 2 : 1
-  particleSystem.maxEmitPower = swarmBurst
-    ? (isSolidGold ? 8 : 6)
-    : (isSolidGold ? 5 : 3)
-  particleSystem.updateSpeed = 0.02
-
-  // Gravity
-  particleSystem.gravity = new Vector3(0, -2, 0)
-
-  // Start and auto-cleanup: `targetStopDuration` (set above) stops emission after the burst and
-  // `disposeOnStop` has the scene dispose the system once its last particle dies. Babylon owns
-  // the lifetime, so nothing fires after scene.dispose() (the old raw timeouts double-disposed).
-  particleSystem.disposeOnStop = true
-  particleSystem.start()
-}
-
-/**
- * Update gentle pulsing emissive glow on gold ball materials.
- * Called once per frame from the game loop.
- */
-export function updateGoldBallGlow(host: BallManagerHost, dt: number): void {
-  host.glowTime += dt
-  const goldPlated = host.matLib.getGoldPlatedBallMaterial()
-  const solidGold = host.matLib.getSolidGoldBallMaterial()
-  // Gentle slow pulse: 0.5 Hz = 2-second period
-  goldPlated.emissiveIntensity = pulse(host.glowTime, 0.5, 0.15, 0.35)
-  // Slightly slower and stronger for solid gold
-  solidGold.emissiveIntensity = pulse(host.glowTime, 0.4, 0.25, 0.55)
 }
 
 /**
@@ -161,7 +52,7 @@ export function updateSmallGoldBallLifetimes(host: BallManagerHost, dt: number):
  * Spawn a swarm of small gold balls instead of single heavy gold ball.
  * Creates chaotic, bouncy behavior for more exciting gameplay.
  */
-export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
+export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vec3Like, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
   if (!GameConfig.smallGoldBalls.enabled) {
     return []
   }
@@ -182,16 +73,6 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
   const swarmCount = Math.min(cfg.swarmSize, cfg.maxConcurrentBalls - smallGoldCount)
   const rng = getSessionRngFork(RNG_FORK.GOLD_SWARM)
   for (let i = 0; i < swarmCount; i++) {
-    // Create small gold mesh
-    const goldBall = MeshBuilder.CreateSphere(`smallGoldBall_${baseType}_${i}`, {
-      diameter: smallRadius * 2,
-      segments: 24,
-      slice: 1,
-    }, host.scene)
-
-    // Use bright gold material with strong emissive
-    goldBall.material = host.matLib.getSolidGoldBallMaterial()
-
     // Create physics body with chaotic velocity spread
     const angleSpread = (Math.PI * 2 / swarmCount) * i + (rng.next() - 0.5) * 0.3
     const speedVariation = cfg.spawnVelocityMin + rng.next() * (cfg.spawnVelocityMax - cfg.spawnVelocityMin)
@@ -228,24 +109,22 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
       type: baseType,
       spawnTime: nowMs(),
       points: cfg.basePoints,
-      mesh: goldBall,
       rigidBody: body,
     })
-    host.bindings.push({ mesh: goldBall, rigidBody: body })
     host.ballBodies.push(body)
 
     // Track lifetime
     host.smallGoldBallLifetimes.set(body, cfg.lifetime)
     host.smallGoldBallSpawnTime.set(body, nowMs())
 
-    // Bright gold trail
-    host.addTrailForBall(body, '#ffdd00')
+    // Mesh, binding and its bright gold trail.
+    host.view?.spawned(body, { kind: 'swarm', type: baseType, index: i, radius: smallRadius })
 
     spawnedBodies.push(body)
   }
 
   if (spawnedBodies.length > 0) {
-    playSpawnEffect(host, new Vector3(spawnPos.x, spawnPos.y + 0.5, spawnPos.z), baseType, true)
+    host.view?.spawnEffect({ x: spawnPos.x, y: spawnPos.y + 0.5, z: spawnPos.z }, baseType, true)
     const swarmId = host.nextSwarmId++
     host.swarmGroups.set(swarmId, {
       bodies: new Set(spawnedBodies),

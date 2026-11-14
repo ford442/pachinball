@@ -1,4 +1,4 @@
-import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { BallType } from '../config'
 import { resolveAssetUrl } from '../core/asset-urls'
 import {
@@ -27,7 +27,7 @@ export interface SoundSystemSynthState {
 }
 export interface SampleBankPlaybackHelpers {
   usesSampleBank: () => boolean
-  playLocalSampleKey: (key: AudioSampleKey, volume?: number, position?: Vector3, playbackRate?: number) => boolean
+  playLocalSampleKey: (key: AudioSampleKey, volume?: number, position?: Vec3Like, playbackRate?: number) => boolean
 }
 
 type SampleRenderer = (t: number, duration: number) => number
@@ -213,7 +213,7 @@ export function playImpact(
   state: SoundSystemSynthState,
   category: ImpactCategory,
   velocity: number,
-  options: ImpactVoiceOptions & { position?: Vector3 } = {},
+  options: ImpactVoiceOptions & { position?: Vec3Like } = {},
   sampleHelpers?: SampleBankPlaybackHelpers,
 ): void {
   if (!state.isInitialized || !state.audioContext || !state.sfxGain) return
@@ -356,7 +356,7 @@ function playNoiseBurst(
 
 function createOptionalStereoPanner(
   state: SoundSystemSynthState,
-  position: Vector3 | undefined,
+  position: Vec3Like | undefined,
   reducedAudio: boolean,
 ): StereoPannerNode | null {
   if (!state.audioContext || reducedAudio) return null

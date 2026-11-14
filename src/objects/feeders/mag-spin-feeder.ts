@@ -1,4 +1,5 @@
 import type { AssetContainer } from '@babylonjs/core/assetContainer'
+import { magSpinCaptureCandidate } from './feeder-triggers'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import { createStandardMaterial } from '../../materials/material-basic'
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
@@ -8,7 +9,8 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import { supportsAxisPullFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../../core/physics-api'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { authorMagSpinPullField } from '../../table/table-colliders'
 import { CapturedBall } from '../../core/captured-ball'
 import { distance3 } from '../../core/vec3-scalar'
 import type { GameConfigType } from '../../config'
@@ -163,19 +165,14 @@ export class MagSpinFeeder {
   }
 
   private createPhysics(): void {
-    if (supportsAxisPullFields(this.world)) {
-      // C++ owner path. The authored bowl below was a Rapier-surface (y = -0.9) ghost: on
-      // the owner's y = 0 plane its wall ring would shut balls out of the capture radius and
-      // sit on the hold point. The well is the field instead — the C++ engine draws idle-state
-      // balls in, so capture no longer hinges on a polled ball list. `checkProximity` stays
-      // as the confirm step.
-      this.physicsBody = this.world.createAxisPullField({
-        center: { x: this.position.x, y: this.position.y, z: this.position.z },
-        radius: this.config.pullRadius,
-        halfHeight: this.config.pullHalfHeight,
-        strength: this.config.pullAcceleration,
-        acceleration: true,
-      })
+    // C++ owner path. The authored bowl below was a Rapier-surface (y = -0.9) ghost: on
+    // the owner's y = 0 plane its wall ring would shut balls out of the capture radius and
+    // sit on the hold point. The well is the field instead — the C++ engine draws idle-state
+    // balls in, so capture no longer hinges on a polled ball list. `checkProximity` stays
+    // as the confirm step.
+    const field = authorMagSpinPullField(this.world, this.config)
+    if (field) {
+      this.physicsBody = field
       this.pullField = true
       return
     }
@@ -398,21 +395,8 @@ export class MagSpinFeeder {
   }
 
   private checkProximity(ballBodies: PhysicsBody[]): void {
-    const pullRadius = this.config.catchRadius
-
-    for (const body of ballBodies) {
-      const pos = body.translation()
-      // Plunger lane runs along x≈10.5 — don't vacuum balls still exiting launch.
-      // Full corridor height matches KEEP_OUT_BOXES.launchLane (z up to 18).
-      if (pos.x > 8.5 && pos.z < 16) continue
-
-      const dist = distance3(pos, this.position)
-
-      if (dist < pullRadius && pos.y < this.config.maxCaptureHeightY) {
-        this.captureBall(body)
-        return
-      }
-    }
+    const body = magSpinCaptureCandidate(ballBodies, this.position, this.config)
+    if (body) this.captureBall(body)
   }
 
   private captureBall(body: PhysicsBody): void {

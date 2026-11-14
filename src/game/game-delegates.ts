@@ -2,8 +2,9 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
 import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility, type ReplayPayload } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
-import type { FeederKey, TableLayout } from '../cascade/daily-cascade-layout'
+import type { FeederKey } from '../cascade/daily-cascade-layout'
 import type { StartMachine } from '../cascade/start-machine'
+import { applyMachineOnStart, resetPlayBall } from './run-start'
 import type { CabinetType } from '../cabinet'
 
 import { TABLE_MAPS } from '../config/table-maps'
@@ -28,31 +29,11 @@ export abstract class GameDelegates extends GameFields {
    * re-exported before the frame-0 fingerprint.
    */
   applyDailyCascadeOnStart(machine: StartMachine): void {
-    const state = getDailyCascadeState()
-
-    if (machine.kind === 'vanilla') {
-      state.clearWeekly()
-      if (state.wasMutatorApplied()) {
-        this.gameObjects?.rebuildMutableToys(null)
-        this.applyFeederGameplayFlags(null)
-        this.physicsController?.rebuildHandleCaches()
-        state.markMutatorApplied(false)
-      }
-      return
-    }
-
-    let layout: TableLayout | null
-    if (machine.kind === 'weekly') {
-      layout = state.weeklyLayout(machine.seed)
-    } else {
-      state.clearWeekly()
-      layout = state.ensureLayout()
-    }
-    if (!layout || !this.gameObjects) return
-    this.gameObjects.rebuildMutableToys(layout)
-    this.applyFeederGameplayFlags(layout.feedersEnabled)
-    this.physicsController?.rebuildHandleCaches()
-    state.markMutatorApplied(true)
+    applyMachineOnStart(machine, this.gameObjects ? {
+      rebuildMutableToys: (layout) => this.gameObjects?.rebuildMutableToys(layout),
+      applyFeederGameplayFlags: (flags) => this.applyFeederGameplayFlags(flags),
+      rebuildHandleCaches: () => this.physicsController?.rebuildHandleCaches(),
+    } : null)
   }
 
   private applyFeederGameplayFlags(flags: Record<FeederKey, boolean> | null): void {
@@ -99,9 +80,7 @@ export abstract class GameDelegates extends GameFields {
    */
   resetBall(): void {
     this.inputManager?.cancelPlungerCharge()
-    this.inputActions?.resetPlungerState()
-    this.ballManager?.removeExtraBalls()
-    this.ballManager?.resetBall()
+    resetPlayBall(this.inputActions, this.ballManager)
     this.applyEquippedRewards()
     this.updateHUD()
   }

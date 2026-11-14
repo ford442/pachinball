@@ -36,6 +36,7 @@ import type { BloomPipelineController } from '../effects/bloom-pipeline-types'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { GameStateManager } from './game-state'
 import { EventBus } from '../core/event-bus'
+import { SimDisplayState } from './sim-display-state'
 import { GameInputManager } from './game-input'
 import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
@@ -236,6 +237,8 @@ export abstract class GameFields {
   ready = false
   stateManager!: GameStateManager
   eventBus!: EventBus
+  /** The backbox state gameplay reads (`SimDisplayState`, #528). Created with the event bus. */
+  displayState: SimDisplayState = new SimDisplayState(null)
   score = 0
   lives = 3
   comboCount = 0

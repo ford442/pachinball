@@ -85,6 +85,9 @@ npm run bench:wasm-flags
 # `-- --update` rewrites goldens for an intentional numeric change; record:replay re-records stale tapes.
 npm run verify:replay
 
+# The same goldens in Node, without Babylon or a browser (#528, docs/HEADLESS_REPLAY.md); ~2 s.
+npm run verify:replay:node
+
 # Replay-verifier service self-test (after npm run build)
 npm run test:verifier
 
@@ -107,8 +110,9 @@ Notes:
   the bundle is absent.
 - `.github/workflows/native-physics.yml` gates PRs touching `native/**` or `src/wasm/**` with
   blocking native Catch2, ASan/UBSan (fatal UBSan), and WASM build + parity jobs (requires Emscripten
-  on runner), plus a blocking golden-replay-tapes job (`npm run verify:replay` + verifier self-test)
-  that also covers `src/game/physics/**` and `src/replay/**`.
+  on runner), plus a blocking golden-replay-tapes job (`npm run verify:replay`, `verify:replay:node`
+  + the verifier self-test on both runners) that also covers `src/game/physics/**`, `src/replay/**`,
+  `src/sim/**` and `src/table/**`.
 - `.github/workflows/arcade-db.yml` gates PRs touching `supabase/**` (migrations + pgTAP RLS tests).
 - Enabling branch protection on `main` (require the `check` job) is recommended so ungated
   direct-to-`main` pushes can't regress the build.
@@ -429,7 +433,7 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 - **Base URL:** `http://localhost:5173`
 - **Projects:** `chromium` (Desktop Chrome) + `mobile-chrome` (Pixel 7, touch smoke); `playwright.degrade.config.ts` runs the no-WASM degrade spec
 - **Dev server:** started automatically by the `webServer` block (port 5173, `--strictPort`; reuses a running server locally)
-- **Replay goldens:** `tests/replays/*.json`, checked by `npm run verify:replay`
+- **Replay goldens:** `tests/replays/*.json`, checked by `npm run verify:replay` (Chromium) and `npm run verify:replay:node` (Node, #528)
 - **Test location:** `tests/`
 - **E2E test:** `tests/verify_prism_core.spec.ts` — smoke test that boots the game, clicks **Start Game**, waits for scene init, and takes a verification screenshot.
 - **Unit tests:** `tests/ball-manager.test.ts` — BallManager logic tests (Vitest).

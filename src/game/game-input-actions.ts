@@ -2,7 +2,7 @@
  * Game Input Actions — Flipper, plunger, and nudge input handlers.
  */
 
-import type { PhysicsRevoluteJoint } from '../core/physics-api'
+import type { PhysicsBody, PhysicsRevoluteJoint } from '../core/physics-api'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { GameObjects } from '../objects'
 import type { HapticManager } from '../game-elements/haptics'
@@ -13,18 +13,21 @@ import type { GameStateManager } from './game-state'
 import { GameConfig, PhysicsConfig } from '../config'
 import { applyPlungerChargeCurve, getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import type { AccessibilityConfig } from '../game-elements'
-import { emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
+import { INTENSITY } from '../game-elements/visual-palette'
 import { simClockMs } from '../core/sim-clock'
 import type { Color3 } from '@babylonjs/core/Maths/math.color'
 
 /** The one property these effects touch; Babylon types `Mesh.material` as the base Material. */
-type EmissiveMaterial = { emissiveColor?: Color3 }
+export type EmissiveMaterial = { emissiveColor?: Color3 }
 
 export interface InputActionsHost {
-  readonly physics: PhysicsSystem
-  readonly gameObjects: GameObjects | null
+  readonly physics: Pick<PhysicsSystem, 'isWasmOwnerMode'>
+  /** The flipper joints and the plunger: `GameObjects`, or the headless replay table (#528). */
+  readonly gameObjects: (Pick<GameObjects, 'getFlipperJoints' | 'getPlungerBody' | 'getPlungerRestZ'> & {
+    getAllFlippers(): ReadonlyMap<string, { body: PhysicsBody }>
+  }) | null
   readonly hapticManager: HapticManager | null
-  readonly soundSystem: SoundSystem
+  readonly soundSystem: Pick<SoundSystem, 'playSample'>
   readonly effects: EffectsSystem | null
   readonly stateManager: GameStateManager
   readonly accessibility: AccessibilityConfig
@@ -44,6 +47,11 @@ export class GameInputActions {
   /** Impulse magnitude of the most recent launch (0 before any) — for determinism tests. */
   lastLaunchImpulse = 0
   private scene: import('@babylonjs/core/scene').Scene | null = null
+  /**
+   * Writes the shooter rod's charge glow (`level` = emissive intensity). The game passes it with the
+   * scene; the headless replay runner (#528) has neither, and this file imports no Babylon.
+   */
+  private rodGlow: ((mat: EmissiveMaterial, level: number) => void) | null = null
 
   // ── Plunger spatial constants ──────────────────────────────────────────────
   /** X position of both the kinematic plunger body and its visual meshes. */
@@ -70,9 +78,13 @@ export class GameInputActions {
     this.lastFrameTime = simClockMs()
   }
 
-  /** Provide the BabylonJS scene so per-frame visual updates can find meshes. */
-  setScene(scene: import('@babylonjs/core/scene').Scene | null): void {
+  /** Provide the BabylonJS scene (and the rod glow writer) so per-frame visual updates can find meshes. */
+  setScene(
+    scene: import('@babylonjs/core/scene').Scene | null,
+    rodGlow: ((mat: EmissiveMaterial, level: number) => void) | null = null,
+  ): void {
     this.scene = scene
+    this.rodGlow = rodGlow
   }
 
   handleFlipperLeft(pressed: boolean): void {
@@ -255,7 +267,7 @@ export class GameInputActions {
       // Emissive glow on the rod gives visual charge-level feedback (cyan → bright at full charge)
       const mat = shooterRod.material as EmissiveMaterial | null
       if (mat && mat.emissiveColor) {
-        mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, chargeLevel * INTENSITY.ACTIVE))
+        this.rodGlow?.(mat, chargeLevel * INTENSITY.ACTIVE)
       }
     }
 
@@ -337,7 +349,7 @@ export class GameInputActions {
         setPositions(restZ)
         const mat = shooterRod?.material as EmissiveMaterial | null
         if (mat && mat.emissiveColor) {
-          mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
+          this.rodGlow?.(mat, 0)
         }
       }
     }
@@ -369,7 +381,7 @@ export class GameInputActions {
     }
     const mat = shooterRod?.material as EmissiveMaterial | null
     if (mat && mat.emissiveColor) {
-      mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
+      this.rodGlow?.(mat, 0)
     }
   }
 

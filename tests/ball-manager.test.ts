@@ -159,8 +159,9 @@ vi.mock('../src/audio/sound-system', () => ({
   }),
 }))
 
-// The real BallManager, imported after all mocks are in place.
+// The real BallManager (and its presentation), imported after all mocks are in place.
 import { BallManager } from '../src/game-elements/ball-manager'
+import { BallPresentation } from '../src/game-elements/ball-presentation'
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -247,11 +248,16 @@ function makeFakeRapier() {
 /** Creates a BallManager wired to fake engine dependencies. */
 function makeManager(): BallManager {
   return new BallManager(
-    {} as never,               // Scene stub
     makeFakeWorld() as never,  // World stub
     makeFakeRapier() as never, // Rapier namespace stub
-    [],                        // bindings
+    new BallPresentation({} as never, []), // Scene stub, bindings
   )
+}
+
+/** The presentation a `makeManager()` manager draws with (trails live there since #528). */
+function viewOf(manager: BallManager): BallPresentation {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (manager as any).presentation
 }
 
 /**
@@ -777,10 +783,9 @@ describe('BallManager', () => {
         { mesh: { name: 'ball_extra', dispose: vi.fn() }, rigidBody: {} },
       ]
       const manager = new BallManager(
-        {} as never,
         makeFakeWorld() as never,
         makeFakeRapier() as never,
-        shared as never,
+        new BallPresentation({} as never, shared as never),
       )
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(manager as any).ballBody = shared[1].rigidBody
@@ -855,17 +860,17 @@ describe('BallManager', () => {
     it('recycles trail materials: extra balls hand theirs back, a respawn builds none (#524)', () => {
       const manager = makeManager()
       manager.spawnExtraBalls(3)
-      expect(manager.trailMaterialPool.size).toBe(3)
-      expect(manager.trails.size).toBe(3)
+      expect(viewOf(manager).trailMaterialPool.size).toBe(3)
+      expect(viewOf(manager).trails.size).toBe(3)
 
       manager.removeExtraBalls()
       // The extra balls' ribbons used to outlive them; now they are disposed with the ball.
-      expect(manager.trails.size).toBe(0)
-      expect(manager.trailMaterials.size).toBe(0)
-      expect(manager.ballTrails.size).toBe(0)
+      expect(viewOf(manager).trails.size).toBe(0)
+      expect(viewOf(manager).trailMaterials.size).toBe(0)
+      expect(viewOf(manager).ballTrails.size).toBe(0)
 
       manager.spawnExtraBalls(3)
-      expect(manager.trailMaterialPool.size).toBe(3)
+      expect(viewOf(manager).trailMaterialPool.size).toBe(3)
     })
 
     it('spawns and removes fine without a gate', () => {

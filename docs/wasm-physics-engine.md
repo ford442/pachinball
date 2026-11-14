@@ -150,6 +150,7 @@ src/wasm/
 └── index.ts                     Barrel export
 
 src/game/physics/
+├── wasm-bridges.ts              Picks and rebuilds the mirror / owner bridge for the physics mode
 ├── wasm-owner.ts                wasm-owner / wasm-worker driver + WASM-id contact resolution
 ├── wasm-mirror.ts               wasm-mirror driver (Rapier-authoritative parity path)
 ├── wasm-static-export.ts        TableColliderDesc → C++ statics / sensors / kinematic movers

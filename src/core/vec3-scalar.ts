@@ -26,3 +26,15 @@ export function distanceSquared3(a: Vec3Like, b: Vec3Like): number {
 export function distance3(a: Vec3Like, b: Vec3Like): number {
   return Math.sqrt(distanceSquared3(a, b))
 }
+
+/**
+ * `new Vector3(x, y, z).normalize()` as plain numbers, bit for bit: Babylon scales by `1 / length`
+ * and leaves a zero-length or unit-length vector untouched. Gameplay that feeds a direction into
+ * the physics (bumper spin transfer) uses this so it runs without Babylon (#528).
+ */
+export function normalized3(x: number, y: number, z: number): { x: number; y: number; z: number } {
+  const len = Math.sqrt(x * x + y * y + z * z)
+  if (len === 0 || len === 1.0) return { x, y, z }
+  const s = 1.0 / len
+  return { x: x * s, y: y * s, z: z * s }
+}

@@ -11,6 +11,7 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { ZoneTriggerSystem, ZoneSensors } from '../../game-elements'
 import { wirePortalEntry } from '../portal-sensor-lifecycle'
 import { SpinnerBumperBuilder, BallTrapBuilder, LauncherBuilder, MovingGateBuilder } from '../../objects'
+import { TABLE_OBSTACLES } from '../../table/table-colliders'
 import type { Game } from '../../game'
 import type { InitContext } from './init-context'
 
@@ -47,16 +48,18 @@ export function registerObstacles(game: Game, { scene, world, rapier }: InitCont
   game.movingGateBuilder.setZoneTriggerSystem(game.zoneTriggerSystem)
   game.movingGateBuilder.setEffectIntensity(effectIntensity)
 
-  const spinner = game.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
+  // Placements shared with the headless replay table (`TABLE_OBSTACLES`, #528).
+  const o = TABLE_OBSTACLES
+  const spinner = game.spinnerBuilder.createSpinnerBumper(o.spinner.x, o.spinner.z, o.spinner.color, o.spinner.scale)
   game.spinnerVisuals.push(spinner.visual)
 
-  const trap = game.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
+  const trap = game.ballTrapBuilder.createBallTrap(o.trap.x, o.trap.z, o.trap.color, o.trap.scale)
   game.trapStates.push(trap.state)
 
-  const launcher = game.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
+  const launcher = game.launcherBuilder.createLauncher(o.launcher.x, o.launcher.z, o.launcher.color, o.launcher.scale)
   game.launcherStates.push(launcher.state)
 
-  const gate = game.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
+  const gate = game.movingGateBuilder.createMovingGate(o.gate.x, o.gate.z, o.gate.color, o.gate.scale, o.gate.animation, o.gate.width, o.gate.height)
   game.gateStates.push(gate.state)
 
   // Reparent advanced obstacle visuals into the tilted playfield group so they

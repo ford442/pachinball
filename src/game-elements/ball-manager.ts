@@ -1,21 +1,13 @@
-import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
-import { Color3 } from '@babylonjs/core/Maths/math.color'
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { Mesh } from '@babylonjs/core/Meshes/mesh'
-import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
-import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { CapturedBall } from '../core/captured-ball'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { BallType, GAME_TUNING } from '../config'
-import { getMaterialLibrary } from '../materials'
-import { TrailMaterialPool } from '../materials/material-trail'
 import { BallSaveSystem } from './ball-save-system'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import {
   type BallManagerHost,
   type BallStuckTracker,
-  type BallTrailData,
+  type BallView,
   type MultiballState,
   nowMs,
   type SwarmGroup,
@@ -23,9 +15,7 @@ import {
 import {
   cleanupSwarmTrackingOnRemove,
   collectBall as collectBallFromGold,
-  playSpawnEffect,
   spawnSmallGoldBallSwarm,
-  updateGoldBallGlow,
   updateSmallGoldBallLifetimes,
 } from './ball-manager-gold'
 import {
@@ -38,46 +28,42 @@ import {
   triggerForcedMultiball,
 } from './ball-manager-multiball'
 import {
-  addTrailForBall,
-  applyBallSkin,
-  applyBallTrail,
-  clearRewards,
   createBallOfType,
   createMainBall,
   resetBall,
   spawnExtraBalls,
   spawnRandomBall,
-  updateBallMaterialColor,
-  updateTrailEffects,
 } from './ball-manager-spawn'
 import { updateStuckDetection } from './ball-manager-stuck'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import type { BallData, PhysicsBinding } from './types'
+import type { BallPresentation } from './ball-presentation'
+
+/** A mesh as the cosmetic API hands it out (`getBallMeshesByType`); typed without Babylon. */
+type BallMesh = ReturnType<BallPresentation['getBallMeshesByType']>[number]
 
 /**
- * Ball spawning, collection and per-frame ball effects. The state the `ball-manager-*` helper
- * modules read and write is the public `BallManagerHost` surface (the class passes `this`);
- * everything else should go through the methods.
+ * Ball spawning, collection, multiball, captures and stuck detection — the sim half. The state the
+ * `ball-manager-*` helper modules read and write is the public `BallManagerHost` surface (the class
+ * passes `this`); everything else should go through the methods.
+ *
+ * Meshes, trails, lights and particles are the `view`'s (`BallPresentation` in the game, `null` on
+ * the headless replay runner, #528): this file imports no Babylon. The cosmetic methods below
+ * (`updateTrailEffects`, `applyBallSkin`, …) forward to the view and do nothing without one.
  */
 export class BallManager implements BallManagerHost {
-  scene: Scene
   world: PhysicsWorldSink
   rapier: PhysicsApi
+  readonly view: BallView | null
+  private readonly presentation: BallPresentation | null
   private readonly capture: CapturedBall
   ballBody: PhysicsBody | null = null
   ballBodies: PhysicsBody[] = []
-  caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
+  caughtBalls: Array<{ body: PhysicsBody; targetPos: Vec3Like; timer: number }> = []
   private staticSceneGate: Pick<StaticSceneGate, 'invalidate'> | null = null
-  bindings: PhysicsBinding[] = []
-  matLib: ReturnType<typeof getMaterialLibrary>
-  trails: Map<PhysicsBody, TrailMesh> = new Map()
-  trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
-  trailMaterialPool: TrailMaterialPool
-  ballTrails: Map<PhysicsBody, BallTrailData> = new Map()
   ballDataMap: Map<PhysicsBody, BallData> = new Map()
   goldBallCount = 0
   onGoldBallCollected?: (type: BallType, points: number) => void
-  glowTime = 0
 
   smallGoldBallLifetimes: Map<PhysicsBody, number> = new Map()
   smallGoldBallSpawnTime: Map<PhysicsBody, number> = new Map()
@@ -97,14 +83,14 @@ export class BallManager implements BallManagerHost {
 
   ballSaveSystem = new BallSaveSystem({ graceMs: GAME_TUNING.feedback.ballSaveGraceSeconds * 1000 })
 
-  constructor(scene: Scene, world: PhysicsWorldSink, rapier: PhysicsApi, bindings: PhysicsBinding[]) {
-    this.scene = scene
+  /** `presentation` draws the balls; null runs the sim alone (headless replay, unit tests). */
+  constructor(world: PhysicsWorldSink, rapier: PhysicsApi, presentation: BallPresentation | null = null) {
     this.world = world
     this.rapier = rapier
     this.capture = new CapturedBall(rapier)
-    this.bindings = bindings
-    this.matLib = getMaterialLibrary(scene)
-    this.trailMaterialPool = new TrailMaterialPool(scene)
+    this.presentation = presentation
+    this.view = presentation
+    presentation?.attach(this)
   }
 
   /** Balls come and go in a scene the gate may have frozen; every spawn / removal thaws it. */
@@ -113,7 +99,7 @@ export class BallManager implements BallManagerHost {
   }
 
   getBindings(): PhysicsBinding[] {
-    return this.bindings
+    return this.presentation?.bindings ?? []
   }
 
   createMainBall(): PhysicsBody {
@@ -121,7 +107,7 @@ export class BallManager implements BallManagerHost {
     return createMainBall(this)
   }
 
-  spawnExtraBalls(count: number, position?: Vector3): void {
+  spawnExtraBalls(count: number, position?: Vec3Like): void {
     this.staticSceneGate?.invalidate('ball:spawn')
     spawnExtraBalls(this, count, position)
   }
@@ -140,33 +126,12 @@ export class BallManager implements BallManagerHost {
     if (idx !== -1) {
       this.world.removeRigidBody(body)
       this.ballBodies.splice(idx, 1)
-
-      const bIdx = this.bindings.findIndex((b) => b.rigidBody === body)
-      const binding = this.bindings[bIdx]
-      if (binding) {
-        binding.mesh.dispose()
-        this.bindings.splice(bIdx, 1)
-      }
-
-      this.disposeTrail(body)
+      this.view?.removed(body)
     }
 
     if (this.ballBody === body) {
       this.ballBody = this.ballBodies[0] ?? null
     }
-  }
-
-  /** Dispose a ball's ribbon trail and hand its material back to the pool. */
-  private disposeTrail(body: PhysicsBody): void {
-    const trail = this.trails.get(body)
-    if (trail) {
-      const material = this.trailMaterials.get(trail)
-      this.trailMaterials.delete(trail)
-      trail.dispose()
-      this.trails.delete(body)
-      if (material) this.trailMaterialPool.release(material)
-    }
-    this.ballTrails.delete(body)
   }
 
   removeExtraBalls(): void {
@@ -177,17 +142,11 @@ export class BallManager implements BallManagerHost {
         this.world.removeRigidBody(rb)
         this.ballBodies.splice(i, 1)
         // Their trails used to outlive them (and their materials never went away).
-        this.disposeTrail(rb)
+        this.view?.disposeTrail(rb)
       }
     }
 
-    for (let i = this.bindings.length - 1; i >= 0; i--) {
-      const b = this.bindings[i]
-      if (!b || !b.mesh.name.startsWith('ball')) continue
-      if (b.rigidBody === this.ballBody) continue
-      b.mesh.dispose()
-      this.bindings.splice(i, 1)
-    }
+    this.view?.removedExtras(this.ballBody)
     this.endMultiball()
   }
 
@@ -246,21 +205,10 @@ export class BallManager implements BallManagerHost {
     return getChainStats(this)
   }
 
-  activateHologramCatch(ball: PhysicsBody, targetPos: Vector3, duration: number): void {
+  activateHologramCatch(ball: PhysicsBody, targetPos: Vec3Like, duration: number): void {
     this.capture.capture(ball)
-    this.caughtBalls.push({ body: ball, targetPos: targetPos.clone(), timer: duration })
-
-    const mesh = this.bindings.find((b) => b.rigidBody === ball)?.mesh as Mesh
-    if (mesh && mesh.material) {
-      // PBRMaterial also has emissiveColor
-      (mesh.material as PBRMaterial).emissiveColor = new Color3(1, 0, 0)
-    }
-
-    // Mark trail for fade effect
-    const trailData = this.ballTrails.get(ball)
-    if (trailData) {
-      trailData.isFading = true
-    }
+    this.caughtBalls.push({ body: ball, targetPos: { x: targetPos.x, y: targetPos.y, z: targetPos.z }, timer: duration })
+    this.view?.caught(ball)
   }
 
   updateCaughtBalls(dt: number, onRelease: (ball: PhysicsBody) => void): void {
@@ -279,17 +227,7 @@ export class BallManager implements BallManagerHost {
       this.capture.steer(catchData.body, { translation: { x: nextX, y: nextY, z: nextZ } })
 
       if (catchData.timer <= 0) {
-        const mesh = this.bindings.find((b) => b.rigidBody === catchData.body)?.mesh as Mesh
-        if (mesh && mesh.material) {
-          (mesh.material as PBRMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2)
-        }
-
-        // Reset trail fade state
-        const trailData = this.ballTrails.get(catchData.body)
-        if (trailData) {
-          trailData.isFading = false
-          trailData.material.alpha = 1.0
-        }
+        this.view?.released(catchData.body)
 
         this.capture.release(catchData.body, {
           impulse: { x: (getSessionRngFork(RNG_FORK.SPAWN).next() - 0.5) * 5, y: 5, z: 5 },
@@ -321,15 +259,15 @@ export class BallManager implements BallManagerHost {
   }
 
   updateBallMaterialColor(mapColorHex: string): void {
-    updateBallMaterialColor(this, mapColorHex)
+    this.presentation?.updateBallMaterialColor(mapColorHex)
   }
 
   updateGoldBallGlow(dt: number): void {
-    updateGoldBallGlow(this, dt)
+    this.presentation?.updateGoldBallGlow(dt)
   }
 
   updateTrailEffects(): void {
-    updateTrailEffects(this)
+    this.presentation?.updateTrailEffects()
   }
 
   updateSmallGoldBallLifetimes(dt: number): void {
@@ -341,48 +279,46 @@ export class BallManager implements BallManagerHost {
   }
 
   applyBallSkin(skinId: string): void {
-    applyBallSkin(this, skinId)
+    this.presentation?.applyBallSkin(skinId)
   }
 
   applyBallTrail(trailId: string): void {
-    applyBallTrail(this, trailId)
+    this.presentation?.applyBallTrail(trailId)
   }
 
   clearRewards(): void {
-    clearRewards(this)
+    this.presentation?.clearRewards()
   }
 
-  playSpawnEffect(position: Vector3, type: BallType, swarmBurst = false): void {
-    playSpawnEffect(this, position, type, swarmBurst)
+  playSpawnEffect(position: Vec3Like, type: BallType, swarmBurst = false): void {
+    this.view?.spawnEffect(position, type, swarmBurst)
   }
 
-  createBallOfType(type: BallType, position?: Vector3, playEffect = false): PhysicsBody {
+  createBallOfType(type: BallType, position?: Vec3Like, playEffect = false): PhysicsBody {
     this.staticSceneGate?.invalidate('ball:spawn')
     return createBallOfType(this, type, position, playEffect)
   }
 
-  spawnSmallGoldBallSwarm(position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
+  spawnSmallGoldBallSwarm(position?: Vec3Like, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
     this.staticSceneGate?.invalidate('ball:spawn')
     return spawnSmallGoldBallSwarm(this, position, baseType)
   }
 
   addTrailForBall(body: PhysicsBody, colorHex: string): void {
-    addTrailForBall(this, body, colorHex)
+    this.presentation?.addTrailForBall(body, colorHex)
   }
 
   getBallType(body: PhysicsBody): BallType {
     return this.ballDataMap.get(body)?.type || BallType.STANDARD
   }
 
-  getBallMeshesByType(type: BallType): Mesh[] {
-    const result: Mesh[] = []
-    for (const binding of this.bindings) {
-      const data = this.ballDataMap.get(binding.rigidBody)
-      if (data?.type === type) {
-        result.push(binding.mesh as Mesh)
-      }
-    }
-    return result
+  getBallMeshesByType(type: BallType): BallMesh[] {
+    return this.presentation?.getBallMeshesByType(type) ?? []
+  }
+
+  /** Whether the sim tracks a tier for this body (the presentation's `getBallMeshesByType`). */
+  hasBallData(body: PhysicsBody): boolean {
+    return this.ballDataMap.has(body)
   }
 
   getBallData(body: PhysicsBody): BallData | undefined {
@@ -410,7 +346,7 @@ export class BallManager implements BallManagerHost {
     this.ballSaveSystem.onBallLaunched(nowMs())
   }
 
-  spawnRandomBall(position?: Vector3): PhysicsBody {
+  spawnRandomBall(position?: Vec3Like): PhysicsBody {
     return spawnRandomBall(this, position)
   }
 }

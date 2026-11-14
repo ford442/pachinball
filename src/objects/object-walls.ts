@@ -1,6 +1,6 @@
 import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
-import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
@@ -9,6 +9,7 @@ import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { authorCornerWedge, authorSlingshot, authorWall, cornerWedgeSpecs, SLINGSHOT_SPECS, tableWallSpecs } from '../table/table-colliders'
 
 export class WallBuilder {
   private scene: Scene
@@ -80,22 +81,10 @@ export class WallBuilder {
     const wallMat = this.matLib.getSmokedGlassMaterial()
     const wallH = GameConfig.table.wallHeight
 
-    // 1. Outer Walls
-    this.createWall(new Vector3(-10, wallH, 5), new Vector3(0.2, 5, 32), wallMat, bindings, meshes)
-    this.createWall(new Vector3(11.5, wallH, 5), new Vector3(0.2, 5, 32), wallMat, bindings, meshes)
-    this.createWall(new Vector3(0.75, wallH, 20.5), new Vector3(22.5, 5, 1.0), wallMat, bindings, meshes) // Top
-
-    // 2. Drain / Plunger Base Walls
-    this.createWall(new Vector3(10.5, wallH, -10.5), new Vector3(1.9, 5, 1.0), wallMat, bindings, meshes) // Plunger Base
-
-    // 3. Shortened Plunger Lane Guide
-    this.createWall(
-      new Vector3(9.5, wallH, GameConfig.table.laneGuideZ),
-      new Vector3(0.2, 5, GameConfig.table.laneGuideLength),
-      wallMat,
-      bindings,
-      meshes
-    )
+    // 1–3. Outer walls, plunger base, shortened lane guide (`tableWallSpecs`)
+    for (const { pos, size } of tableWallSpecs()) {
+      this.createWall(new Vector3(pos.x, pos.y, pos.z), new Vector3(size.x, size.y, size.z), wallMat, bindings, meshes)
+    }
 
     // 4. Create Corner Wedges
     this.createCornerWedges(wallH, bindings, meshes)
@@ -104,54 +93,26 @@ export class WallBuilder {
   }
 
   private createCornerWedges(height: number, bindings: PhysicsBinding[], meshes: Mesh[]): void {
-    const wedgeSize = GameConfig.table.wedgeSize
-    const thickness = GameConfig.table.wedgeThickness
-
     const wedgeMat = this.matLib.getBrushedMetalMaterial()
 
-    // Calculate diagonal width
-    const diagWidth = Math.sqrt(2 * (wedgeSize * wedgeSize))
-
-    const createWedge = (name: string, x: number, z: number, rotationY: number) => {
-      const wedge = MeshBuilder.CreateBox(name, {
-        width: diagWidth,
-        height: height,
-        depth: thickness
+    for (const spec of cornerWedgeSpecs(height)) {
+      const wedge = MeshBuilder.CreateBox(spec.name, {
+        width: spec.diagWidth,
+        height: spec.height,
+        depth: spec.thickness
       }, this.scene)
 
-      wedge.position.set(x, 1, z)
-      wedge.rotation.y = rotationY
+      wedge.position.set(spec.x, 1, spec.z)
+      wedge.rotation.y = spec.rotationY
       wedge.material = wedgeMat
 
-      const q = Quaternion.FromEulerAngles(0, rotationY, 0)
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(x, 1, z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(diagWidth / 2, height / 2, thickness / 2)
-          .setRestitution(0.5)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-        body
-      )
+      const body = authorCornerWedge(this.world, this.rapier, spec)
 
       bindings.push({ mesh: wedge, rigidBody: body })
       meshes.push(wedge)
       this.meshes.push(wedge)
       this.bodies.push(body)
     }
-
-    // Top Left Corner Calculation
-    const tlX = -10 + (wedgeSize / 2)
-    const tlZ = 20.5 - (wedgeSize / 2)
-    createWedge('wedgeTL', tlX, tlZ, -Math.PI / 4) // 45 degrees
-
-    // Top Right Corner Calculation
-    const trX = 11.5 - (wedgeSize / 2)
-    const trZ = 20.5 - (wedgeSize / 2)
-    createWedge('wedgeTR', trX, trZ, Math.PI / 4) // -45 degrees
   }
 
   private createWall(
@@ -165,15 +126,7 @@ export class WallBuilder {
     w.position.copyFrom(pos)
     w.material = mat
 
-    const b = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(size.x / 2, size.y, size.z / 2)
-        .setFriction(GameConfig.ball.friction)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      b
-    )
+    const b = authorWall(this.world, this.rapier, pos, size)
 
     bindings.push({ mesh: w, rigidBody: b })
     meshes.push(w)
@@ -194,8 +147,9 @@ export class WallBuilder {
 
     const slingMat = this.matLib.getNeonSlingshotMaterial()
 
-    this.createSlingshot(new Vector3(-6.5, 0, -3), -Math.PI / 6, slingMat, bindings, bumperBodies, bumperVisuals, meshes)
-    this.createSlingshot(new Vector3(6.5, 0, -3), Math.PI / 6, slingMat, bindings, bumperBodies, bumperVisuals, meshes)
+    for (const { pos, rot } of SLINGSHOT_SPECS) {
+      this.createSlingshot(new Vector3(pos.x, pos.y, pos.z), rot, slingMat, bindings, bumperBodies, bumperVisuals, meshes)
+    }
 
     return { bindings, bumperBodies, bumperVisuals, meshes }
   }
@@ -214,19 +168,7 @@ export class WallBuilder {
     mesh.position.copyFrom(pos)
     mesh.material = mat
 
-    const q = Quaternion.FromEulerAngles(0, rot, 0)
-    const b = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(pos.x, pos.y, pos.z)
-        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.25, 1, 2)
-        .setRestitution(1.5)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.BUMPER)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      b
-    )
+    const b = authorSlingshot(this.world, this.rapier, pos, rot)
 
     bindings.push({ mesh, rigidBody: b })
     bumperBodies.push(b)

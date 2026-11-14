@@ -11,7 +11,22 @@ export interface PhysicsBinding {
   rigidBody: PhysicsBody
 }
 
-export interface BumperVisual {
+/**
+ * What gameplay needs of a bumper or slingshot (#528): its body, its colour and — for a bumper —
+ * the point a hologram catch holds the ball at. Plain data, so contact dispatch and scoring run
+ * without a mesh (the headless replay runner has none). `mesh` is presentation only.
+ */
+export interface BumperRef {
+  body: PhysicsBody
+  /** World point a hologram catch pulls the ball to (the hologram pillar's centre); slingshots have none. */
+  hologramAnchor?: { readonly x: number; readonly y: number; readonly z: number }
+  /** Bumper base color for particle matching */
+  color?: string
+  /** The drawn bumper; absent when nothing is drawn. Never read by gameplay. */
+  mesh?: Mesh
+}
+
+export interface BumperVisual extends BumperRef {
   mesh: Mesh
   body: PhysicsBody
   hologram?: Mesh
@@ -23,8 +38,6 @@ export interface BumperVisual {
   currentEmissive?: Color3
   /** Flash timer for state entry white flash */
   flashTimer?: number
-  /** Bumper base color for particle matching */
-  color?: string
   /** Thin wireframe hologram ring floating above the bumper */
   wireframeRing?: Mesh
 }

@@ -1,15 +1,16 @@
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { PhysicsBody } from '../../core/physics-api'
 
-import type { BumperVisual } from '../../game-elements/types'
-import { ComboSystem, getScoringBreakdownManager, type ComboHitType } from '../../game-elements'
+import type { BumperRef } from '../../game-elements/types'
+import type { Vec3Like } from '../../core/vec3-scalar'
+import { ComboSystem, type ComboHitType } from '../../game-elements/combo-system'
+import { getScoringBreakdownManager } from '../../game-elements/scoring-breakdown'
 import { ComboMultiplierSystem } from '../../game-elements/combo-multiplier-system'
 import { BonusTallySystem } from '../../game-elements/bonus-tally-system'
 import { GoldBallStreakSystem } from '../../game-elements/gold-ball-streak-system'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
 import { DisplayState } from '../../display/display-types'
 import { TABLE_MAPS } from '../../config/table-maps'
-import { PALETTE } from '../../game-elements'
+import { PALETTE } from '../../game-elements/visual-palette'
 import type { PhysicsHost } from './types'
 import { getFeverScoreMultiplier, applyFeverGoldMultiplier } from './scoring-multipliers'
 import { simClockMs, simClockSeconds } from '../../core/sim-clock'
@@ -98,7 +99,7 @@ export class ScoringBridge {
           })
         }
         if (data.position) {
-          const pos = new Vector3(data.position.x, data.position.y, data.position.z)
+          const pos = { x: data.position.x, y: data.position.y, z: data.position.z }
           this.host.effects?.spawnFloatingNumber(awardedPoints, pos)
           if (data.source?.includes('spinner')) {
             this.host.effects?.spawnBumperSpark(pos, PALETTE.CYAN)
@@ -156,7 +157,7 @@ export class ScoringBridge {
     this.host.zoneTriggerSystem?.resetBallCounters?.()
   }
 
-  awardScore(basePoints: number, source: string, position?: Vector3): number {
+  awardScore(basePoints: number, source: string, position?: Vec3Like): number {
     this.awardScoreCalls++
     const multiballMultiplier = this.getActiveScoreMultiplier()
     const comboMultiplier = this.comboMultiplierSystem.getState().multiplier
@@ -216,10 +217,11 @@ export class ScoringBridge {
     this.host.rebuildHandleCaches()
   }
 
-  activateHologramCatch(ball: PhysicsBody, bumper: PhysicsBody, bumperVisualMap: Map<PhysicsBody, BumperVisual>): void {
+  activateHologramCatch(ball: PhysicsBody, bumper: PhysicsBody, bumperVisualMap: Map<PhysicsBody, BumperRef>): void {
     const visual = bumperVisualMap.get(bumper)
-    if (!visual || !visual.hologram) return
-    const target = visual.hologram.getAbsolutePosition()
+    // The hologram's centre as plain data (#528): it used to be read off the hologram mesh.
+    const target = visual?.hologramAnchor
+    if (!target) return
     this.host.ballManager?.activateHologramCatch(ball, target, 4.0)
     this.host.effects?.playBeep(880)
     this.host.eventBus.emit('reach:start')
@@ -250,7 +252,7 @@ export class ScoringBridge {
       this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
     }
     this.syncComboSnapshot()
-    const wasFeverActive = this.host.display?.getDisplayState() === DisplayState.FEVER
+    const wasFeverActive = this.host.displayState.get() === DisplayState.FEVER
     if (wasFeverActive) {
       this.host.eventBus.emit('fever:end')
       this.host.eventBus.emit('display:set', DisplayState.IDLE)
@@ -263,7 +265,7 @@ export class ScoringBridge {
       // Ball stack visual updated by caller
       this.host.goldBallStack.push({ type: collected.type, timestamp: simClockMs() })
       this.host.sessionGoldBalls++
-      const collectPos = new Vector3(body.translation().x, body.translation().y, body.translation().z)
+      const collectPos = { x: body.translation().x, y: body.translation().y, z: body.translation().z }
 
       // Apply the gold ball streak multiplier before scoring so the point
       // total already reflects it when spawnFloatingNumber() shows the value.
@@ -447,7 +449,7 @@ export class ScoringBridge {
       })
       this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
       this.host.updateHUD()
-      if (this.host.display?.getDisplayState() === DisplayState.FEVER) {
+      if (this.host.displayState.get() === DisplayState.FEVER) {
         this.host.eventBus.emit('fever:end')
         this.host.eventBus.emit('display:set', DisplayState.IDLE)
         this.host.effects?.setLightingMode('normal', 0)

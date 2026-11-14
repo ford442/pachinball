@@ -3,22 +3,11 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import { supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../core/physics-api'
-import { resolvePinField } from '../core/pin-field'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig } from '../config'
 import type { PinLattice, SeededPinField } from '../cascade/daily-cascade-layout'
-import {
-  PEG_BASE_RADIUS,
-  PEG_COLLIDER_RADIUS,
-  PEG_FRICTION,
-  PEG_HEIGHT,
-  PEG_RESTITUTION,
-  PEG_TOP_RADIUS,
-  PIN_Y,
-  pachinkoPinFieldSpec,
-  pinInKeepOut,
-} from './pachinko-pin-field'
-import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { PEG_BASE_RADIUS, PEG_HEIGHT, PEG_TOP_RADIUS, PIN_Y } from './pachinko-pin-field'
+import { authorPachinkoField, PACHINKO_FIELD } from '../table/table-colliders'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { setPinLatticeInstances } from './pin-lattice'
@@ -52,9 +41,9 @@ export class PachinkoBuilder {
   }
 
   createPachinkoField(
-    center: Vector3 = new Vector3(0, 0.5, 6),
-    width: number = 24,
-    height: number = 22,
+    center: Vector3 = new Vector3(PACHINKO_FIELD.center.x, PACHINKO_FIELD.center.y, PACHINKO_FIELD.center.z),
+    width: number = PACHINKO_FIELD.width,
+    height: number = PACHINKO_FIELD.height,
     pinPositions?: { x: number; z: number }[],
     pinLattice?: PinLattice,
     seededField?: SeededPinField,
@@ -140,26 +129,10 @@ export class PachinkoBuilder {
     // its own fixed cylinder. The visual instances come from the same
     // resolver either way, so they sit exactly on the pins that collide.
     // ================================================================
-    const spec = pachinkoPinFieldSpec(center, width, height, pinPositions, pinLattice, seededField)
-    const placements: PinPlacement[] = spec
-      ? resolvePinField(spec).map((pin) => ({
-          x: pin.position.x,
-          z: pin.position.z,
-        }))
-      : this.offLatticePlacements(pinPositions ?? [])
-
-    let fieldBody: PhysicsBody | null = null
-    if (spec && supportsPinFields(this.world)) {
-      fieldBody = this.world.createPinField(spec)
-      this.bodies.push(fieldBody)
-      pinBodies.push(fieldBody)
-    }
-
-    // The Rapier path (and off-lattice seeded pins) still need a body per pin.
-    // createPinBody registers each in this.bodies for disposal.
-    if (!fieldBody) {
-      for (const { x, z } of placements) pinBodies.push(this.createPinBody(x, z))
-    }
+    const field = authorPachinkoField(this.world, this.rapier, center, width, height, pinPositions, pinLattice, seededField)
+    const placements: PinPlacement[] = field.placements
+    pinBodies.push(...field.pinBodies)
+    this.bodies.push(...field.pinBodies)
 
     if (placements.length > 0) {
       const lattice = buildTemplate(8, 6, 8)
@@ -185,16 +158,7 @@ export class PachinkoBuilder {
     catcher.position.set(center.x, 0.2, center.z)
     catcher.material = this.matLib.getCatcherMaterial()
 
-    const catchBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, 0.2, center.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(0.5, 1.0)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      catchBody
-    )
+    const catchBody = field.catchBody
 
     targetBodies.push(catchBody)
     targetMeshes.push(catcher)
@@ -214,31 +178,6 @@ export class PachinkoBuilder {
       pins,
       pinBodies,
     }
-  }
-
-  /** A Rapier-path pin (or an off-lattice seeded one): its own fixed cylinder. */
-  private createPinBody(x: number, z: number): PhysicsBody {
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(x, PIN_Y, z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(PEG_HEIGHT / 2, PEG_COLLIDER_RADIUS)
-        .setRestitution(PEG_RESTITUTION)
-        .setFriction(PEG_FRICTION)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      body
-    )
-    this.bodies.push(body)
-    return body
-  }
-
-  /** Seeded positions with no lattice to fit: filter the keep-outs and place each pin. */
-  private offLatticePlacements(pinPositions: readonly { x: number; z: number }[]): PinPlacement[] {
-    const placements: PinPlacement[] = []
-    for (const p of pinPositions) {
-      if (!pinInKeepOut(p.x, p.z)) placements.push({ x: p.x, z: p.z })
-    }
-    return placements
   }
 
   dispose(): void {

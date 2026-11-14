@@ -13,36 +13,12 @@
 
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { parseHexColorUnit } from '../core/color'
+import { PALETTE, INTENSITY, QualityTier } from './visual-palette'
+export { PALETTE, INTENSITY, QualityTier }
 // ============================================================================
 // COLOR PALETTE - Single source of truth
 // ============================================================================
 
-/** Primary accent colors - used for energy states and interactive elements */
-export const PALETTE = {
-  /** Primary cyan - main interactive color, neutral/idle state */
-  CYAN: '#00d9ff',
-  
-  /** Magenta/Pink - secondary accent, jackpot/reward states */
-  MAGENTA: '#ff00aa',
-  
-  /** Purple - deep energy, feeders, special elements */
-  PURPLE: '#8800ff',
-  
-  /** Gold/Yellow - fever mode, high energy, success */
-  GOLD: '#ffd700',
-  
-  /** Red/Orange - danger, warning, reach state */
-  ALERT: '#ff4400',
-  
-  /** Green - adventure mode, matrix/cyberpunk aesthetic */
-  MATRIX: '#00ff44',
-  
-  /** White - pure energy, flash effects */
-  WHITE: '#ffffff',
-  
-  /** Ambient dark blue - subtle emissive, background elements */
-  AMBIENT: '#001133',
-} as const
 
 /** Palette token key used by theme systems to avoid ad-hoc hex values. */
 export type VisualThemeColor = keyof typeof PALETTE
@@ -75,26 +51,6 @@ export const SURFACES = {
 // INTENSITY LEVELS - Consistent emissive power
 // ============================================================================
 
-/** Standardized emissive intensity multipliers */
-export const INTENSITY = {
-  /** Subtle ambient glow - background elements */
-  AMBIENT: 0.2,
-  
-  /** Normal operational glow - always-on elements */
-  NORMAL: 0.5,
-  
-  /** Active state - interactive elements engaged */
-  ACTIVE: 1.0,
-  
-  /** High energy - fever, jackpot, special modes */
-  HIGH: 1.5,
-  
-  /** Maximum flash - impacts, transitions */
-  FLASH: 2.0,
-  
-  /** Bloom threshold kick - brief spikes */
-  BURST: 3.0,
-} satisfies Record<string, number>
 
 // ============================================================================
 // STATE COLOR MAPPING - Consistent state visualization
@@ -193,11 +149,6 @@ export const CLEARCOAT = {
 // QUALITY TIERS - Hardware-adaptive material quality
 // ============================================================================
 
-export enum QualityTier {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-}
 
 /** Per-tier environment intensity scaling */
 export const TIER_ENV_INTENSITY: Record<QualityTier, number> = {
