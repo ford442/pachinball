@@ -134,7 +134,7 @@ jobs:
     name: Native CTest (Blocking)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++
@@ -156,7 +156,7 @@ jobs:
     name: Native CTest Release -O3 (Blocking)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++
@@ -168,9 +168,9 @@ jobs:
     name: Native CTest aarch64 (Blocking)
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
 
@@ -191,7 +191,7 @@ jobs:
     name: Sanitizer CTest (Blocking)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake clang-18 libclang-rt-18-dev
@@ -215,7 +215,7 @@ jobs:
     name: clang-tidy (Blocking)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++ clang-tidy-18
@@ -236,7 +236,7 @@ jobs:
     name: libFuzzer 60 s x 2 (Blocking)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake clang-18 libclang-rt-18-dev
@@ -249,7 +249,7 @@ jobs:
 
       - name: Upload fuzzer findings
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-findings
           path: native/build-fuzz/artifacts/
@@ -261,9 +261,9 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -381,7 +381,7 @@ jobs:
       # Diagnostics only: keep Playwright's error context and traces of a failed run.
       - name: Upload Playwright results on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-owner-playwright-results
           path: test-results/
@@ -392,9 +392,9 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -447,7 +447,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: replay-goldens-results
           path: test-results/
