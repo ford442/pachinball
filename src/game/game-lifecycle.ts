@@ -16,12 +16,13 @@ import {
   type GameSettings,
 } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
-import { resolveStartMachine, type StartMachine } from '../cascade/start-machine'
+import type { StartMachine } from '../cascade/start-machine'
+import { resetRunState, resolveRunStart, startSeed, type RunStartInput } from './run-start'
 import { DisplayState } from '../display/display-types'
-import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
+import { initSessionRng, getSessionSeed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
 import { REPLAY_SCHEMA_VERSION } from '../replay/replay-recorder'
-import { freshNudgeState, type NudgeState } from './physics/types'
+import type { NudgeState } from './physics/types'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -216,19 +217,13 @@ export class GameLifecycle {
     const dailyState = getDailyCascadeState()
     const isReplaying = this.host.replayRunner?.isPlaying() ?? false
     const replayPayload = isReplaying ? this.host.replayRunner?.getPayload() ?? null : null
-    // A replay plays on the cascade table it was recorded on, whatever this
-    // player has selected; their own next game gets their selection back (#444).
-    if (isReplaying) dailyState.beginReplay(replayPayload?.cascade ?? null)
-    else dailyState.endReplay()
-    const challengeSeed = getChallengeSystem().getActiveChallenge()?.seed ?? null
-
-    const machine = resolveStartMachine({
-      mode: dailyState.getMode(),
-      modeSeed: dailyState.getModeSeed(),
-      replay: replayPayload ? { seed: replayPayload.seed, machine: replayPayload.machine } : null,
-      challengeSeed,
+    // Machine, seed and table are shared with the headless replay runner (`run-start.ts`, #528).
+    const runStart: RunStartInput = {
+      replay: replayPayload ? { seed: replayPayload.seed, machine: replayPayload.machine, cascade: replayPayload.cascade ?? null } : null,
+      challengeSeed: isReplaying ? null : getChallengeSystem().getActiveChallenge()?.seed ?? null,
       campaign: this.host.campaignStartSelected,
-    })
+    }
+    const machine = resolveRunStart(runStart)
 
     if (machine.kind === 'weekly') {
       // Its generator is a lazy chunk. Awaited before the RNG is seeded, so nothing is half-built if the game is disposed meanwhile.
@@ -236,20 +231,7 @@ export class GameLifecycle {
       if (this.host.signal.aborted) return
     }
 
-    let seed: number
-    if (isReplaying) {
-      seed = replayPayload?.seed ?? randomU32Seed()
-    } else if (machine.kind === 'weekly') {
-      seed = machine.seed
-    } else if (machine.kind === 'cascade' && dailyState.getMode() === 'daily') {
-      const layout = dailyState.ensureLayout()
-      seed = layout ? layout.seed : randomU32Seed()
-    } else {
-      // `?seed=` / `?challenge=seed:target` share links (#343): the same seed
-      // must give the same session RNG streams, or a challenge is not a challenge.
-      seed = challengeSeed ?? randomU32Seed()
-    }
-
+    const seed = startSeed(machine, runStart)
     initSessionRng(seed)
     // After the session RNG: the weekly machine draws its layout through
     // getLayoutRng, and the table must be rebuilt before the first recorded
@@ -276,19 +258,9 @@ export class GameLifecycle {
     this.scoringBreakdown.reset()
     this.host.uiManager?.hideScoringBreakdown()
     this.host.resetRunFaults?.()
-    this.host.score = 0
-    this.host.lives = 3
-    this.host.comboCount = 0
-    this.host.comboTimer = 0
-    this.host.goldBallStack = []
+    resetRunState(this.host)
     this.host.ballStackVisual?.clear()
     this.host.gameObjects?.resetTargets()
-    this.host.powerupActive = false
-    this.host.powerupTimer = 0
-    // A new game starts untilted with no nudge history; a stale cooldown or
-    // penalty from the last game must not reach this one's tape.
-    this.host.nudgeState = freshNudgeState()
-    this.host.tiltActive = false
     this.host.ballManager?.removeExtraBalls()
     this.host.updateHUD()
     this.host.resetBall()

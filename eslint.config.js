@@ -219,6 +219,20 @@ export default defineConfig([
       }],
     },
   },
+  // The headless replay runner and the table authoring it shares with the builders (#528) run in
+  // Node with no renderer: no Babylon import at all, not even a type (a type import is the first
+  // step to a value one). The bundle check (scripts/lib/sim-bundle.mjs) catches transitive ones.
+  {
+    files: ['src/sim/**/*.ts', 'src/table/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@babylonjs/**'],
+          message: 'src/sim and src/table run in Node without Babylon (#528): take plain {x, y, z} records and bodies.',
+        }],
+      }],
+    },
+  },
   {
     files: ['src/config/display-slot.ts'],
     rules: {

@@ -5,7 +5,6 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { PhysicsSystem } from '../../game-elements/physics'
 import type { BallManager } from '../../game-elements/ball-manager'
 import type { BallAnimator } from '../../game-elements/ball-animator'
-import type { GameObjects } from '../../objects'
 import type { EffectsSystem } from '../../effects'
 import type { DisplaySystem } from '../../display'
 import type { SoundSystem } from '../../audio/sound-system'
@@ -16,12 +15,10 @@ import type { AdventureManager } from '../game-adventure'
 import type { AdventureMode } from '../../adventure'
 import type { ZoneTriggerSystem } from '../../game-elements/zone-trigger-system'
 import type { CameraController } from '../../game-elements/camera-controller'
-import type { MagSpinFeeder } from '../../objects/feeders/mag-spin-feeder'
-import type { NanoLoomFeeder } from '../../objects/feeders/nano-loom-feeder'
-import type { PrismCoreFeeder } from '../../objects/feeders/prism-core-feeder'
-import type { GaussCannonFeeder } from '../../objects/feeders/gauss-cannon-feeder'
-import type { QuantumTunnelFeeder } from '../../objects/feeders/quantum-tunnel-feeder'
-import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../../objects'
+import type { PhysicsBody } from '../../core/physics-api'
+import type { Vec3Like } from '../../core/vec3-scalar'
+import type { BumperRef, PhysicsBinding } from '../../game-elements/types'
+import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import type { BallType } from '../../config'
 import type { CameraMode } from '../../game-elements'
 import type { QualityTier } from '../../game-elements/visual-language'
@@ -57,18 +54,104 @@ export interface PhysicsFrameState {
   alpha: number
 }
 
+/**
+ * The physics backend as the tick uses it: `PhysicsSystem` in the game, `HeadlessPhysics` on the
+ * headless replay runner (#528).
+ */
+export type PhysicsSim = Pick<
+  PhysicsSystem,
+  | 'getLastMirrorOverheadMs'
+  | 'getWasmEngine'
+  | 'getWasmTableWorld'
+  | 'getWorld'
+  | 'isWasmActive'
+  | 'isWasmOwnerMode'
+  | 'setEngineSwitchListener'
+  | 'setMirrorOverheadMs'
+  | 'setWasmDebugColliders'
+  | 'step'
+>
+
+/**
+ * The table as the tick uses it: `GameObjects` in the game, `HeadlessTable` in Node (#528). Plain
+ * bodies and bumper refs; meshes only through `getBindings` (empty when nothing is drawn).
+ */
+export interface TableObjectsSim {
+  getBindings(): PhysicsBinding[]
+  setBumperState(state: 'IDLE' | 'REACH' | 'FEVER' | 'JACKPOT' | 'ADVENTURE'): void
+  getBumperBodies(): PhysicsBody[]
+  getBumperVisuals(): readonly BumperRef[]
+  getAllFlippers(): ReadonlyMap<string, { body: PhysicsBody }>
+  updateTargets(dt: number): void
+  updateBumpers(dt: number): void
+  getWasmExportBodies(): PhysicsBody[]
+  getTargetBodies(): PhysicsBody[]
+  getLaneSensors(): LaneSensorDef[]
+  getDeathZoneBody(): PhysicsBody | null
+  deactivateTarget(body: PhysicsBody): boolean
+  activateBumperHit(body: PhysicsBody): void
+}
+
+/** A feeder as the fixed step drives it. */
+export interface FeederSim {
+  update(dt: number, ballBodies: PhysicsBody[]): void
+}
+
+/** What contact dispatch and the step read of a toy's state (the builders' states carry meshes too). */
+export interface BallTrapSimState {
+  readonly body: PhysicsBody
+  isOpen: boolean
+  caughtBall: PhysicsBody | null
+  rearmTimer: number
+  trapColor: string
+}
+export interface LauncherSimState {
+  readonly body: PhysicsBody
+  cooldownTimer: number
+}
+export interface MovingGateSimState {
+  readonly body: PhysicsBody
+  isOpen: boolean
+}
+export interface SpinnerSimVisual {
+  readonly body: PhysicsBody
+}
+
+export interface BallTrapSim {
+  getBodies(): PhysicsBody[]
+  catchBall(state: BallTrapSimState, ball: PhysicsBody, ballPosition?: Vec3Like): void
+  updateTrap(state: BallTrapSimState, dt: number): unknown
+}
+export interface LauncherSim {
+  getBodies(): PhysicsBody[]
+  triggerLauncher(state: LauncherSimState, force?: number): Vec3Like
+  updateLauncher(state: LauncherSimState, dt: number): void
+}
+export interface MovingGateSim {
+  getBodies(): PhysicsBody[]
+  openGate(state: MovingGateSimState, duration?: number): void
+  updateGate(state: MovingGateSimState, dt: number): void
+}
+export interface SpinnerSim {
+  getBodies(): PhysicsBody[]
+  triggerSpin(visual: SpinnerSimVisual, impactForce: number, ballPosition?: Vec3Like): void
+}
+
 export interface PhysicsHost {
-  readonly engine: Engine | WebGPUEngine
-  readonly physics: PhysicsSystem
+  /** Only the frame delta is read (the headless replay runner fixes it at 1/60 s). */
+  readonly engine: Pick<Engine | WebGPUEngine, 'getDeltaTime'>
+  readonly physics: PhysicsSim
   readonly stateManager: GameStateManager
   readonly eventBus: EventBus
   readonly ballManager: BallManager | null
-  readonly gameObjects: GameObjects | null
+  readonly gameObjects: TableObjectsSim | null
   readonly effects: EffectsSystem | null
   readonly display: DisplaySystem | null
+  /** The backbox state gameplay gates on (`SimDisplayState`, #528) — never `display.getDisplayState()`. */
+  readonly displayState: { get(): import('../../display/display-types').DisplayState }
   readonly ballAnimator: BallAnimator | null
   readonly hapticManager: HapticManager | null
-  readonly soundSystem: SoundSystem
+  readonly soundSystem: Pick<SoundSystem, 'playImpact' | 'playGoldBallCollect'>
   readonly mapManager: import('../game-maps').TableMapManager | null
   readonly uiManager: import('../game-ui').GameUIManager | null
   readonly adventureMode: AdventureMode | null
@@ -76,11 +159,11 @@ export interface PhysicsHost {
   readonly zoneTriggerSystem: ZoneTriggerSystem | null
   readonly cameraController: CameraController | null
   readonly dynamicWorld: import('../../game-elements/dynamic-world').DynamicWorld | null
-  readonly magSpinFeeder: MagSpinFeeder | null
-  readonly nanoLoomFeeder: NanoLoomFeeder | null
-  readonly prismCoreFeeder: PrismCoreFeeder | null
-  readonly gaussCannon: GaussCannonFeeder | null
-  readonly quantumTunnel: QuantumTunnelFeeder | null
+  readonly magSpinFeeder: (FeederSim & { getBodies(): PhysicsBody[] }) | null
+  readonly nanoLoomFeeder: FeederSim | null
+  readonly prismCoreFeeder: FeederSim | null
+  readonly gaussCannon: FeederSim | null
+  readonly quantumTunnel: FeederSim | null
   readonly tableCam: TargetCamera | null
   readonly accessibility: import('../../game-elements').AccessibilityConfig
   readonly qualityTier: QualityTier
@@ -95,14 +178,14 @@ export interface PhysicsHost {
   /** Runs at the end of every fixed step: the live broadcast and spectator (#444 Slice E). */
   readonly afterFixedStep?: (() => void) | null
 
-  readonly spinnerBuilder: SpinnerBumperBuilder | null
-  readonly ballTrapBuilder: BallTrapBuilder | null
-  readonly launcherBuilder: LauncherBuilder | null
-  readonly movingGateBuilder: MovingGateBuilder | null
-  readonly spinnerVisuals: SpinnerBumperVisual[]
-  readonly trapStates: BallTrapState[]
-  readonly launcherStates: LauncherState[]
-  readonly gateStates: MovingGateState[]
+  readonly spinnerBuilder: SpinnerSim | null
+  readonly ballTrapBuilder: BallTrapSim | null
+  readonly launcherBuilder: LauncherSim | null
+  readonly movingGateBuilder: MovingGateSim | null
+  readonly spinnerVisuals: SpinnerSimVisual[]
+  readonly trapStates: BallTrapSimState[]
+  readonly launcherStates: LauncherSimState[]
+  readonly gateStates: MovingGateSimState[]
 
   score: number
   comboCount: number

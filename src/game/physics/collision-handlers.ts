@@ -4,26 +4,29 @@
  * focused on handle-space conversion and routing.
  */
 
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
 
-import type { BumperVisual } from '../../game-elements/types'
+import type { BumperRef } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { DisplayState } from '../../display/display-types'
 import { getLaneRolloverPoints, GAME_TUNING, PhysicsConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import { TABLE_MAPS } from '../../config/table-maps'
-import { PALETTE } from '../../game-elements'
+import { PALETTE } from '../../game-elements/visual-palette'
+import { normalized3, type Vec3Like } from '../../core/vec3-scalar'
 
 import type { PhysicsHost } from './types'
 import type { ScoringBridge } from './scoring-bridge'
+
+/** World up, for impact rings (read-only). */
+const UP: Vec3Like = { x: 0, y: 1, z: 0 }
 
 export interface CollisionHandlerContext {
   host: PhysicsHost
   scoringBridge: ScoringBridge
   ballHandleSet: Set<number>
-  bumperVisualMap: Map<PhysicsBody, BumperVisual>
+  bumperVisualMap: Map<PhysicsBody, BumperRef>
   laneRolloverAwardedKeys: Set<string>
   setLastLaneHit: (laneId: string) => void
   /**
@@ -45,17 +48,19 @@ export function handleBumperCollision(
   const vis = ctx.bumperVisualMap.get(bump)
   if (!vis) return
 
+  // The bumper's centre comes from its body, not its mesh: the impact normal below feeds the
+  // ball's spin (#528 — the headless replay runner has no meshes).
+  const bumperPos = vis.body.translation()
   const ballMesh = getBallMeshForBody(ctx.host, ballBody)
   if (ballMesh && ctx.host.ballAnimator) {
     const velocity = ballBody.linvel()
     const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
     const impactIntensity = Math.min(speed / 20, 1.0)
-    const bumperPos = vis.mesh.position
-    const impactNormal = new Vector3(
+    const impactNormal = normalized3(
       ballPos.x - bumperPos.x,
       ballPos.y - bumperPos.y,
       ballPos.z - bumperPos.z
-    ).normalize()
+    )
     ctx.host.ballAnimator.animateBallImpact(ballMesh, impactNormal, impactIntensity)
   }
 
@@ -64,7 +69,7 @@ export function handleBumperCollision(
   // a kinematic catch and dumps the ball behind the launcher on release.
   const inLaunchCorridor = ballPos.x > 8.5 && ballPos.z < 16
   if (ballPos.y > 1.5) {
-    if (!inLaunchCorridor && ctx.host.display?.getDisplayState() === DisplayState.IDLE) {
+    if (!inLaunchCorridor && ctx.host.displayState.get() === DisplayState.IDLE) {
       ctx.scoringBridge.activateHologramCatch(ballBody, bump, ctx.bumperVisualMap)
     }
     return
@@ -82,25 +87,26 @@ export function handleBumperCollision(
   ctx.scoringBridge.awardScore(
     chainAdjustedBase,
     'bumper-hit',
-    new Vector3(ballPos.x, ballPos.y, ballPos.z)
+    { x: ballPos.x, y: ballPos.y, z: ballPos.z }
   )
   if (comboResult.chain.bonusPoints > 0) {
-    ctx.scoringBridge.awardScore(comboResult.chain.bonusPoints, 'combo-chain-bonus', new Vector3(ballPos.x, ballPos.y, ballPos.z))
+    ctx.scoringBridge.awardScore(comboResult.chain.bonusPoints, 'combo-chain-bonus', { x: ballPos.x, y: ballPos.y, z: ballPos.z })
     ctx.scoringBridge.recordChainBonus(comboResult.chain.bonusPoints)
   }
   ctx.scoringBridge.registerComboMultiplierHit()
 
-  if (comboResult.comboCount >= GAME_TUNING.combo.feverThreshold && ctx.host.display?.getDisplayState() === DisplayState.IDLE) {
+  if (comboResult.comboCount >= GAME_TUNING.combo.feverThreshold && ctx.host.displayState.get() === DisplayState.IDLE) {
     ctx.host.eventBus.emit('fever:start')
     ctx.host.eventBus.emit('display:set', DisplayState.FEVER)
     ctx.host.effects?.setLightingMode('fever', 0)
   }
 
   const impactTier = ctx.scoringBridge.getComboImpactTier()
-  ctx.host.effects?.spawnEnhancedBumperImpact(vis.mesh.position, impactTier)
-  ctx.host.effects?.spawnBumperSpark(vis.mesh.position, vis.color || PALETTE.CYAN)
-  ctx.host.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
-  ctx.host.effects?.triggerImpactFlash(vis.mesh.position, 1.0, vis.color || '#44aaff')
+  const effectPos = vis.mesh?.position ?? bumperPos
+  ctx.host.effects?.spawnEnhancedBumperImpact(effectPos, impactTier)
+  ctx.host.effects?.spawnBumperSpark(effectPos, vis.color || PALETTE.CYAN)
+  ctx.host.effects?.spawnImpactRing(effectPos, UP, PALETTE.CYAN)
+  ctx.host.effects?.triggerImpactFlash(effectPos, 1.0, vis.color || '#44aaff')
   ctx.host.effects?.playBeep(400 + Math.random() * 200)
   ctx.host.updateHUD()
   ctx.host.effects?.setLightingMode('hit', impactTier === 'heavy' ? 0.35 : impactTier === 'medium' ? 0.25 : 0.2)
@@ -110,11 +116,11 @@ export function handleBumperCollision(
   ctx.host.hapticManager?.bumper(speed)
   ctx.host.eventBus.emit('bumper:contact', { strength: Math.min(speed / 20, 1) })
 
-  const impactNormal = new Vector3(
-    ballPos.x - vis.mesh.position.x,
-    ballPos.y - vis.mesh.position.y,
-    ballPos.z - vis.mesh.position.z
-  ).normalize()
+  const impactNormal = normalized3(
+    ballPos.x - bumperPos.x,
+    ballPos.y - bumperPos.y,
+    ballPos.z - bumperPos.z
+  )
   applySpinTransfer(ballBody, impactNormal, speed)
 
   if (speed > 12) {
@@ -123,11 +129,11 @@ export function handleBumperCollision(
   }
   if (speed > 8) {
     const impactStrength = Math.min((speed - 8) / 14, 1)
-    ctx.host.cameraController?.notifyImpact(vis.mesh.position, impactStrength)
+    ctx.host.cameraController?.notifyImpact(effectPos, impactStrength)
   }
 
   ctx.host.soundSystem.playImpact('bumper', speed, {
-    position: new Vector3(ctx.contactX() ?? ballPos.x, ballPos.y, ballPos.z),
+    position: { x: ctx.contactX() ?? ballPos.x, y: ballPos.y, z: ballPos.z },
   })
 }
 
@@ -145,11 +151,11 @@ export function handleFlipperCollision(
 
   const flipperPos = flipperBody.translation()
   const ballPos = ballBody.translation()
-  const collisionNormal = new Vector3(
+  const collisionNormal = normalized3(
     ballPos.x - flipperPos.x,
     ballPos.y - flipperPos.y,
     ballPos.z - flipperPos.z
-  ).normalize()
+  )
 
   const ballMesh = getBallMeshForBody(ctx.host, ballBody)
   if (ballMesh && ctx.host.ballAnimator) {
@@ -159,7 +165,7 @@ export function handleFlipperCollision(
   ctx.host.hapticManager?.flipper()
   ctx.host.effects?.playBeep(880 + Math.random() * 200)
   ctx.host.soundSystem.playImpact('flipper', speed, {
-    position: new Vector3(ctx.contactX() ?? ballPos.x, ballPos.y, ballPos.z),
+    position: { x: ctx.contactX() ?? ballPos.x, y: ballPos.y, z: ballPos.z },
   })
 
   const kickScale = getPhysicsTuningValue('flipperKickImpulse')
@@ -195,11 +201,11 @@ export function handleTargetCollision(
       const impactIntensity = Math.min(speed / 20, 1.0)
       ctx.host.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
       ctx.host.soundSystem.playImpact('peg', speed, {
-        position: new Vector3(
-          ctx.contactX() ?? ballBody.translation().x,
-          ballBody.translation().y,
-          ballBody.translation().z,
-        ),
+        position: {
+          x: ctx.contactX() ?? ballBody.translation().x,
+          y: ballBody.translation().y,
+          z: ballBody.translation().z,
+        },
       })
     }
   }
@@ -209,7 +215,7 @@ export function handleTargetCollision(
     ctx.scoringBridge.awardScore(
       GAME_TUNING.scoring.targetHitBase,
       'target-hit',
-      new Vector3(ballPos.x, ballPos.y, ballPos.z)
+      { x: ballPos.x, y: ballPos.y, z: ballPos.z }
     )
     ctx.scoringBridge.registerComboMultiplierHit()
     ctx.host.effects?.playBeep(1200)
@@ -239,7 +245,7 @@ export function handleSpinnerCollision(
   const visual = ctx.host.spinnerVisuals.find(v => v.body === obstacleBody)
   if (visual) {
     const ballPos = ballBody.translation()
-    const pos = new Vector3(ballPos.x, ballPos.y, ballPos.z)
+    const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
     ctx.host.spinnerBuilder?.triggerSpin(visual, impactForce, pos)
     ctx.scoringBridge.awardScore(GAME_TUNING.obstacle.spinnerHitBase, 'spinner-hit', pos)
     ctx.host.effects?.spawnEnhancedBumperImpact(pos, impactForce > 14 ? 'medium' : 'light')
@@ -264,9 +270,9 @@ export function handleBallTrapCollision(
     ctx.scoringBridge.registerComboObstacleHit('trap')
     ctx.scoringBridge.registerComboMultiplierHit()
     const ballPos = ballBody.translation()
-    const pos = new Vector3(ballPos.x, ballPos.y, ballPos.z)
+    const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
     ctx.host.ballTrapBuilder?.catchBall(state, ballBody, pos)
-    ctx.host.effects?.spawnImpactRing(pos, new Vector3(0, 1, 0), state.trapColor || PALETTE.MAGENTA)
+    ctx.host.effects?.spawnImpactRing(pos, UP, state.trapColor || PALETTE.MAGENTA)
     ctx.host.hapticManager?.bumper(8)
   }
 }
@@ -319,7 +325,7 @@ export function handleLaneRolloverCollision(
 
   const points = getLaneRolloverPoints(sensor.kind)
   const ballPos = ballBody.translation()
-  const pos = new Vector3(ballPos.x, ballPos.y, ballPos.z)
+  const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
 
   ctx.scoringBridge.awardScore(points, `lane-rollover:${sensor.id}`, pos)
   ctx.host.eventBus.emit('lane:rollover', {
@@ -344,7 +350,7 @@ export function getBallMeshForBody(host: PhysicsHost, body: PhysicsBody): Mesh |
 
 export function applySpinTransfer(
   ball: PhysicsBody,
-  collisionNormal: Vector3,
+  collisionNormal: Vec3Like,
   contactSpeed: number
 ): void {
   // Apply spin based on collision normal and ball velocity
@@ -353,11 +359,11 @@ export function applySpinTransfer(
   const angvel = ball.angvel()
 
   // Apply spin perpendicular to collision normal and velocity direction
-  const tangent = new Vector3(
+  const tangent = normalized3(
     collisionNormal.z,
     0,
     -collisionNormal.x
-  ).normalize()
+  )
 
   const spinAmount = spinFactor * PhysicsConfig.global.englishSpinAmount
   ball.setAngvel(

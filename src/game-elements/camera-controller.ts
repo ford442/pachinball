@@ -1,4 +1,5 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { QualityTier } from './visual-language'
@@ -176,7 +177,7 @@ export class CameraController {
     this.hasLastBallPos = true
   }
 
-  notifyImpact(impactPos: Vector3, intensity: number): void {
+  notifyImpact(impactPos: Vec3Like, intensity: number): void {
     if (!this.dynamicAllowed || this.impactCooldownRemaining > 0) return
 
     const strength = Scalar.Clamp(intensity, 0, 1)

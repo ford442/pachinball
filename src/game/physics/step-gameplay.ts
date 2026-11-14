@@ -28,7 +28,7 @@ const NO_STUCK_BODIES: readonly PhysicsBody[] = []
  */
 export function finishJackpotIfDone(host: PhysicsHost): void {
   const effects = host.effects
-  if (!effects || effects.isJackpotActive || host.display?.getDisplayState() !== DisplayState.JACKPOT) return
+  if (!effects || effects.isJackpotActive || host.displayState.get() !== DisplayState.JACKPOT) return
   host.eventBus.emit('jackpot:end')
   host.eventBus.emit('display:set', DisplayState.IDLE)
   effects.setAtmosphereState('IDLE')

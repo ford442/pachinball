@@ -24,6 +24,8 @@ const ENFORCED_DIRS = [
   'src/shaders/',
   'src/replay/',
   'src/arcade/',
+  'src/table/',
+  'src/sim/',
   'src/game.ts',
 ]
 

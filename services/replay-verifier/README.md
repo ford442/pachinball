@@ -13,6 +13,29 @@ Supabase ──claim_score_verifications──▶ verifier ──Chromium──�
          ◀─record_score_verification──
 ```
 
+### Runners (#528)
+
+`VERIFIER_RUNNER` (or `--runner`) picks how a tape is replayed:
+
+| Runner | How | Cost |
+|--------|-----|------|
+| `chromium` (default) | The real game in headless Chromium (`scripts/lib/replay-harness.mjs`), one `GamePhysicsController.stepFixed` per tape frame. | ~10 s boot + the run, a browser per host |
+| `node` | The build's own headless runner, `dist/sim/node-replay.mjs` (`src/sim/node-replay.ts`, written by `vite build`): the C++ world from the build's `wasm/PhysicsModule.wasm`, the frame-0 snapshot, the tape rows and the same TypeScript tick the game runs (`SimPhysicsController`, scoring, ball manager, table authoring) — no Babylon, no browser. | ~0.1 s per golden-length tape |
+
+The Node runner still loads only the build's own binary and checks it
+against the `wasmSha256` its `build-info.json` declares. It replays what it
+can replay exactly and says `unsupported` for the rest — an adventure track,
+a toy or feeder that engages (their state machines still live in
+mesh-owning classes), the backbox leaving IDLE (slot machine, fever,
+jackpot). Those tapes, builds archived before the runner existed, and any
+Node runner error go to Chromium, which is launched only then
+(`chromium-fallback` in the log, with the reason). A verdict line names the
+runner that produced it (`"runner": "node"`).
+
+`VERIFIER_NODE_CONFIRM_REJECTIONS=1` replays every run Node rejects in
+Chromium too and records Chromium's verdict: Node may verify on its own, a
+rejection waits for the browser. Use it while rolling the Node runner out.
+
 A run is rejected when:
 
 | Reason | Meaning |
@@ -48,7 +71,8 @@ npx playwright install --with-deps chromium
 # The build players run. `npm run build` also writes dist/build-info.json
 # (the build id stamped into every tape).
 npm run build
-npm run test:verifier            # self-test against a fake backend: 12 cases ok
+npm run test:verifier            # self-test against a fake backend (Chromium): 13 cases ok
+npm run test:verifier:node       # the same cases on the Node runner; Chromium is never launched
 
 sudo mkdir -p /etc/pachinball
 sudo cp services/replay-verifier/replay-verifier.env.example /etc/pachinball/replay-verifier.env
@@ -107,8 +131,9 @@ verifier on the new code.
 
 ## Operation
 
-- One run takes 20–60 s (boot ~10 s, then ~5–10 ms per physics step); a full
-  three-ball game is a few minutes of tape. `VERIFIER_BATCH` scores are
+- On Chromium one run takes 20–60 s (boot ~10 s, then ~5–10 ms per physics
+  step); a full three-ball game is a few minutes of tape. On the Node runner a
+  1200-step golden tape replays in ~0.1 s. `VERIFIER_BATCH` scores are
   claimed at a time; when the queue is empty the service sleeps
   `VERIFIER_POLL_MS`.
 - A claim is held for 15 minutes. If the service dies mid-run, the score is

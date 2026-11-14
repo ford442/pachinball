@@ -6,6 +6,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { OBSTACLE_ZONE_FOOTPRINTS } from '../table/table-colliders'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -167,14 +168,7 @@ export class MovingGateBuilder {
     // Register with ZoneTriggerSystem
     if (this.zoneTriggerSystem) {
       const zoneId = `gate-zone-${body.handle.toString()}`
-      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
-        minX: x - (width * scale) / 2,
-        maxX: x + (width * scale) / 2,
-        minZ: z - 0.15 * scale,
-        maxZ: z + 0.15 * scale,
-        minY: 0,
-        maxY: height * scale,
-      }, { color: colorHex, type: 'gate' })
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, OBSTACLE_ZONE_FOOTPRINTS.gate(x, z, scale, width, height), { color: colorHex, type: 'gate' })
       this.registeredZoneIds.push(zoneId)
     }
 

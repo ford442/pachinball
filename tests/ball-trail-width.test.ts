@@ -10,8 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../src/audio/sound-system', () => ({ getSoundSystem: () => ({ playSample: vi.fn() }) }))
 vi.mock('../src/adventure/campaign-rewards-manager', () => ({ getCampaignRewardsManager: () => null }))
 
-import { trailWidthMultiplier, updateTrailEffects } from '../src/game-elements/ball-manager-spawn'
-import type { BallManagerHost } from '../src/game-elements/ball-manager-context'
+import { trailWidthMultiplier, updateTrailEffects, type TrailEffectsHost } from '../src/game-elements/ball-presentation'
 
 interface FakeTrail {
   diameter: number
@@ -26,7 +25,7 @@ function makeHost(speed: number, baseWidth: number, isFading = false) {
   const material: FakeMaterial = { alpha: 1, emissiveColor: { r: 0.5, g: 0.5, b: 0.5 } }
   const body = { linvel: () => ({ x: speed, y: 0, z: 0 }) }
   const ballTrails = new Map([[body, { mesh, material, baseWidth, isFading }]])
-  const host = { ballTrails } as unknown as BallManagerHost
+  const host = { ballTrails } as unknown as TrailEffectsHost
   return { host, mesh, material }
 }
 

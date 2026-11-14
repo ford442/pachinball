@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * Replay verifier service (#444 Slice C) — Node + headless Chromium, run on
- * the storage host (README.md here). It claims pending leaderboard scores
- * (`claim_score_verifications`), replays each one's tape in the real game,
- * one fixed step per tape frame (scripts/lib/replay-harness.mjs), and records
+ * Replay verifier service (#444 Slice C) — run on the storage host (README.md
+ * here). It claims pending leaderboard scores (`claim_score_verifications`),
+ * replays each one's tape one fixed step per tape frame, and records
  * the verdict (`record_score_verification`): verified when the tape replays
  * to the submitted score, rejected with the reason when it cannot. A verified
  * run's ball path goes to `ghost_tracks`: the race ghost of a challenge.
@@ -19,8 +18,20 @@
  * build-info.json declares is never used. `verifier_version` is the build
  * that replayed the run, `verify_wasm_sha256` its binary.
  *
- *   node services/replay-verifier/verifier.mjs          # poll forever
- *   node services/replay-verifier/verifier.mjs --once   # one claim round, then exit
+ * Runners (#528): `chromium` (the default) plays the tape in the real game in
+ * headless Chromium (scripts/lib/replay-harness.mjs). `node` replays it with
+ * the build's headless runner, `dist/sim/node-replay.mjs` — the same
+ * TypeScript tick, no Babylon, no browser — on the build's own
+ * `PhysicsModule.wasm` (SHA-256 checked against build-info.json). A tape the
+ * Node runner cannot replay exactly (`unsupported`: adventure, an engaged toy
+ * or feeder, the backbox slot machine / fever / jackpot), a build archived
+ * before the runner existed, or a Node runner error goes to Chromium, which is
+ * launched only then. With VERIFIER_NODE_CONFIRM_REJECTIONS=1 a run Node
+ * rejects is replayed in Chromium too, and Chromium's verdict is recorded.
+ *
+ *   node services/replay-verifier/verifier.mjs                  # poll forever
+ *   node services/replay-verifier/verifier.mjs --once           # one claim round, then exit
+ *   node services/replay-verifier/verifier.mjs --runner node    # headless Node runner first
  *
  * Environment:
  *   ARCADE_SECRET_KEY     required — a Supabase secret key (sb_secret_…)
@@ -29,11 +40,15 @@
  *   VERIFIER_BUILDS       optional directory of builds, one subdirectory per build id
  *   VERIFIER_POLL_MS      idle wait between claims, default 30000
  *   VERIFIER_BATCH        scores per claim, default 4
+ *   VERIFIER_RUNNER       chromium (default) | node
+ *   VERIFIER_NODE_CONFIRM_REJECTIONS  1: a Node rejection is re-run in Chromium
  */
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
 import { discoverBuilds } from '../../scripts/lib/build-info.mjs'
+import { loadSimBundle, SIM_BUNDLE, wasmModuleFactory } from '../../scripts/lib/sim-bundle.mjs'
 import { launchBrowser, repoRoot, runTape, serveDist } from '../../scripts/lib/replay-harness.mjs'
 import { judge, precheck, selectBuild } from './judge.mjs'
 
@@ -74,8 +89,12 @@ function client({ url, key }) {
  * `injectContactFault(claim)` is the self-test's: true makes that replay's
  * first contact handler throw, a sim fault the strict playback must reject.
  */
-export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal, injectContactFault } = {}) {
+export async function runVerifier({
+  url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal, injectContactFault,
+  runner = 'chromium', confirmRejections = false,
+} = {}) {
   if (!key) throw new Error('ARCADE_SECRET_KEY is required')
+  if (runner !== 'chromium' && runner !== 'node') throw new Error(`unknown runner ${runner}: chromium | node`)
   const { rpc, rest } = client({ url, key })
   // A build whose binary is not the one its build-info.json declares is never replayed on.
   const known = discoverBuilds({
@@ -87,6 +106,7 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
     builds: known.builds.map((b) => ({ id: b.id, wasm: b.wasmSha256?.slice(0, 12) ?? null })),
     default: known.fallback.id,
     url,
+    runner,
   })
 
   const servers = new Map()
@@ -95,8 +115,58 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
     return servers.get(build.id).base
   }
 
-  let browser = await launchBrowser()
-  const summary = { verified: 0, rejected: 0, retried: 0, errors: 0 }
+  // Chromium is launched up front on the chromium runner, and on first need on the node runner.
+  let browser = runner === 'chromium' ? await launchBrowser() : null
+  const chromium = async (build, tape, opts) => {
+    if (!browser?.isConnected()) browser = await launchBrowser()
+    return runTape(browser, await serverFor(build), 'verify', tape, opts)
+  }
+
+  // Each build's headless runner and wasm, loaded once (null: a build from before #528).
+  const nodeRunners = new Map()
+  const nodeRunnerFor = async (build) => {
+    if (!nodeRunners.has(build.id)) {
+      const file = path.join(build.dir, SIM_BUNDLE)
+      if (!existsSync(file)) nodeRunners.set(build.id, null)
+      else {
+        const replay = await loadSimBundle(file)
+        // The binary build-info.json declares (discoverBuilds checked it) — refused if it changed since.
+        const { moduleFactory } = await wasmModuleFactory(path.join(build.dir, 'wasm'), { expectSha256: build.wasmSha256 })
+        nodeRunners.set(build.id, { replay, moduleFactory })
+      }
+    }
+    return nodeRunners.get(build.id)
+  }
+
+  /** One tape on `build`: `{ result, runner, fallback }`, `fallback` saying why Node handed it to Chromium. */
+  const replayTape = async (build, tape, opts) => {
+    if (runner === 'node') {
+      let node = null
+      let fallback = null
+      try {
+        node = await nodeRunnerFor(build)
+        if (!node) fallback = `build ${build.id} has no ${SIM_BUNDLE}`
+      } catch (err) {
+        fallback = `node runner: ${err instanceof Error ? err.message : String(err)}`
+      }
+      if (node) {
+        try {
+          const result = await node.replay(tape, { moduleFactory: node.moduleFactory, ...opts })
+          // A replay outcome (verified, or the tape's own failure) is Node's to give; anything else is Chromium's.
+          if (result.ok || ['snapshot', 'rejected', 'incomplete'].includes(result.code)) {
+            return { result, runner: 'node', fallback: null }
+          }
+          fallback = result.code === 'unsupported' ? `unsupported in node: ${result.reason}` : `node ${result.code}: ${result.reason}`
+        } catch (err) {
+          fallback = `node runner threw: ${err instanceof Error ? err.message : String(err)}`
+        }
+      }
+      return { result: await chromium(build, tape, opts), runner: 'chromium', fallback }
+    }
+    return { result: await chromium(build, tape, opts), runner: 'chromium', fallback: null }
+  }
+
+  const summary = { verified: 0, rejected: 0, retried: 0, errors: 0, node: 0, chromium: 0 }
   try {
     while (!signal?.aborted) {
       let claims = []
@@ -111,17 +181,23 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
         const started = Date.now()
         let verdict = precheck(claim)
         let build = known.fallback
+        let replayedOn = null
         const replayed = !verdict
         if (!verdict) {
-          if (!browser.isConnected()) browser = await launchBrowser()
           const pick = selectBuild(claim.payload, known.builds, known.fallback)
           build = pick.build
           const tape = { scenario: { seed: claim.payload.seed ?? 0, setup: [] }, replay: claim.payload }
-          const result = await runTape(browser, await serverFor(build), 'verify', tape, {
-            ghostStride: GHOST_STRIDE,
-            throwOnContact: injectContactFault?.(claim) ?? false,
-          })
-          verdict = judge(claim, result, { verifierVersion: build.id, binary: pick.binary })
+          const opts = { ghostStride: GHOST_STRIDE, throwOnContact: injectContactFault?.(claim) ?? false }
+          let run = await replayTape(build, tape, opts)
+          verdict = judge(claim, run.result, { verifierVersion: build.id, binary: pick.binary })
+          if (run.runner === 'node' && confirmRejections && verdict.verdict === 'rejected') {
+            // Rollout safety: Node may verify on its own, but a rejection is Chromium's to confirm.
+            run = { result: await chromium(build, tape, opts), runner: 'chromium', fallback: `confirming a node rejection: ${verdict.reason}` }
+            verdict = judge(claim, run.result, { verifierVersion: build.id, binary: pick.binary })
+          }
+          summary[run.runner]++
+          replayedOn = run
+          if (run.fallback) log('chromium-fallback', { score_id: claim.score_id, build: build.id, reason: run.fallback })
         }
         const version = build.id
         if (verdict.verdict === 'retry') {
@@ -154,7 +230,7 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
           summary[verdict.verdict === 'verified' ? 'verified' : 'rejected']++
           log(verdict.verdict, {
             score_id: claim.score_id, map_id: claim.map_id, score: claim.score,
-            replayed: verdict.verifierScore, reason: verdict.reason, build: version,
+            replayed: verdict.verifierScore, reason: verdict.reason, build: version, runner: replayedOn?.runner ?? null,
             wasm: replayed ? build.wasmSha256?.slice(0, 12) ?? null : null, ms: Date.now() - started,
           })
         } catch (err) {
@@ -171,11 +247,17 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
       }
     }
   } finally {
-    await browser.close().catch(() => {})
+    await browser?.close().catch(() => {})
     for (const server of servers.values()) await server.close()
     log('stop', summary)
   }
   return summary
+}
+
+/** `--name value` from the command line, or undefined. */
+function argValue(name) {
+  const i = process.argv.indexOf(name)
+  return i >= 0 ? process.argv[i + 1] : undefined
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -189,6 +271,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     pollMs: Number(process.env.VERIFIER_POLL_MS ?? 30_000),
     batch: Number(process.env.VERIFIER_BATCH ?? 4),
     once: process.argv.includes('--once'),
+    runner: argValue('--runner') ?? process.env.VERIFIER_RUNNER ?? 'chromium',
+    confirmRejections: process.env.VERIFIER_NODE_CONFIRM_REJECTIONS === '1',
     signal: stop.signal,
   }).then(
     (summary) => process.exit(summary.errors > 0 && process.argv.includes('--once') ? 1 : 0),

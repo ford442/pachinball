@@ -5,6 +5,7 @@
 
 import { vi } from 'vitest'
 
+import { SimDisplayState } from '../../src/game/sim-display-state'
 import { EventBus } from '../../src/core/event-bus'
 import type { PhysicsHost } from '../../src/game/physics/types'
 import { freshNudgeState } from '../../src/game/physics/types'
@@ -87,6 +88,7 @@ export function makePhysicsHostShell(opts: PhysicsHostShellOpts): PhysicsHost {
     gameObjects: opts.gameObjects,
     effects: null,
     display: null,
+    displayState: new SimDisplayState(eventBus),
     ballAnimator: null,
     hapticManager: null,
     soundSystem: { playBeep: vi.fn(), playImpact: vi.fn(), playGoldBallCollect: vi.fn() },

@@ -28,6 +28,7 @@ export function registerManagers(game: Game): void {
     {
       effects: game.effects,
       display: game.display,
+      displayState: game.displayState,
       ballManager: game.ballManager,
       soundSystem: game.soundSystem,
     },

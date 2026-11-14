@@ -1,5 +1,5 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
@@ -7,6 +7,7 @@ import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { PhysicsConfig } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { OBSTACLE_ZONE_FOOTPRINTS } from '../table/table-colliders'
 import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
@@ -169,14 +170,7 @@ export class SpinnerBumperBuilder {
     // Register with ZoneTriggerSystem
     if (this.zoneTriggerSystem) {
       const zoneId = `spinner-zone-${spinnerId}`
-      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
-        minX: x - 0.7 * scale,
-        maxX: x + 0.7 * scale,
-        minZ: z - 0.7 * scale,
-        maxZ: z + 0.7 * scale,
-        minY: 0,
-        maxY: 1.0 * scale,
-      }, { color: colorHex, type: 'spinner' })
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, OBSTACLE_ZONE_FOOTPRINTS.spinner(x, z, scale), { color: colorHex, type: 'spinner' })
       this.registeredZoneIds.push(zoneId)
     }
 
@@ -244,7 +238,7 @@ export class SpinnerBumperBuilder {
   /**
    * Trigger spinner when hit by ball
    */
-  triggerSpin(visual: SpinnerBumperVisual, impactForce: number, ballPosition?: Vector3): void {
+  triggerSpin(visual: SpinnerBumperVisual, impactForce: number, ballPosition?: Vec3Like): void {
     visual.hitTime = PhysicsConfig.spinner.hitFlashSeconds
 
     const spinIntensity = Math.min(impactForce / 18, 1.0)

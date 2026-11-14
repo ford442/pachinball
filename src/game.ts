@@ -16,6 +16,8 @@ import { GameRenderer, type RendererHost } from './game/game-renderer'
 import { GameCabinetBuilder, type CabinetBuilderHost } from './game/game-cabinet-builder'
 import { GameSceneBuilder, type SceneBuilderHost } from './game/game-scene-builder'
 import { GamePhysicsController } from './game/physics/physics-controller'
+import { SimDisplayState } from './game/sim-display-state'
+import { emissive, PALETTE } from './game-elements/visual-language'
 import type { PhysicsHost } from './game/physics/types'
 import { GameInputActions, type InputActionsHost } from './game/game-input-actions'
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
@@ -254,6 +256,8 @@ export class Game
       this.settingsUI?.setupMapSelector()
 
       this.eventBus = new EventBus()
+      // The backbox state gameplay gates on, owned by the sim (#528); the DisplaySystem follows the same events.
+      this.displayState = new SimDisplayState(this.eventBus)
       this.soundSystem.bindEventBus(this.eventBus)
       this.stateManager = new GameStateManager({
         onStateChange: (oldState, newState) => {
@@ -275,7 +279,8 @@ export class Game
 
     await this.runCheckpointStage('input_runtime', () => {
       // Provide scene reference so the per-frame plunger animation can find meshes by name
-      this.inputActions?.setScene(scene)
+      // The rod's charge glow is presentation: the cyan emissive at the given intensity.
+      this.inputActions?.setScene(scene, (mat, level) => mat.emissiveColor?.copyFrom(emissive(PALETTE.CYAN, level)))
       this.inputManager = new GameInputManager(scene, this.physics, {
         onFlipperLeft: (pressed) => this.inputActions?.handleFlipperLeft(pressed),
         onFlipperRight: (pressed) => this.inputActions?.handleFlipperRight(pressed),
@@ -540,6 +545,7 @@ export class Game
     this.adventureManager?.updateSystems({
       effects: this.effects,
       display: this.display,
+      displayState: this.displayState,
       ballManager: this.ballManager,
       soundSystem: this.soundSystem,
     })

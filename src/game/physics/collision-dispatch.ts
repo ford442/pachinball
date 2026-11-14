@@ -19,7 +19,7 @@
 
 import type { PhysicsBody } from '../../core/physics-api'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type { BumperVisual } from '../../game-elements/types'
+import type { BumperRef } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { ContactPhase, contactPhaseAt, contactPointXAt, contactStarted, type PhysicsContact, type WasmContactBatch, type WasmContactEvent } from '../../wasm'
 
@@ -77,7 +77,7 @@ export class CollisionDispatcher {
   private gateHandleSet: Set<number> = new Set()
   private launcherHandleSet: Set<number> = new Set()
   private spinnerHandleSet: Set<number> = new Set()
-  private bumperVisualMap: Map<PhysicsBody, BumperVisual> = new Map()
+  private bumperVisualMap: Map<PhysicsBody, BumperRef> = new Map()
   private deathZoneHandle: number | null = null
 
   private adventureSensorHandle: number | null = null
@@ -418,6 +418,19 @@ export class CollisionDispatcher {
   }
 
   /** `started`: an Enter contact; false is an Exit (only zone sensors use it). `contactX`: the contact point's world x. */
+  /** Self-test seam (`SimPhysicsController.injectContactFaultOnce`): the next pair dispatched throws. */
+  injectFaultOnce(): void {
+    const dispatch = this.dispatchWasmPair.bind(this)
+    let thrown = false
+    this.dispatchWasmPair = (...args: Parameters<CollisionDispatcher['dispatchWasmPair']>) => {
+      if (!thrown) {
+        thrown = true
+        throw new Error('injected contact fault')
+      }
+      dispatch(...args)
+    }
+  }
+
   private dispatchWasmPair(bodyId1: number, bodyId2: number, started: boolean, contactX?: number): void {
     const bridge = this.getWasmBridge()
     if (!bridge) return

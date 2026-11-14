@@ -9,7 +9,7 @@
 
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig, type LaneRolloverKind } from '../config'
-import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { COLLISION_GROUP_PRESETS } from '../core/collision-groups'
 
 export interface LaneSensorDef {
   id: string

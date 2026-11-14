@@ -5,7 +5,9 @@
  * Chromium, against a fake Supabase that hands out crafted claims and keeps
  * the verdicts. Golden tapes stand in for players' runs.
  *
- *   npm run test:verifier
+ *   npm run test:verifier            # the Chromium runner
+ *   npm run test:verifier:node       # the headless Node runner (#528): every case
+ *                                    # is replayed in Node, and Chromium is never launched
  */
 
 import { readFileSync } from 'node:fs'
@@ -17,6 +19,7 @@ import { boardFor } from './judge.mjs'
 import { runVerifier } from './verifier.mjs'
 
 const KEY = 'sb_secret_selftest'
+const RUNNER = process.argv.includes('--runner') ? process.argv[process.argv.indexOf('--runner') + 1] : 'chromium'
 const tape = (name) => JSON.parse(readFileSync(path.join(repoRoot, 'tests', 'replays', `${name}.json`), 'utf8'))
 const vanilla = tape('vanilla-rally')
 const cascade = tape('free-cascade')
@@ -124,13 +127,21 @@ await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve))
 
 let failures = 0
 try {
-  await runVerifier({
+  const summary = await runVerifier({
     url: `http://127.0.0.1:${port}`,
     key: KEY,
     dist: path.join(repoRoot, 'dist'),
     once: true,
     injectContactFault: (c) => c.score_id === FAULTED,
+    runner: RUNNER,
   })
+  // Every case that replays (the prechecked ones never do) ran on the runner under test.
+  if (RUNNER === 'node' && (summary.node === 0 || summary.chromium !== 0)) {
+    failures++
+    console.log(`FAIL node runner: ${summary.node} replays ran in Node, ${summary.chromium} fell back to Chromium`)
+  } else {
+    console.log(`ok   replays on the ${RUNNER} runner (node ${summary.node}, chromium ${summary.chromium})`)
+  }
   for (const c of cases) {
     const v = recorded.get(c.row.score_id)
     const problems = []
@@ -167,4 +178,4 @@ if (failures) {
   console.error(`verifier self-test: ${failures} of ${cases.length} case(s) failed`)
   process.exit(1)
 }
-console.log(`verifier self-test: ${cases.length} cases ok`)
+console.log(`verifier self-test (${RUNNER}): ${cases.length} cases ok`)

@@ -8,6 +8,7 @@
 
 import { GameConfig } from '../../config'
 import { BallManager } from '../../game-elements'
+import { BallPresentation } from '../../game-elements/ball-presentation'
 import { GameObjects } from '../../objects'
 import { AdventureMode } from '../../adventure'
 import type { Game } from '../../game'
@@ -15,7 +16,7 @@ import type { InitContext } from './init-context'
 
 export function registerGameplay(game: Game, { scene, world, rapier }: InitContext): void {
   game.gameObjects = new GameObjects(scene, world, rapier, GameConfig)
-  game.ballManager = new BallManager(scene, world, rapier, game.gameObjects.getBindings())
+  game.ballManager = new BallManager(world, rapier, new BallPresentation(scene, game.gameObjects.getBindings()))
   game.ballManager.setOnGoldBallCollected((type, points) => {
     console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
   })

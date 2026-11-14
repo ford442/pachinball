@@ -69,6 +69,9 @@ on:
       - 'src/replay/**'
       - 'tests/replays/**'
       - 'scripts/verify-replay.mjs'
+      - 'scripts/verify-replay-node.mjs'
+      - 'src/sim/**'
+      - 'src/table/**'
       - 'scripts/lib/**'
       - 'services/replay-verifier/**'
       - 'src/arcade/live-broadcast.ts'
@@ -109,6 +112,9 @@ on:
       - 'src/replay/**'
       - 'tests/replays/**'
       - 'scripts/verify-replay.mjs'
+      - 'scripts/verify-replay-node.mjs'
+      - 'src/sim/**'
+      - 'src/table/**'
       - 'scripts/lib/**'
       - 'services/replay-verifier/**'
       - 'src/arcade/live-broadcast.ts'
@@ -418,6 +424,12 @@ jobs:
       - name: Verify golden replay tapes (#444)
         run: npm run verify:replay
 
+      # The same goldens in Node, without Babylon or a browser (#528): the headless runner
+      # (src/sim/node-replay.ts) must land on each tape's hash and score; a tape that reaches
+      # gameplay still owned by a presentation class is reported skipped, never guessed.
+      - name: Verify golden replay tapes in Node (#528)
+        run: npm run verify:replay:node
+
       # The storage-host verifier against a production build and a fake
       # Supabase: legitimate runs verify, a forged score, a tape from another
       # board, a worker recording and a missing replay are rejected (#444 Slice C).
@@ -425,6 +437,13 @@ jobs:
         run: |
           npx vite build
           npm run test:verifier
+
+      # The verifier on the build's own Node runner (dist/sim/node-replay.mjs, #528): every case
+      # replays in Node and Chromium is never launched.
+      - name: Replay verifier self-test on the Node runner
+        run: |
+          npm run test:verifier:node
+          npm run verify:replay:node -- --dist dist
 
       - name: Upload Playwright results on failure
         if: failure()

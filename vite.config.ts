@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { buildSimBundle, SIM_BUNDLE } from './scripts/lib/sim-bundle.mjs'
 
 /**
  * The build a replay was recorded on, and the build that verified it (#444):
@@ -54,6 +55,27 @@ function buildInfo(): Plugin {
         fileName: 'build-info.json',
         source: `${JSON.stringify({ buildId: BUILD_ID, wasmSha256: WASM_SHA256 })}\n`,
       })
+    },
+  }
+}
+
+/**
+ * `dist/sim/node-replay.mjs` (#528): the headless replay runner — this build's TypeScript tick,
+ * Babylon-free — as one Node module. The replay verifier runs it on this build's own
+ * `wasm/PhysicsModule.wasm` (`VERIFIER_RUNNER=node`). The build fails if the bundle would import
+ * `@babylonjs/*` (`scripts/lib/sim-bundle.mjs`).
+ */
+function simBundle(): Plugin {
+  let env: Record<string, unknown> = {}
+  return {
+    name: 'pachinball-sim-bundle',
+    apply: 'build',
+    configResolved(config) {
+      env = config.env
+    },
+    async writeBundle(options) {
+      const outDir = options.dir ?? 'dist'
+      await buildSimBundle({ outfile: join(outDir, SIM_BUNDLE), buildId: BUILD_ID, wasmSha256: WASM_SHA256, env })
     },
   }
 }
@@ -277,6 +299,7 @@ export default defineConfig(({ mode, command }) => ({
   worker: { format: 'es' },
   plugins: [
     buildInfo(),
+    simBundle(),
     sourcemapsOutOfDist(),
     babylonChunks.plugin,
     VitePWA({

@@ -1,8 +1,8 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import type { Vec3Like } from '../core/vec3-scalar'
 import { createStandardMaterial } from '../materials/material-basic'
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
@@ -10,7 +10,7 @@ import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsVector, PhysicsWorldSink } from '../core/physics-api'
 import { CapturedBall } from '../core/captured-ball'
 import { GAME_TUNING } from '../config'
-import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { authorBallTrapBody, OBSTACLE_ZONE_FOOTPRINTS } from '../table/table-colliders'
 import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
@@ -152,30 +152,8 @@ export class BallTrapBuilder {
     trapGate.material = gateMat
     this.materials.push(gateMat)
 
-    // Physics body - trap chamber (sensor)
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
-    )
-
-    // Trap entrance collision (funnel)
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cone(0.6 * scale, 0.2)
-        .setRestitution(0.6)
-        .setFriction(0.3)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.TARGET)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      body
-    )
-
-    // Trap chamber sensor (catches ball)
-    this.world.createCollider(
-      this.rapier.ColliderDesc.ball(0.45 * scale)
-        .setTranslation(0, -0.3 * scale, 0)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      body
-    )
+    // Physics body: funnel cone + chamber sensor (`authorBallTrapBody`)
+    const body = authorBallTrapBody(this.world, this.rapier, x, z, scale)
 
     const trapId = `trap-${this.trapCounter++}`
 
@@ -203,14 +181,7 @@ export class BallTrapBuilder {
     // Register with ZoneTriggerSystem
     if (this.zoneTriggerSystem) {
       const zoneId = `trap-zone-${trapId}`
-      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
-        minX: x - 0.65 * scale,
-        maxX: x + 0.65 * scale,
-        minZ: z - 0.65 * scale,
-        maxZ: z + 0.65 * scale,
-        minY: 0,
-        maxY: 1.0 * scale,
-      }, { color: colorHex, type: 'trap' })
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, OBSTACLE_ZONE_FOOTPRINTS.trap(x, z, scale), { color: colorHex, type: 'trap' })
       this.registeredZoneIds.push(zoneId)
     }
 
@@ -297,7 +268,7 @@ export class BallTrapBuilder {
   /**
    * Catch a ball in the trap
    */
-  catchBall(state: BallTrapState, ball: PhysicsBody, ballPosition?: Vector3): void {
+  catchBall(state: BallTrapState, ball: PhysicsBody, ballPosition?: Vec3Like): void {
     if (!state.caughtBall && state.rearmTimer <= 0) {
       state.caughtBall = ball
       state.holdTimer = 0

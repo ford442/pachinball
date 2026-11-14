@@ -5,6 +5,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { OBSTACLE_ZONE_FOOTPRINTS } from '../table/table-colliders'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -181,14 +182,7 @@ export class LauncherBuilder {
     // Register with ZoneTriggerSystem
     if (this.zoneTriggerSystem) {
       const zoneId = `launcher-zone-${launcherId}`
-      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
-        minX: x - 0.35 * scale,
-        maxX: x + 0.35 * scale,
-        minZ: z - 0.25 * scale,
-        maxZ: z + 0.25 * scale,
-        minY: 0,
-        maxY: 1.0 * scale,
-      }, { color: colorHex, type: 'launcher' })
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, OBSTACLE_ZONE_FOOTPRINTS.launcher(x, z, scale), { color: colorHex, type: 'launcher' })
       this.registeredZoneIds.push(zoneId)
     }
 

@@ -8,11 +8,9 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { getMaterialLibrary } from '../materials'
-import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
-import { PhysicsConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { INTENSITY, STATE_PROFILES, PALETTE, color, emissive, stateEmissive } from '../game-elements/visual-language'
-import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { authorBumper, BUMPER_HOLOGRAM_Y, VANILLA_BUMPERS } from '../table/table-colliders'
 
 export class BumperBuilder {
   private scene: Scene
@@ -95,7 +93,7 @@ export class BumperBuilder {
 
       // --- REFINED HOLOGRAM PILLAR (tapered for organic look) ---
       const holoInner = MeshBuilder.CreateCylinder('holoInner', { diameterTop: 0.35, diameterBottom: 0.65, height: 2.5, tessellation: 24 }, this.scene)
-      holoInner.position.set(x, 1.8, z)
+      holoInner.position.set(x, BUMPER_HOLOGRAM_Y, z)
 
       const innerMat = this.matLib.getHologramMaterial(colorHex, true)
       holoInner.material = innerMat
@@ -123,27 +121,7 @@ export class BumperBuilder {
       wfMat.wireframe = true
       wireframeRing.material = wfMat
 
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
-      )
-
-      this.world.createCollider(
-        this.rapier.ColliderDesc.ball(0.4 * scale)
-          .setRestitution(getPhysicsTuningValue('bumperRestitution'))
-          .setFriction(PhysicsConfig.surfaces.bumper.friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.BUMPER)
-          .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-        body
-      )
-
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cylinder(1.5, 0.5)
-          .setSensor(true)
-          .setTranslation(0, 2.0, 0)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
-          .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-        body
-      )
+      const body = authorBumper(this.world, this.rapier, x, z, scale)
 
       bindings.push({ mesh: bumper, rigidBody: body })
       bumperBodies.push(body)
@@ -154,6 +132,7 @@ export class BumperBuilder {
         mesh: bumper,
         body: body,
         hologram: holoInner,
+        hologramAnchor: { x, y: BUMPER_HOLOGRAM_Y, z },
         hitTime: 0,
         sweep: Math.random(),
         targetEmissive: initialEmissive.clone(),
@@ -171,27 +150,10 @@ export class BumperBuilder {
         make(s.x, s.z, s.color, s.scale)
       }
     } else {
-      // Keep all default bumpers out of KEEP_OUT_BOXES.launchLane (x 8.5–12).
-      // Main center bumper (larger)
-      make(0, 8, '#ff00aa', 1.2)
-      // Upper side bumpers
-      make(-4, 4, '#00aaff', 1.0)
-      make(3.5, 4, '#00aaff', 1.0)
-      // Lower bumpers - funnel toward flippers
-      make(-3, 0, '#ffaa00', 0.9)
-      make(3, 0, '#ffaa00', 0.9)
-      // Far upper bumper
-      make(0, 14, '#00ff88', 0.85)
-      // Side deflector bumper (left only — right side is the plunger corridor)
-      make(-6, 10, '#ff4400', 1.0)
-
-      // Additional scoring bumpers — stay left of the launch corridor
-      make(0, 2, '#88ffaa', 0.85)
-      make(-5, 6, '#ffaa88', 0.9)
-      make(3.5, 7, '#ffaa88', 0.9)
-      // Lower sides near slings to catch outlane recoveries
-      make(-4, -1, '#aaffff', 0.8)
-      make(3.5, -1, '#aaffff', 0.8)
+      // The vanilla layout (`VANILLA_BUMPERS`, all left of the launch corridor).
+      for (const s of VANILLA_BUMPERS) {
+        make(s.x, s.z, s.color, s.scale)
+      }
     }
 
     return {

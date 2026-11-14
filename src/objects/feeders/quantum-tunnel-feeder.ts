@@ -1,4 +1,6 @@
 import { createStandardMaterial } from '../../materials/material-basic'
+import { authorQuantumTunnelSensor } from '../../table/table-colliders'
+import { quantumTunnelCaptureCandidate } from './feeder-triggers'
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
@@ -85,7 +87,7 @@ export class QuantumTunnelFeeder {
     }
 
     // Physics Sensor (Input Only)
-    this.createSensor(inputPos)
+    this.createSensor()
   }
 
   private createPortalMesh(name: string, pos: Vector3, color: Color3, rotY: number): Mesh {
@@ -113,16 +115,10 @@ export class QuantumTunnelFeeder {
     return ring
   }
 
-  private createSensor(pos: Vector3): void {
-    const sensorBodyDesc = this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-    this.inputSensor = this.world.createRigidBody(sensorBodyDesc)
-
-    const colliderDesc = this.rapier.ColliderDesc.ball(this.config.inputRadius)
-      .setSensor(true)
-      .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS)
-
-    this.world.createCollider(colliderDesc, this.inputSensor)
+  private createSensor(): void {
+    this.inputSensor = authorQuantumTunnelSensor(this.world, this.rapier, this.config)
   }
+
 
   public update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
@@ -183,20 +179,11 @@ export class QuantumTunnelFeeder {
   private updateIdle(ballBodies: PhysicsBody[]): void {
     if (!this.inputSensor) return
 
-    const sensorHandle = this.inputSensor.collider(0)
-
-    for (const ball of ballBodies) {
-      const pos = ball.translation()
-      // Input portal sits on the right wall at the top of the plunger corridor —
-      // ignore the entire launch climb so every launch is not a free teleport.
-      if (pos.x > 8.5 && pos.z < 16) continue
-
-      const ballHandle = ball.collider(0)
-      if (this.world.intersectionPair(sensorHandle, ballHandle)) {
-        this.capturedBall = ball
-        this.transitionTo(QuantumTunnelState.CAPTURE)
-        return
-      }
+    const ball = quantumTunnelCaptureCandidate(ballBodies, this.world, this.inputSensor)
+    if (ball) {
+      this.capturedBall = ball
+      this.transitionTo(QuantumTunnelState.CAPTURE)
+      return
     }
 
     // Pulse Input Visual

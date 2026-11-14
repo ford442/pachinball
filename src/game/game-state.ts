@@ -76,8 +76,8 @@ export class GameStateManager {
           this.eventBus?.emit('game:resume')
           this.config.onResume?.()
         }
-        // Hide the main menu overlay when the game starts
-        {
+        // Hide the main menu overlay when the game starts (no DOM on the headless replay runner, #528)
+        if (typeof document !== 'undefined') {
           const startScreen = document.getElementById('startScreen')
           if (startScreen) {
             startScreen.classList.add('hidden')

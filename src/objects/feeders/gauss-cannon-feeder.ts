@@ -1,4 +1,5 @@
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { gaussCannonCaptureCandidate } from './feeder-triggers'
 import { createStandardMaterial } from '../../materials/material-basic'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
@@ -333,18 +334,8 @@ export class GaussCannonFeeder {
   }
 
   private checkProximity(ballBodies: PhysicsBody[]): void {
-    const PULL_RADIUS = this.config.intakeRadius || 1.0
-
-    for (const body of ballBodies) {
-      const pos = body.translation()
-      const dist = distance3(pos, this.position)
-
-      if (dist < PULL_RADIUS) {
-         // Check height logic if needed
-         this.captureBall(body)
-         return
-      }
-    }
+    const body = gaussCannonCaptureCandidate(ballBodies, this.position, this.config)
+    if (body) this.captureBall(body)
   }
 
   private captureBall(body: PhysicsBody): void {

@@ -1,13 +1,13 @@
-import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsImpulseJoint, PhysicsRevoluteJoint, PhysicsWorldSink } from '../core/physics-api'
-import { GameConfig, PhysicsConfig } from '../config'
+import { GameConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { authorFlipper, FLIPPER_PIVOTS } from '../table/table-colliders'
 
 export class FlipperBuilder {
   private scene: Scene
@@ -174,37 +174,10 @@ export class FlipperBuilder {
       // PHYSICS BODY - Simplified collider matching visual shape
       // ================================================================
 
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.dynamic()
-          .setTranslation(pos.x, pos.y, pos.z)
-          .setLinearDamping(0.5)
-          .setAngularDamping(2)
-          .setCcdEnabled(true)
-      )
-
-      // Main blade collider (box)
-      const colliderOffset = isRight ? (flipperLength - 0.4) / 2 : -(flipperLength - 0.4) / 2
-      const bladeTilt = Quaternion.FromEulerAngles(0.15, 0, 0)
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid((flipperLength - 0.4) / 2, 0.3, 0.25)
-          .setTranslation(colliderOffset, 0, 0)
-          .setRotation({ x: bladeTilt.x, y: bladeTilt.y, z: bladeTilt.z, w: bladeTilt.w })
-          .setRestitution(PhysicsConfig.flipper.restitution)
-          .setFriction(PhysicsConfig.flipper.friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.FLIPPER),
-        body
-      )
-
-      // Rounded tip collider (ball)
-      const tipOffset = isRight ? flipperLength - 0.3 : -(flipperLength - 0.3)
-      this.world.createCollider(
-        this.rapier.ColliderDesc.ball(0.3)
-          .setTranslation(tipOffset, 0.05, 0)
-          .setRestitution(PhysicsConfig.flipper.restitution)
-          .setFriction(PhysicsConfig.flipper.friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.FLIPPER),
-        body
-      )
+      // Blade, tip, anchor and the limited revolute joint (`authorFlipper`).
+      const { body, anchor, joint } = authorFlipper(this.world, this.rapier, pos, isRight)
+      this.anchors.push(anchor)
+      this.joints.push(joint)
 
       // Register binding with root mesh
       bindings.push({ mesh: flipperRoot, rigidBody: body })
@@ -213,33 +186,6 @@ export class FlipperBuilder {
       this.meshes.push(bladeMesh, tipMesh, bevelLeft, bevelRight, pivotCyl, pivotCap, pivotRing)
       this.bodies.push(body)
 
-      // ================================================================
-      // PIVOT JOINT - Revolute joint with limits
-      // ================================================================
-
-      const anchor = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-      )
-      this.anchors.push(anchor)
-
-      const pX = isRight ? 1.5 : -1.5
-      const jParams = this.rapier.JointData.revolute(
-        new this.rapier.Vector3(pX, 0, 0),
-        new this.rapier.Vector3(pX, 0, 0),
-        new this.rapier.Vector3(0, 1, 0)
-      )
-      jParams.limitsEnabled = true
-      jParams.limits = isRight ? [-Math.PI / 4, Math.PI / 6] : [-Math.PI / 6, Math.PI / 4]
-
-      const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as PhysicsRevoluteJoint
-      this.joints.push(joint)
-
-      joint.configureMotorPosition(
-        isRight ? -PhysicsConfig.flipper.restAngleRad : PhysicsConfig.flipper.restAngleRad,
-        PhysicsConfig.flipper.stiffness,
-        PhysicsConfig.flipper.damping
-      )
-
       flippers.set(isRight ? 'right' : 'left', { mesh: flipperRoot, body, joint })
 
       return joint
@@ -247,8 +193,9 @@ export class FlipperBuilder {
 
     // Slightly above the LCD deck (y=-1) so paddles clear the tilted playfield
     // after reparenting + mesh interpolation (y=-0.5 still z-fought the surface).
-    leftJoint = make(new Vector3(-4, -0.25, -7), false)
-    rightJoint = make(new Vector3(4, -0.25, -7), true)
+    const { left, right } = FLIPPER_PIVOTS
+    leftJoint = make(new Vector3(left.x, left.y, left.z), false)
+    rightJoint = make(new Vector3(right.x, right.y, right.z), true)
 
     return {
       flippers,
