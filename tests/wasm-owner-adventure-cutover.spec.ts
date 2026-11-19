@@ -47,7 +47,7 @@ async function bootGame(page: Page): Promise<void> {
   await expect(startBtn).toBeVisible({ timeout: 30_000 })
 
   await expect.poll(
-    () => page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager),
+    () => page.evaluate(() => !!window.game?.stateManager),
     { intervals: [200], timeout: 90_000 }
   ).toBe(true)
 
@@ -56,7 +56,7 @@ async function bootGame(page: Page): Promise<void> {
   await page.evaluate(() => { document.getElementById('start-btn')?.click() })
 
   await expect.poll(async () => page.evaluate(() => {
-    const g = (window as unknown as { game?: { stateManager?: { isPlaying?: () => boolean } } }).game
+    const g = window.game
     return g?.stateManager?.isPlaying?.() ?? false
   }), { intervals: [200], timeout: 90_000 }).toBe(true)
 }
@@ -117,13 +117,13 @@ test.describe('wasm-owner adventure cutover', () => {
     await page.goto('/?renderer=webgl2')
     await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 })
     await expect.poll(
-      () => page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager),
+      () => page.evaluate(() => !!window.game?.stateManager),
       { intervals: [200], timeout: 90_000 }
     ).toBe(true)
     await page.evaluate(() => { document.getElementById('start-btn')?.click() })
 
     await expect.poll(async () => page.evaluate(() => {
-      const g = (window as unknown as { game?: { stateManager?: { isPlaying?: () => boolean } } }).game
+      const g = window.game
       return g?.stateManager?.isPlaying?.() ?? false
     }), { intervals: [200], timeout: 90_000 }).toBe(true)
 

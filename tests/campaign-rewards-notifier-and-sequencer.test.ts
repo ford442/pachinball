@@ -68,10 +68,10 @@ describe('CampaignRewardNotifier', () => {
     notifier.recordGrant(mockRewardItem, 'track')
 
     expect(emittedEvent).not.toBeNull()
-    expect(emittedEvent.id).toBe('ball-skin-cascade')
-    expect(emittedEvent.label).toBe('Cascade Core')
-    expect(emittedEvent.rarity).toBe('common')
-    expect(emittedEvent.scope).toBe('track')
+    expect(emittedEvent!.id).toBe('ball-skin-cascade')
+    expect(emittedEvent!.label).toBe('Cascade Core')
+    expect(emittedEvent!.rarity).toBe('common')
+    expect(emittedEvent!.scope).toBe('track')
 
     const raw = storage.getItem('unseen-rewards')
     expect(raw).not.toBeNull()

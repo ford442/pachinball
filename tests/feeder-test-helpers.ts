@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type { PhysicsBody } from '../src/core/physics-api'
 
 export function createMockBall(pos: { x: number; y: number; z: number }) {
   let position = { ...pos }
@@ -248,14 +249,15 @@ export type GoldenRecord = {
 
 type GoldenRunOpts = {
   feeder: {
-    update: (dt: number, balls: unknown[]) => void
+    update: (dt: number, balls: PhysicsBody[]) => void
     onStateChange?: ((state: number) => void) | null
   }
   /** A mock ball, or a real body whose `applyImpulse` / `setAngvel` are `vi.spyOn`-wrapped. */
   ball: Pick<ReturnType<typeof createMockBall>, 'applyImpulse' | 'setAngvel'>
   maxFrames: number
   getState: () => number
-  stateNames: Record<string, number>
+  /** The feeder's numeric state enum (its reverse mapping makes the values string | number). */
+  stateNames: Record<string, string | number>
   onFrame?: (frame: number) => void
   /** After each feeder update — the owner-path fixtures step the WASM engine here. */
   afterFrame?: (frame: number) => void

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { Engine } from '@babylonjs/core/Engines/engine'
 import { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import {
@@ -159,7 +159,7 @@ describe('create-engine', () => {
 describe('createWebGPUEngineWithFallback', () => {
   const canvas = {} as HTMLCanvasElement
 
-  function stubEngine(init: () => Promise<void>): WebGPUEngineLike & { dispose: ReturnType<typeof vi.fn> } {
+  function stubEngine(init: () => Promise<void>): WebGPUEngineLike & { dispose: Mock } {
     return { initAsync: init, dispose: vi.fn() }
   }
 

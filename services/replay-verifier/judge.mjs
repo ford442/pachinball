@@ -97,6 +97,10 @@ export function precheck(claim) {
  * `PhysicsModule.wasm` is not held (`missing`), a run that does not replay is
  * retried while attempts remain — the release may not be archived yet — and
  * then rejected naming the binary it was played on.
+ *
+ * @param {any} claim
+ * @param {any} result
+ * @param {{ verifierVersion?: string | null, maxAttempts?: number, binary?: string }} [options]
  */
 export function judge(claim, result, { verifierVersion = null, maxAttempts = MAX_ATTEMPTS, binary = 'unstamped' } = {}) {
   const verdict = judgeReplay(claim, result, { verifierVersion, maxAttempts })

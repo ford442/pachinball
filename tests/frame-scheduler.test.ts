@@ -35,8 +35,8 @@ describe('FrameScheduler', () => {
     const order: string[] = []
     // Registered out of order on purpose.
     for (const phase of [...FRAME_PHASES].reverse()) {
-      s.register({ phase, update: () => order.push(`${phase}:a`) })
-      s.register({ phase, update: () => order.push(`${phase}:b`) })
+      s.register({ name: 'test', phase, update: () => order.push(`${phase}:a`) })
+      s.register({ name: 'test', phase, update: () => order.push(`${phase}:b`) })
     }
     s.tick()
     expect(order).toEqual(FRAME_PHASES.flatMap((p) => [`${p}:a`, `${p}:b`]))
@@ -45,7 +45,7 @@ describe('FrameScheduler', () => {
   it('passes dt in seconds', () => {
     const s = new FrameScheduler(fakeEngine(20))
     const update = vi.fn()
-    s.register({ phase: 'sim', update })
+    s.register({ name: 'test', phase: 'sim', update })
     s.tick()
     expect(update).toHaveBeenCalledWith(0.02)
   })
@@ -73,7 +73,7 @@ describe('FrameScheduler', () => {
     const update = vi.fn()
     let hooked = 0
     const s: FrameScheduler = new FrameScheduler(engine, { frame: () => { hooked++; s.tick() } })
-    s.register({ phase: 'render', update })
+    s.register({ name: 'test', phase: 'render', update })
     s.start()
     engine.frame()
     expect(hooked).toBe(1)
@@ -82,8 +82,8 @@ describe('FrameScheduler', () => {
 
   it('unregister and signal abort remove (and dispose) a system', () => {
     const s = new FrameScheduler(fakeEngine())
-    const a = { phase: 'sim' as FramePhase, update: vi.fn(), dispose: vi.fn() }
-    const b = { phase: 'sim' as FramePhase, update: vi.fn(), dispose: vi.fn() }
+    const a = { name: 'test', phase: 'sim' as FramePhase, update: vi.fn(), dispose: vi.fn() }
+    const b = { name: 'test', phase: 'sim' as FramePhase, update: vi.fn(), dispose: vi.fn() }
     const controller = new AbortController()
     const off = s.register(a)
     s.register(b, { signal: controller.signal })
@@ -101,8 +101,8 @@ describe('FrameScheduler', () => {
     const s = new FrameScheduler(fakeEngine())
     const late = vi.fn()
     let offLate = (): void => undefined
-    s.register({ phase: 'input', update: () => offLate() })
-    offLate = s.register({ phase: 'hud', update: late })
+    s.register({ name: 'test', phase: 'input', update: () => offLate() })
+    offLate = s.register({ name: 'test', phase: 'hud', update: late })
     s.tick()
     expect(late).not.toHaveBeenCalled()
   })
@@ -112,11 +112,12 @@ describe('FrameScheduler', () => {
     const added = vi.fn()
     let once = false
     s.register({
+      name: 'adder',
       phase: 'sim',
       update: () => {
         if (once) return
         once = true
-        s.register({ phase: 'sim', update: added })
+        s.register({ name: 'test', phase: 'sim', update: added })
       },
     })
     s.tick()
@@ -129,7 +130,7 @@ describe('FrameScheduler', () => {
     const engine = fakeEngine()
     const controller = new AbortController()
     const s = new FrameScheduler(engine, { signal: controller.signal })
-    const sys = { phase: 'visuals' as FramePhase, update: vi.fn(), dispose: vi.fn() }
+    const sys = { name: 'test', phase: 'visuals' as FramePhase, update: vi.fn(), dispose: vi.fn() }
     s.register(sys)
     s.start()
     controller.abort()
@@ -137,7 +138,7 @@ describe('FrameScheduler', () => {
     expect(engine.loops).toHaveLength(0)
     expect(sys.dispose).toHaveBeenCalledTimes(1)
     // Late registration on a dead scheduler disposes at once and never runs.
-    const late = { phase: 'sim' as FramePhase, update: vi.fn(), dispose: vi.fn() }
+    const late = { name: 'test', phase: 'sim' as FramePhase, update: vi.fn(), dispose: vi.fn() }
     s.register(late)
     s.tick()
     expect(late.dispose).toHaveBeenCalledTimes(1)
@@ -147,8 +148,8 @@ describe('FrameScheduler', () => {
   it('measures per-phase time with the injected clock', () => {
     let t = 0
     const s = new FrameScheduler(fakeEngine(), { now: () => t, timingSmoothing: 1 })
-    s.register({ phase: 'physics', update: () => { t += 3 } })
-    s.register({ phase: 'render', update: () => { t += 5 } })
+    s.register({ name: 'test', phase: 'physics', update: () => { t += 3 } })
+    s.register({ name: 'test', phase: 'render', update: () => { t += 5 } })
     s.tick()
     const timings = s.getTimings()
     expect(timings.phases.physics).toBe(3)
@@ -161,7 +162,7 @@ describe('FrameScheduler', () => {
 
   it('iterates without allocating a new list per frame (copy-on-write registration)', () => {
     const s = new FrameScheduler(fakeEngine())
-    s.register({ phase: 'sim', update: () => undefined })
+    s.register({ name: 'test', phase: 'sim', update: () => undefined })
     const lists = (s as unknown as { lists: unknown[][] }).lists
     const before = lists[2]
     s.tick()
@@ -171,7 +172,7 @@ describe('FrameScheduler', () => {
 
   it('rejects an unknown phase', () => {
     const s = new FrameScheduler(fakeEngine())
-    expect(() => s.register({ phase: 'bogus' as FramePhase, update: () => undefined })).toThrow(/Unknown phase/)
+    expect(() => s.register({ name: 'test', phase: 'bogus' as FramePhase, update: () => undefined })).toThrow(/Unknown phase/)
   })
 })
 

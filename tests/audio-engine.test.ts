@@ -64,7 +64,7 @@ describe('AudioEngine', () => {
   it('loads the voice worklet from the deploy directory, not the origin root (#464 item 5)', async () => {
     const loaded: string[] = []
     class WorkletContext extends FakeAudioContext {
-      audioWorklet = { addModule: vi.fn(async (url: string) => { loaded.push(url) }) }
+      override audioWorklet = { addModule: vi.fn(async (url: string) => { loaded.push(url) }) }
     }
     vi.stubGlobal('AudioContext', WorkletContext)
     vi.stubGlobal('AudioWorkletNode', FakeWorkletNode)
@@ -84,7 +84,7 @@ describe('AudioEngine', () => {
 
   it('stays the only AudioContext after the worklet loads, and posts a clean VoiceHit with pan from x', async () => {
     class WorkletContext extends FakeAudioContext {
-      audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) }
+      override audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) }
     }
     vi.stubGlobal('AudioContext', WorkletContext)
     vi.stubGlobal('AudioWorkletNode', FakeWorkletNode)
@@ -113,7 +113,7 @@ describe('AudioEngine', () => {
 
   it('a processor error hands the voices back to the oscillator fallback', async () => {
     class WorkletContext extends FakeAudioContext {
-      audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) }
+      override audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) }
     }
     vi.stubGlobal('AudioContext', WorkletContext)
     vi.stubGlobal('AudioWorkletNode', FakeWorkletNode)

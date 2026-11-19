@@ -36,7 +36,7 @@ class TestFields extends GameFields {
 
 describe('ensureOverlaySystems after dispose', () => {
   it('creates the singletons when the Game is still alive', async () => {
-    const fields = new TestFields()
+    const fields = new TestFields(undefined as never)
     await fields.ensureOverlaySystems()
 
     expect(mocks.getLeaderboardSystem).toHaveBeenCalledTimes(1)
@@ -51,7 +51,7 @@ describe('ensureOverlaySystems after dispose', () => {
   it('does not create them when dispose() lands while the chunks are loading', async () => {
     mocks.getLeaderboardSystem.mockClear()
     mocks.getNameEntryDialog.mockClear()
-    const fields = new TestFields()
+    const fields = new TestFields(undefined as never)
 
     const loading = fields.ensureOverlaySystems()
     fields.abort.abort()

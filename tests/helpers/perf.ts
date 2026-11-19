@@ -137,7 +137,12 @@ interface PerfGameHooks {
   startGame: () => Promise<void>
 }
 
-type PerfWindow = Window & {
+/**
+ * Not `Window` / `GameTestHandle`: the perf harness also measures older commits (see the
+ * "absent on commits before …" members above), so it types `window.game` by the loose,
+ * all-optional slice above instead of the current Game.
+ */
+type PerfWindow = Omit<Window, 'game' | 'currentPhysicsEngine'> & {
   __perfProgress?: { seen: number; total: number; lastFrameMs: number }
   game?: PerfGameHooks
   currentPhysicsEngine?: string

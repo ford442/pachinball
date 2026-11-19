@@ -17,7 +17,7 @@
 
 import type { PhysicsApi, PhysicsBody, PhysicsImpulseJoint, PhysicsWorldSink } from '../core/physics-api'
 import type { Vec3Like } from '../core/vec3-scalar'
-import { GameConfig } from '../config'
+import { GameConfig, type MagSpinTunables } from '../config'
 import type { FeederKey, TableLayout } from '../cascade/daily-cascade-layout'
 import type { BumperRef, PhysicsBinding } from '../game-elements/types'
 import { LaneSensorBuilder, type LaneSensorDef } from '../objects/object-lane-sensors'
@@ -279,7 +279,7 @@ abstract class HeadlessFeeder implements FeederSim {
 export class HeadlessMagSpin extends HeadlessFeeder {
   private readonly well: Vec3Like
 
-  constructor(guard: HeadlessGuard, private readonly field: PhysicsBody | null, private readonly config = GameConfig.magSpin) {
+  constructor(guard: HeadlessGuard, private readonly field: PhysicsBody | null, private readonly config: MagSpinTunables = GameConfig.magSpin) {
     super(guard, 'MagSpin')
     this.well = { x: config.feederPosition.x, y: config.feederPosition.y, z: config.feederPosition.z }
   }

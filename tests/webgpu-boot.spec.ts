@@ -40,13 +40,13 @@ test.describe('WebGPU boot (opt-in)', () => {
       })
       await page.goto('/?renderer=webgpu&debug=1&noopt=1')
       await page.waitForFunction(
-        () => (window as unknown as { game?: { ready?: boolean } }).game?.ready === true,
+        () => window.game?.ready === true,
         undefined,
         { timeout: 150_000 },
       )
 
       const webgpu = await page.evaluate(
-        () => (window as unknown as { game: { engine: { isWebGPU?: boolean } } }).game.engine.isWebGPU === true,
+        () => window.game!.engine.isWebGPU === true,
       )
       expect(webgpu, 'engine is WebGPU').toBe(true)
       expect(errors.filter((e) => e.includes('createDynamicTexture'))).toEqual([])

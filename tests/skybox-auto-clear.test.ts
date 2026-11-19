@@ -50,7 +50,8 @@ describe('isCameraInsideSkybox', () => {
 describe('SkyboxAutoClear', () => {
   function rig(mobile = false) {
     const observers: Array<() => void> = []
-    const scene: AutoClearScene = {
+    // activeCamera is read-only to the code under test; the test moves it.
+    const scene: Omit<AutoClearScene, 'activeCamera'> & { activeCamera: AutoClearCamera | null } = {
       autoClear: true,
       activeCamera: { globalPosition: { x: 0, y: 16, z: -21 }, maxZ: 10_000 },
       onBeforeRenderObservable: {

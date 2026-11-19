@@ -8,7 +8,7 @@
  * on its WASM id as setBodyType / setNextKinematicTransform / applyImpulse.
  * Same states, same impulses, either way.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { FEEDER_TUNABLES } from '../src/config'
 import { MagSpinFeeder, MagSpinState } from '../src/objects/feeders/mag-spin-feeder'
 import { NanoLoomFeeder, NanoLoomState } from '../src/objects/feeders/nano-loom-feeder'
@@ -258,7 +258,7 @@ describe.each(BACKENDS)('feeder golden FSM fixtures — %s', (_name, makeBackend
     ])
 
     const impulses = balls.map((ball) => {
-      const call = (ball.applyImpulse as ReturnType<typeof vi.fn>).mock.calls.at(-1)
+      const call = (ball.applyImpulse as Mock).mock.calls.at(-1)
       return call![0]
     })
 

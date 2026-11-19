@@ -182,12 +182,14 @@ describe('StaticSceneGate', () => {
       const t = makeTarget()
       gate.registerTarget(t.target)
 
-      bus.emit(start as never, {} as never)
+      // The table mixes void-payload and payload events; emit them all the same way.
+      const emit = bus.emit.bind(bus) as (event: string, payload: unknown) => void
+      emit(start, {})
       s.frames(100)
       expect(t.refreeze).not.toHaveBeenCalled()
       expect(gate.getStats().lastReason).toBe(start)
 
-      bus.emit(end as never, {} as never)
+      emit(end, {})
       s.frames(FRAMES_BEFORE_REFREEZE)
       expect(t.refreeze).toHaveBeenCalledTimes(1)
     })

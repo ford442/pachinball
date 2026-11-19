@@ -44,7 +44,8 @@ describe('buildCampaignMapModel — layout', () => {
   })
 
   it('shows the two optional branches and the post-finale chain in unlock order', () => {
-    const byAnchor = Object.fromEntries(model.branches.map((b) => [b.anchorTrackId, b]))
+    // String(): the key conversion Object.fromEntries does anyway (a null anchor keys as 'null').
+    const byAnchor = Object.fromEntries(model.branches.map((b) => [String(b.anchorTrackId), b]))
 
     expect(byAnchor['NEON_HELIX']?.kind).toBe('optional')
     expect(byAnchor['NEON_HELIX']?.stages.map((s) => s.id)).toEqual(['PACHINKO_SPIRE'])

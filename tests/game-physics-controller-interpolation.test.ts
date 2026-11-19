@@ -211,7 +211,7 @@ describe('GamePhysicsController mesh interpolation', () => {
   })
 
   for (const tier of [QualityTier.LOW, QualityTier.HIGH]) {
-    it(`at 144 Hz over a 60 Hz step the ball mesh moves on every frame and never jumps backward (${QualityTier[tier]})`, () => {
+    it(`at 144 Hz over a 60 Hz step the ball mesh moves on every frame and never jumps backward (${tier})`, () => {
       const { body, state } = makeBody({ position: { x: 0, y: 0, z: 0 } })
       const mesh: BindingMesh = {
         position: new Vector3(),

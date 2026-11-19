@@ -5,6 +5,7 @@ import {
   startPlaying,
   stripIsolationHeaders,
   type GameHooks,
+  type WorkerTransportProbe,
 } from './helpers/wasm-owner-boot'
 
 /**
@@ -23,12 +24,7 @@ import {
 
 const PHYSICS_DEGRADE_MARKER = '[Bootstrap][physics-degrade]'
 
-type DefaultHooks = GameHooks & {
-  game?: GameHooks['game'] & {
-    engine?: { getDeltaTime: () => number; stopRenderLoop?: () => void }
-    mapManager?: { update?: (dt: number) => void }
-  }
-}
+type DefaultHooks = GameHooks
 
 function collectDegradeLogs(page: Page): string[] {
   const lines: string[] = []
@@ -59,7 +55,7 @@ async function stepByHand(page: Page, steps: number): Promise<number> {
 
 async function readBall(page: Page) {
   return page.evaluate(() => {
-    const ball = (window as unknown as GameHooks).game!.ballManager!.getBallBody!()
+    const ball = (window as unknown as GameHooks).game!.ballManager!.getBallBody()!
     const p = ball.translation()
     return { x: p.x, z: p.z, vz: ball.linvel().z }
   })
@@ -72,7 +68,7 @@ async function readTiming(page: Page) {
       isolated: crossOriginIsolated,
       mode: physics?.getWasmMode?.() ?? '',
       rapierMs: physics?.getLastRapierStepMs?.() ?? -1,
-      stats: physics?.getWasmEngine?.()?.getTransportStats?.() ?? null,
+      stats: (physics?.getWasmEngine?.() as WorkerTransportProbe)?.getTransportStats?.() ?? null,
       degradeReason: (window as unknown as { physicsDegradeReason?: string }).physicsDegradeReason ?? null,
     }
   })
@@ -100,7 +96,7 @@ test.describe('wasm-owner default, wasm-worker opt-in (#439, #444)', () => {
     // Flipper: same placement as wasm-worker-flipper.spec.ts.
     await page.evaluate(() => {
       const g = (window as unknown as GameHooks).game!
-      const ball = g.ballManager!.getBallBody!()
+      const ball = g.ballManager!.getBallBody()!
       g.physicsController!.rebuildHandleCaches?.()
       ball.setTranslation({ x: -2.5, y: 0.4, z: -6.2 }, true)
       ball.setLinvel({ x: 0, y: 0, z: -1.5 }, true)

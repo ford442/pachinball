@@ -1,4 +1,6 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
+import type { BackboxEffectNode } from '../src/display/backbox-graph-plan'
+import type { GameTestWindow } from './game-test-handle'
 
 /**
  * #488 §1: a WebGPU boot compiles no GLSL, so Babylon never fetches its GLSL → WGSL translator
@@ -34,27 +36,15 @@ const SHADER_ERROR =
 
 const SHADER_LANGUAGE_WGSL = 1
 
-interface ShaderProbe {
-  ready?: boolean
-  stateManager: { isPlaying: () => boolean }
-  triggerJackpot: () => void
-  mapManager: { switchTableMap: (id: string) => void; getCurrentMap?: () => string } | null
-  display: {
-    getBackboxGraphInfo: () => {
-      status: string
-      error: string | null
-      graph: { backend: string; nodes: string[]; activeEffects: string[] } | null
-    }
-    setCRTEffectEnabled: (on: boolean) => void
-    // Private at the type level; read here only to check which language each shader compiled as.
-    shaderLayer?: { material: { options: { shaderLanguage?: number } } | null }
-    backboxGraph?: {
-      frameGraph: { tasks: Array<{ name: string; postProcess?: { effect?: { shaderLanguage?: number } } }> }
-    } | null
+type ProbeWindow = GameTestWindow
+
+/** Private on DisplaySystem; read here only to check which language each shader compiled as. */
+interface DisplayShaderInternals {
+  shaderLayer?: { material: { options: { shaderLanguage?: number } } | null }
+  backboxGraph?: {
+    frameGraph: { tasks: Array<{ name: string; postProcess?: { effect?: { shaderLanguage?: number } } }> }
   } | null
 }
-
-type ProbeWindow = Window & { game?: ShaderProbe }
 
 async function hasWebGpuAdapter(page: Page, origin: string): Promise<boolean> {
   // `navigator.gpu` only exists in a secure context; a page on the dev server's localhost origin is one.
@@ -74,7 +64,7 @@ async function hasWebGpuAdapter(page: Page, origin: string): Promise<boolean> {
   return ok
 }
 
-async function waitForActiveEffect(page: Page, effect: string): Promise<void> {
+async function waitForActiveEffect(page: Page, effect: BackboxEffectNode): Promise<void> {
   await page.waitForFunction(
     (name) => ((window as ProbeWindow).game?.display?.getBackboxGraphInfo().graph?.activeEffects ?? []).includes(name),
     effect,
@@ -147,7 +137,7 @@ test.describe('WebGPU boot fetches no GLSL translator (#488)', () => {
       expect(requests.filter((url) => TRANSLATOR_REQUEST.test(url)), 'no glslang / twgsl / cdn.babylonjs.com request').toEqual([])
 
       const languages = await page.evaluate(() => {
-        const display = (window as ProbeWindow).game!.display!
+        const display = (window as ProbeWindow).game!.display as unknown as DisplayShaderInternals
         const tasks = display.backboxGraph?.frameGraph.tasks ?? []
         const pass = (name: string) => tasks.find((t) => t.name === name)?.postProcess?.effect?.shaderLanguage
         return {

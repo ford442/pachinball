@@ -17,6 +17,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DisplayState } from '../src/display/display-types'
 import type { AccessibilityConfig } from '../src/game-elements/accessibility-config'
+import type { QualityTier as QualityTierEnum } from '../src/game-elements/visual-palette'
 
 // ---------------------------------------------------------------------------
 // Hoisted shared state — evaluated before vi.mock() factories run
@@ -87,8 +88,9 @@ const hoisted = vi.hoisted(() => {
 
 const { glowInst, GlowLayerCtor, clones, StdMat } = hoisted
 
-// Expose QualityTier as a plain object — mirrors the real enum values
-const QualityTier = { LOW: 'low', MEDIUM: 'medium', HIGH: 'high', ULTRA: 'ultra' } as const
+// Expose QualityTier as a plain object — the real enum's values (visual-language is mocked below),
+// typed as the enum so the constructor calls type-check.
+const QualityTier = { LOW: 'low', MEDIUM: 'medium', HIGH: 'high' } as unknown as typeof QualityTierEnum
 
 // ---------------------------------------------------------------------------
 // Module mocks

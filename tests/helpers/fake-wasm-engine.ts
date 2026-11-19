@@ -17,6 +17,7 @@
 import { vi } from 'vitest'
 
 import type { WasmSimEngine } from '../../src/wasm/wasm-sim-engine'
+import type { WasmHingeDesc } from '../../src/wasm/physics-module-bodies'
 
 type V3 = { x: number; y: number; z: number }
 type Q = { x: number; y: number; z: number; w: number }
@@ -123,7 +124,7 @@ export function makeFakeWasmEngine() {
       const b = body(id)
       if (b) b.rotation = { x, y, z, w }
     }),
-    createHinge: vi.fn(() => 1),
+    createHinge: vi.fn((_desc: WasmHingeDesc) => 1),
     setHingeMotor: vi.fn(),
     getHingeAngle: vi.fn(() => 0),
     removeHinge: vi.fn(),

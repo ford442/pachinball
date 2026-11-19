@@ -1,68 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { GameTestHandle } from '../game-test-handle'
+import type { PhysicsWorkerTransportStats } from '../../src/wasm/physics-worker-client'
 
-export type GameHooks = {
-  game?: {
-    startGame?: () => Promise<void>
-    stateManager?: { isPlaying?: () => boolean }
-    physics?: {
-      isWasmOwnerMode?: () => boolean
-      getWasmEngine?: () => {
-        isReady?: boolean
-        /** PhysicsWorkerClient only (the in-process engine returns 0). */
-        getLastWorkerStepMs?: () => number
-        /** PhysicsWorkerClient only. */
-        getTransportStats?: () => {
-          transport: 'shared' | 'post-message'
-          sharedSnapshots: number
-          postMessageSnapshots: number
-          sharedAttaches: number
-          staleSnapshots: number
-        }
-      }
-      getWasmMode?: () => string
-      /** Null on the owner path: Rapier is never loaded there (#412). */
-      getRapier?: () => unknown
-      getRapierWorld?: () => unknown
-      getLastRapierStepMs?: () => number
-      getLastWasmStepMs?: () => number
-    }
-    physicsController?: {
-      rebuildHandleCaches?: () => void
-      resetBallScoreCounters?: () => void
-      getPointsThisBall?: () => number
-      getBumperHitsThisBall?: () => number
-      getRawCollisionEvents?: () => number
-      getLastLaneHit?: () => string | null
-      stepPhysics: (
-        inputManager: unknown,
-        inputActions: unknown,
-        replayRunner: null,
-        replayRecorder: null
-      ) => void
-    }
-    ballManager?: {
-      getBallBody?: () => {
-        setTranslation: (v: unknown, w: boolean) => void
-        setLinvel: (v: unknown, w: boolean) => void
-        translation: () => { x: number; y: number; z: number }
-        linvel: () => { x: number; y: number; z: number }
-      }
-    }
-    gameObjects?: {
-      getBumperBodies?: () => Array<{ translation: () => { x: number; y: number; z: number } }>
-    }
-    inputManager?: unknown
-    inputActions?: {
-      handlePlunger?: (charge?: number | null) => boolean
-      handleFlipperLeft?: (pressed: boolean) => void
-      /** Impulse magnitude of the most recent launch (#441). */
-      lastLaunchImpulse?: number
-    }
-    plungerChargeLevel?: number
-    engine?: { getDeltaTime: () => number }
-    scene?: { meshes?: Array<{ name: string; getVerticesData?: (kind: string) => Float32Array | number[] | null }> }
-  }
-}
+/** `window` with the live Game, typed against src/ (see tests/game-test-handle.ts). */
+export type GameHooks = { game?: GameTestHandle }
+
+/**
+ * `getWasmEngine()` is typed as the `WasmSimEngine` interface; the transport stats exist only on its
+ * `PhysicsWorkerClient` implementation (absent in-process), so specs read them through this.
+ */
+export type WorkerTransportProbe = { getTransportStats?: () => PhysicsWorkerTransportStats } | null | undefined
 
 export type OwnerEngine = 'wasm-owner' | 'wasm-worker'
 

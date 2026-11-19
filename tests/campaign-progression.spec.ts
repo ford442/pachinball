@@ -1,49 +1,13 @@
 import { test, expect, type Page } from '@playwright/test'
+import type { BootedGame } from './game-test-handle'
 
 test.setTimeout(180_000)
 test.describe.configure({ mode: 'serial' })
 
-interface TestAdventureMode {
-  isActive: () => boolean
-  onEvent?: (event: string, data?: unknown) => void
-}
+type TestGame = BootedGame
 
-interface TestGame {
-  score: number
-  eventBus?: {
-    on: (event: string, handler: (payload: unknown) => void) => () => void
-    emit: (event: string, payload?: unknown) => void
-  }
-  ballManager?: {
-    getBallBodies: () => Array<{ handle: number }>
-    getChainStats?: () => { isActive: boolean; scoreMultiplier: number }
-  }
-  physicsController?: {
-    handleBallLoss: (body: { handle: number }) => void
-  }
-  display?: { storyText?: string }
-  adventureMode?: TestAdventureMode
-  endAdventureMode: () => void
-  startAdventureMode: () => void
-  adventureProgressionSupervisor?: {
-    startTrack: (trackId: string, initialScore?: number) => void
-    update: (dt: number, currentScore: number) => void
-    getActiveMultiplier?: () => number
-  }
-  adventureTrackProgression?: {
-    getCurrentTrack?: () => string
-    isTrackCompleted: (trackId: string) => boolean
-    getTrackInfo?: (trackId: string) => { timeLimitSeconds: number } | null
-    getStats?: () => { totalRewardsEarned: number }
-  }
-  uiManager?: {
-    updateCountdownTimer: (remaining: number, limit: number) => void
-    hideCountdownTimer: () => void
-    updateComboChainMeter?: (progress: number, target: number, pulse: boolean) => void
-    prefersReducedMotion?: boolean
-  }
-  toggleCampaignMap?: () => Promise<void>
-}
+/** AdventureMode's event callback is protected (TrackBuilder); the spec fires it to simulate zone events. */
+type AdventureEventProbe = { onEvent?: (event: string, data?: unknown) => void }
 
 async function bootGame(page: Page): Promise<void> {
   await page.goto('/')
@@ -73,12 +37,12 @@ test.describe('Campaign progression E2E', () => {
 
   test('A -> B -> A success flow with portal entry advancement', async () => {
     const result = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as TestGame
+      const g = window.game as TestGame
 
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
 
-      const callback = g.adventureMode?.onEvent
+      const callback = (g.adventureMode as unknown as AdventureEventProbe | undefined)?.onEvent
       const supervisor = g.adventureProgressionSupervisor
       const progression = g.adventureTrackProgression
       if (!callback || !supervisor || !progression) {
@@ -130,12 +94,12 @@ test.describe('Campaign progression E2E', () => {
 
   test('timeout path opens emergency portal and applies penalized advance messaging', async () => {
     const result = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as TestGame
+      const g = window.game as TestGame
 
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
 
-      const callback = g.adventureMode?.onEvent
+      const callback = (g.adventureMode as unknown as AdventureEventProbe | undefined)?.onEvent
       const supervisor = g.adventureProgressionSupervisor
       const progression = g.adventureTrackProgression
       if (!callback || !supervisor || !progression) {
@@ -178,7 +142,7 @@ test.describe('Campaign progression E2E', () => {
 
   test('countdown HUD shows urgency colors and respects reduced-motion pulse suppression', async () => {
     const timerState = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as TestGame
+      const g = window.game as TestGame
       const ui = g.uiManager
       if (!ui) throw new Error('UI manager not available')
 
@@ -223,11 +187,11 @@ test.describe('Campaign progression E2E', () => {
 
   test('reward toast appears and archive shows unlocked cosmetics after portal completion', async () => {
     const result = await page.evaluate(async () => {
-      const g = (window as unknown as Record<string, unknown>).game as TestGame
+      const g = window.game as TestGame
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
 
-      const callback = g.adventureMode?.onEvent
+      const callback = (g.adventureMode as unknown as AdventureEventProbe | undefined)?.onEvent
       const supervisor = g.adventureProgressionSupervisor
       const progression = g.adventureTrackProgression
       if (!callback || !supervisor || !progression) {
@@ -269,7 +233,7 @@ test.describe('Campaign progression E2E', () => {
 
   test('jackpot starts multiball and shows multiplier indicator', async () => {
     const result = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as TestGame
+      const g = window.game as TestGame
       if (!g.eventBus || !g.ballManager) {
         throw new Error('Multiball systems are not initialized')
       }
@@ -300,7 +264,7 @@ test.describe('Campaign progression E2E', () => {
 
   test('combo chain meter renders with visible progress pips', async () => {
     const result = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as TestGame
+      const g = window.game as TestGame
       if (!g.uiManager?.updateComboChainMeter) {
         throw new Error('Combo chain HUD is not initialized')
       }

@@ -9,20 +9,14 @@ test.describe('Scoring breakdown', () => {
     await page.locator('#start-btn').click()
 
     await expect.poll(async () => {
-      return page.evaluate(() => (window as unknown as { game?: { stateManager?: { isPlaying?: () => boolean } } }).game?.stateManager?.isPlaying?.() ?? false)
+      return page.evaluate(() => window.game?.stateManager?.isPlaying?.() ?? false)
     }, {
       intervals: [200],
       timeout: 10_000,
     }).toBe(true)
 
     await page.evaluate(() => {
-      const game = (window as unknown as {
-        game?: {
-          lives: number
-          ballManager?: { getBallBody?: () => unknown; ballSaveSystem?: { expire: () => void } }
-          physicsController?: { scoringBridge?: { handleBallLoss?: (body: unknown) => void } }
-        }
-      }).game
+      const game = window.game
       // Fail loudly on a stale hook rather than silently skipping the drain.
       const drain = game?.physicsController?.scoringBridge
       if (!game?.ballManager?.getBallBody || !drain?.handleBallLoss) throw new Error('drain hook missing: physicsController.scoringBridge.handleBallLoss')

@@ -13,7 +13,7 @@ function makeSlot(progression: AdventureTrackProgression, active = false) {
   let isActive = active
   const adventureMode = {
     isActive: vi.fn(() => isActive),
-    start: vi.fn(() => { isActive = true; return Promise.resolve() }),
+    start: vi.fn((..._args: unknown[]) => { isActive = true; return Promise.resolve() }),
     end: vi.fn(() => { isActive = false }),
     getFollowCamera: vi.fn(() => null),
   }

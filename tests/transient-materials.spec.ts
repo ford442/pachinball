@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { QualityTier } from '../src/game-elements/visual-palette'
+import type { GameTestWindow } from './game-test-handle'
 import { waitForSceneSettle } from './helpers/perf'
 
 /**
@@ -8,49 +11,13 @@ import { waitForSceneSettle } from './helpers/perf'
  * floating-number pool, which this spec does not touch.
  */
 
-interface FieldProbe {
-  name: string
-  isEnabled: (checkAncestors?: boolean) => boolean
-  thinInstanceCount: number
-  material: { name: string } | null
-}
-
-interface EffectsProbe {
-  spawnShardBurst: (pos: unknown, color?: string) => void
-  spawnImpactRing: (pos: unknown, normal: unknown, color: string) => void
-  spawnEnhancedBumperImpact: (pos: unknown, intensity: 'light' | 'medium' | 'heavy') => void
-  setLightingMode: (mode: 'normal' | 'fever', duration?: number) => void
-  updateShards: (dt: number) => void
-  /** Private in TS, plain properties at runtime. */
+/** Private in TS (EffectsSystem's sub-systems), plain properties at runtime; the spec ticks them by hand. */
+interface EffectsInternals {
   ripplesEffects: { updateRippleRings: (dt: number) => void }
   trailEffects: { updateFeverTrails: (bodies: unknown[], isFever: boolean, dt: number) => void }
 }
 
-interface GameProbe {
-  ready?: boolean
-  scene: {
-    materials: Array<{ name: string }>
-    meshes: Array<{ name: string }>
-    getMeshByName: (name: string) => FieldProbe | null
-    activeCamera: { position: { clone: () => { set: (x: number, y: number, z: number) => unknown } } }
-    onAfterRenderObservable: {
-      add: (cb: () => void) => unknown
-      remove: (observer: unknown) => void
-    }
-  }
-  effects: EffectsProbe
-  ballManager: {
-    spawnExtraBalls: (n: number) => void
-    removeExtraBalls: () => void
-    getBallBodies: () => Array<{ translation: () => { x: number; y: number; z: number } }>
-    presentation: { trailMaterialPool: { size: number } } | null
-  }
-  renderer: { applyQualityTier: (tier: string) => void }
-  performanceMonitor: { setOnSustainedJank: (cb: (() => void) | null) => void }
-  startGame: () => Promise<void>
-}
-
-type ProbeWindow = Window & { game?: GameProbe }
+type ProbeWindow = GameTestWindow
 
 const FIELDS = ['shardField', 'impactRingField', 'rippleRingField', 'feverTrailField'] as const
 
@@ -65,7 +32,7 @@ async function bootTable(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const g = (window as ProbeWindow).game!
     await g.startGame()
-    g.renderer.applyQualityTier('medium')
+    g.renderer.applyQualityTier('medium' as QualityTier)
   })
   await waitForSceneSettle(page)
 }
@@ -74,7 +41,7 @@ async function renderFrames(page: Page, n: number): Promise<void> {
   await page.evaluate(
     (count) =>
       new Promise<void>((resolve) => {
-        const scene = (window as ProbeWindow).game!.scene
+        const scene = (window as ProbeWindow).game!.scene!
         let left = count
         const observer = scene.onAfterRenderObservable.add(() => {
           if (--left > 0) return
@@ -99,14 +66,15 @@ test.describe('transient effects build no materials after boot (#524)', () => {
     const counts = () =>
       page.evaluate(() => {
         const g = (window as ProbeWindow).game!
-        return { materials: g.scene.materials.length, meshes: g.scene.meshes.length }
+        return { materials: g.scene!.materials.length, meshes: g.scene!.meshes.length }
       })
     const fieldsOf = () =>
       page.evaluate((names) => {
         const g = (window as ProbeWindow).game!
         return Object.fromEntries(
           names.map((n) => {
-            const m = g.scene.getMeshByName(n)
+            // The transient fields are thin-instanced Meshes; getMeshByName types them as AbstractMesh.
+            const m = g.scene!.getMeshByName(n) as Mesh | null
             return [n, m ? { enabled: m.isEnabled(false), instances: m.thinInstanceCount, material: m.material?.name ?? null } : null]
           }),
         )
@@ -116,9 +84,9 @@ test.describe('transient effects build no materials after boot (#524)', () => {
     const burst = () =>
       page.evaluate(() => {
         const g = (window as ProbeWindow).game!
-        const e = g.effects
-        const pos = g.scene.activeCamera.position.clone().set(0, 0.6, 2)
-        const up = g.scene.activeCamera.position.clone().set(0, 1, 0)
+        const e = g.effects!
+        const pos = g.scene!.activeCamera!.position.clone().set(0, 0.6, 2)
+        const up = g.scene!.activeCamera!.position.clone().set(0, 1, 0)
         e.spawnShardBurst(pos, '#ff00ff')
         e.spawnImpactRing(pos, up, '#00ffaa')
         e.spawnEnhancedBumperImpact(pos, 'heavy')
@@ -127,11 +95,12 @@ test.describe('transient effects build no materials after boot (#524)', () => {
     // Let everything expire (large dt: the SwiftShader frame rate makes wall-clock lifetimes meaningless).
     const expire = async () => {
       await page.evaluate(() => {
-        const e = (window as ProbeWindow).game!.effects
+        const e = (window as ProbeWindow).game!.effects!
         e.setLightingMode('normal', 0)
         e.updateShards(5)
-        e.ripplesEffects.updateRippleRings(5)
-        e.trailEffects.updateFeverTrails([], false, 5)
+        const internals = e as unknown as EffectsInternals
+        internals.ripplesEffects.updateRippleRings(5)
+        internals.trailEffects.updateFeverTrails([], false, 5)
       })
       await renderFrames(page, 3)
     }
@@ -181,19 +150,19 @@ test.describe('transient effects build no materials after boot (#524)', () => {
   test('ball trail materials are recycled across a multiball respawn', async ({ page }) => {
     await bootTable(page)
 
-    await page.evaluate(() => (window as ProbeWindow).game!.ballManager.spawnExtraBalls(2))
+    await page.evaluate(() => (window as ProbeWindow).game!.ballManager!.spawnExtraBalls(2))
     await waitForSceneSettle(page)
     const first = await page.evaluate(() => {
       const g = (window as ProbeWindow).game!
-      return { materials: g.scene.materials.length, pool: g.ballManager.presentation!.trailMaterialPool.size }
+      return { materials: g.scene!.materials.length, pool: g.ballManager!.presentation!.trailMaterialPool.size }
     })
 
-    await page.evaluate(() => (window as ProbeWindow).game!.ballManager.removeExtraBalls())
-    await page.evaluate(() => (window as ProbeWindow).game!.ballManager.spawnExtraBalls(2))
+    await page.evaluate(() => (window as ProbeWindow).game!.ballManager!.removeExtraBalls())
+    await page.evaluate(() => (window as ProbeWindow).game!.ballManager!.spawnExtraBalls(2))
     await waitForSceneSettle(page)
     const second = await page.evaluate(() => {
       const g = (window as ProbeWindow).game!
-      return { materials: g.scene.materials.length, pool: g.ballManager.presentation!.trailMaterialPool.size }
+      return { materials: g.scene!.materials.length, pool: g.ballManager!.presentation!.trailMaterialPool.size }
     })
 
     expect(second.pool).toBe(first.pool)

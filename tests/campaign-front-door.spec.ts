@@ -8,10 +8,6 @@ import { test, expect, type Page } from '@playwright/test'
 
 test.setTimeout(180_000)
 
-interface FrontDoorGame {
-  adventureMode?: { isActive(): boolean; getCurrentZone(): string | null }
-}
-
 async function openMenu(page: Page): Promise<void> {
   await page.goto('/?renderer=webgl2')
   await expect(page.locator('#start-btn')).toBeEnabled({ timeout: 90_000 })
@@ -19,7 +15,7 @@ async function openMenu(page: Page): Promise<void> {
 
 async function waitForCampaignStage(page: Page, trackId: string): Promise<void> {
   await page.waitForFunction((id) => {
-    const g = (window as unknown as { game?: FrontDoorGame }).game
+    const g = window.game
     return g?.adventureMode?.isActive() === true && g.adventureMode.getCurrentZone() === id
   }, trackId, { timeout: 30_000 })
 }

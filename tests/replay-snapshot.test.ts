@@ -258,7 +258,8 @@ describe('recording and playback carry the fingerprint', () => {
   })
 
   it('an engine that cannot snapshot records hashes but no snapshot (version 0)', () => {
-    const fp = captureReplayFingerprint(null, null)
+    // No engine, nothing to wait for: the fingerprint comes back synchronously.
+    const fp = captureReplayFingerprint(null, null) as ReplayWorldFingerprint
     expect(fp).toMatchObject({ snapshotVersion: 0, staticHash: null, initialSnapshot: undefined })
     expect(fp.feederTunablesHash).toBe(feederTunablesHash())
   })

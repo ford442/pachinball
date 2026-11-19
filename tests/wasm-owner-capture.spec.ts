@@ -18,26 +18,10 @@ import {
 
 type Vec = { x: number; y: number; z: number }
 
-type CaptureHooks = GameHooks & {
-  game?: GameHooks['game'] & {
-    magSpinFeeder?: {
-      getPosition: () => Vec
-      getState: () => number
-      setGameplayEnabled: (enabled: boolean) => void
-      onStateChange: ((state: number) => void) | null
-    }
-    ballManager?: {
-      getBallBody?: () => {
-        wasmId?: number | null
-        setTranslation: (v: Vec, w: boolean) => void
-        setLinvel: (v: Vec, w: boolean) => void
-        setAngvel: (v: Vec, w: boolean) => void
-        translation: () => Vec
-        linvel: () => Vec
-      }
-    }
-  }
-}
+/** The C++ owner, a private getter on SimPhysicsController that these specs read on purpose. */
+type OwnerProbe = { wasmOwner?: { getTableUnsupported: () => Array<{ shape: string }> } | null }
+/** `wasmId` lives on the concrete WasmBody, not on the PhysicsBody interface the ball is typed as. */
+type WasmIdProbe = { wasmId?: number | null }
 
 /** MagSpinState: IDLE, CATCH, SPIN, RELEASE, COOLDOWN. */
 const MAG_SPIN = { IDLE: 0, CATCH: 1, SPIN: 2, RELEASE: 3, COOLDOWN: 4 } as const
@@ -52,7 +36,7 @@ test.describe('wasm-owner MagSpin capture', () => {
     await startPlaying(page)
 
     const run = await page.evaluate(({ MAG_SPIN, HOLD_Y_OFFSET }) => {
-      const g = (window as unknown as CaptureHooks).game
+      const g = (window as unknown as GameHooks).game
       const feeder = g?.magSpinFeeder
       const ball = g?.ballManager?.getBallBody?.()
       const engine = g?.physics?.getWasmEngine?.() as unknown as {
@@ -60,10 +44,10 @@ test.describe('wasm-owner MagSpin capture', () => {
         getVelocity: (id: number) => Vec
         getBodyType?: (id: number) => number
       } | undefined
-      if (!g?.physicsController || !g.engine || !feeder || !ball || !engine || ball.wasmId == null) {
+      if (!g?.physicsController || !g.engine || !feeder || !ball || !engine || (ball as WasmIdProbe).wasmId == null) {
         return { ok: false, reason: 'hooks missing' }
       }
-      const id = ball.wasmId
+      const id = (ball as WasmIdProbe).wasmId!
 
       feeder.setGameplayEnabled(true)
       const well = feeder.getPosition()
@@ -144,12 +128,7 @@ test.describe('wasm-owner MagSpin capture', () => {
     await startPlaying(page)
 
     const run = await page.evaluate(() => {
-      type TrapState = { body: unknown; caughtBall: unknown; chamber: Vec; holdDuration: number }
-      const g = (window as unknown as CaptureHooks).game as CaptureHooks['game'] & {
-        trapStates?: TrapState[]
-        ballTrapBuilder?: { updateTrap: (state: TrapState, dt: number) => unknown }
-        physicsController?: { wasmOwner?: { getTableUnsupported: () => Array<{ shape: string }> } }
-      }
+      const g = (window as unknown as GameHooks).game
       const trap = g?.trapStates?.[0]
       const ball = g?.ballManager?.getBallBody?.()
       const engine = g?.physics?.getWasmEngine?.() as unknown as {
@@ -158,10 +137,10 @@ test.describe('wasm-owner MagSpin capture', () => {
         getBodyType?: (id: number) => number
       } | undefined
       const traps = g?.ballTrapBuilder
-      if (!g?.physicsController || !g.engine || !trap || !traps || !ball || !engine || ball.wasmId == null) {
+      if (!g?.physicsController || !g.engine || !trap || !traps || !ball || !engine || (ball as WasmIdProbe).wasmId == null) {
         return { ok: false, reason: 'hooks missing' }
       }
-      const id = ball.wasmId
+      const id = (ball as WasmIdProbe).wasmId!
       // One game tick. The fixed step already updates every trap at the tick's dt
       // (tickStepMechanisms, 2c62f98); updating it here as well ran its hold clock twice as fast.
       const step = () => {
@@ -171,7 +150,7 @@ test.describe('wasm-owner MagSpin capture', () => {
       g.engine.getDeltaTime = () => 1000 / 60
       try {
         step() // pick up the trap export
-        const unsupportedCones = (g.physicsController.wasmOwner?.getTableUnsupported() ?? [])
+        const unsupportedCones = ((g.physicsController as unknown as OwnerProbe).wasmOwner?.getTableUnsupported() ?? [])
           .filter((u) => u.shape === 'cone').length
 
         // Roll the ball up the table into the funnel.
@@ -235,7 +214,7 @@ test.describe('wasm-owner MagSpin capture', () => {
     // paused and each iteration takes one fixed step, then yields until the worker's next
     // snapshot lands — the same between-tasks delivery, without paying for a render per step.
     const run = await page.evaluate(async ({ MAG_SPIN, HOLD_Y_OFFSET }) => {
-      const g = (window as unknown as CaptureHooks).game
+      const g = (window as unknown as GameHooks).game
       const feeder = g?.magSpinFeeder
       const ball = g?.ballManager?.getBallBody?.()
       const engine = g?.physics?.getWasmEngine?.() as unknown as {
@@ -244,10 +223,10 @@ test.describe('wasm-owner MagSpin capture', () => {
         getTransportStats: () => { sharedSnapshots: number; postMessageSnapshots: number }
       } | undefined
       const scheduler = (g as unknown as { frameScheduler?: { pause: () => void; resume: () => void } } | undefined)?.frameScheduler
-      if (!g?.physicsController || !g.engine || !feeder || !ball || !engine || !scheduler || ball.wasmId == null) {
+      if (!g?.physicsController || !g.engine || !feeder || !ball || !engine || !scheduler || (ball as WasmIdProbe).wasmId == null) {
         return { ok: false, reason: 'hooks missing' }
       }
-      const id = ball.wasmId
+      const id = (ball as WasmIdProbe).wasmId!
       // What the worker has published: step-result messages, or the shared buffer's publish count
       // (read only by the next `step()`'s poll, so `getTransportStats()` lags it by a step).
       const shared = () => (engine as unknown as { shared?: { getPublishCount: () => number } | null }).shared ?? null

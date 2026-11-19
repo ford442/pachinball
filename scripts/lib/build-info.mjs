@@ -56,6 +56,8 @@ export function inspectBuild(dir) {
  * build id) newest first — and the default: `dist`, else the newest archived
  * build. A build whose binary differs from the one its build-info.json
  * declares is skipped (`onSkip(build)`); so is a half-written archive copy.
+ *
+ * @param {{ dist?: string | null, builds?: string | null, onSkip?: (build: NonNullable<ReturnType<typeof inspectBuild>>) => void }} options
  */
 export function discoverBuilds({ dist, builds, onSkip = () => {} }) {
   const found = []

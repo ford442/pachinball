@@ -1,4 +1,7 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
+import type { BackboxGraphReport } from '../src/display/display-backbox-graph'
+import type { BackboxEffectNode } from '../src/display/backbox-graph-plan'
+import type { GameTestWindow } from './game-test-handle'
 
 /**
  * #461 Slice A: the backbox is one Frame Graph composite.
@@ -13,31 +16,8 @@ import { chromium, expect, test, type Page } from '@playwright/test'
  * opt-in like tests/webgpu-probe.spec.ts: `WEBGPU_CI=1 npx playwright test tests/backbox-frame-graph.spec.ts`.
  */
 
-interface GraphReport {
-  status: 'idle' | 'pending' | 'built' | 'failed'
-  error: string | null
-  plan: { effects: string[]; omitted: Array<{ node: string; reason: string }> }
-  graph: {
-    backend: 'webgpu' | 'webgl2'
-    nodes: string[]
-    activeEffects: string[]
-    executedFrames: number
-  } | null
-}
-
-interface GraphProbe {
-  ready?: boolean
-  scene: { activeCamera: { _postProcesses?: Array<{ name: string } | null> } | null }
-  display: {
-    getBackboxGraphInfo: () => GraphReport
-    setCRTEffectEnabled: (on: boolean) => void
-  } | null
-  applyAccessibilitySettings: (reducedMotion: boolean, photosensitiveMode: boolean) => void
-  triggerJackpot: () => void
-  stateManager: { isPlaying: () => boolean }
-}
-
-type ProbeWindow = Window & { game?: GraphProbe }
+type GraphReport = BackboxGraphReport
+type ProbeWindow = GameTestWindow
 
 const LAYERS = [
   'backbox:physical',
@@ -84,14 +64,16 @@ function report(page: Page): Promise<GraphReport> {
 /** Names of the post-processes on the scene camera: CRT and jackpot must never be among them. */
 function cameraPostProcesses(page: Page): Promise<string[]> {
   return page.evaluate(() =>
-    ((window as ProbeWindow).game!.scene.activeCamera?._postProcesses ?? [])
+    // `_postProcesses` is Babylon's internal per-camera list (stripped from its .d.ts).
+    (((window as ProbeWindow).game!.scene!.activeCamera as { _postProcesses?: Array<{ name: string } | null> } | null)
+      ?._postProcesses ?? [])
       .filter((pp): pp is { name: string } => !!pp)
       .map((pp) => pp.name),
   )
 }
 
 /** Wait until `effect` ran on the last executed frame (a disabled pass only copies through). */
-async function waitForActiveEffect(page: Page, effect: string): Promise<void> {
+async function waitForActiveEffect(page: Page, effect: BackboxEffectNode): Promise<void> {
   await page.waitForFunction(
     (name) => ((window as ProbeWindow).game?.display?.getBackboxGraphInfo().graph?.activeEffects ?? []).includes(name),
     effect,

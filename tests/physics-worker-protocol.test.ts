@@ -48,6 +48,11 @@ function identityTransform(id: number, px: number): WasmTransform {
   }
 }
 
+/** The mock implements only the engine calls these tests' commands reach. */
+function asCommandEngine(engine: object): Parameters<typeof applyPhysicsCommand>[0] {
+  return engine as Parameters<typeof applyPhysicsCommand>[0]
+}
+
 function makeMockEngine() {
   let nextBody = 0
   let nextHinge = 0
@@ -68,6 +73,7 @@ function makeMockEngine() {
       normal: { x: 0, y: 1, z: 0 },
       point: { x: 1, y: 2, z: 3 },
       impulse: 4,
+      isSensor: false,
       phase: ContactPhase.Enter,
     },
   ])
@@ -156,6 +162,7 @@ describe('physics worker protocol', () => {
         normal: { x: 1, y: 0, z: 0 },
         point: { x: 0, y: 1, z: 0 },
         impulse: 8,
+        isSensor: false,
         phase: ContactPhase.Stay,
       },
     ])
@@ -199,7 +206,7 @@ describe('physics worker in-process loopback', () => {
       let alpha = 0
       let stepped = false
       for (const cmd of commands) {
-        const result = applyPhysicsCommand(engine, cmd, runtime)
+        const result = applyPhysicsCommand(asCommandEngine(engine), cmd, runtime)
         if (cmd.type === 'step') {
           alpha = result
           stepped = true
@@ -241,7 +248,7 @@ describe('physics worker capture (#420)', () => {
     client.attachLoopback((commands) => {
       for (const cmd of commands) {
         order.push(cmd.type)
-        applyPhysicsCommand(engine, cmd, runtime)
+        applyPhysicsCommand(asCommandEngine(engine), cmd, runtime)
       }
     })
 
@@ -325,7 +332,7 @@ describe('static handle capacity', () => {
 describe('worker snapshot request/reply', () => {
   type Reply = Extract<Parameters<PhysicsWorkerClient['receiveWorkerMessage']>[0], { type: 'snapshot-reply' }>
 
-  function setup(restoreStatus = WasmSnapshotStatus.Ok) {
+  function setup(restoreStatus: WasmSnapshotStatus = WasmSnapshotStatus.Ok) {
     const engine = {
       ...makeMockEngine(),
       serializeSnapshot: vi.fn(() => new Uint8Array([1, 2, 3, 4])),
@@ -343,7 +350,7 @@ describe('worker snapshot request/reply', () => {
     let holdReplies = false
     client.attachLoopback((commands) => {
       batches.push(commands)
-      for (const cmd of commands) applyPhysicsCommand(withHash, cmd, runtime)
+      for (const cmd of commands) applyPhysicsCommand(asCommandEngine(withHash), cmd, runtime)
       const replies = runtime.replies
       runtime.replies = []
       for (const r of replies) {
@@ -385,7 +392,7 @@ describe('worker snapshot request/reply', () => {
     expect(engine.serializeSnapshot).not.toHaveBeenCalled()
     // Every reply carries the hash, including a serialize.
     const r = createWorkerRuntimeState()
-    applyPhysicsCommand(engine, { type: 'serializeSnapshot', requestId: 9 }, r)
+    applyPhysicsCommand(asCommandEngine(engine), { type: 'serializeSnapshot', requestId: 9 }, r)
     expect(r.replies[0]!.stateHash).toBe('state@1')
   })
 

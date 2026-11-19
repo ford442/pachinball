@@ -1,18 +1,19 @@
 /**
  * Integration tests for SlotMachine orchestration (win / near-miss / jackpot events).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
 import { SlotMachine } from '../src/display/slot-machine'
 import { SlotSymbol, SlotSpinState, SlotActivationMode } from '../src/display/slot-types'
 import type { DisplayReelsLayer } from '../src/display/display-reels'
 
 function createMockReelsLayer(): DisplayReelsLayer & {
-  startSpin: ReturnType<typeof vi.fn>
-  stopReel: ReturnType<typeof vi.fn>
-  setOnStopped: ReturnType<typeof vi.fn>
-  setSymbols: ReturnType<typeof vi.fn>
-  setVisible: ReturnType<typeof vi.fn>
+  startSpin: Mock
+  stopReel: Mock
+  setOnStopped: Mock
+  setSymbols: Mock
+  setVisible: Mock
+  simulateStop(symbols: string[]): void
 } {
   let stoppedCallback: ((symbols: string[]) => void) | null = null
 
@@ -29,11 +30,11 @@ function createMockReelsLayer(): DisplayReelsLayer & {
       stoppedCallback?.(symbols)
     },
   } as unknown as DisplayReelsLayer & {
-    startSpin: ReturnType<typeof vi.fn>
-    stopReel: ReturnType<typeof vi.fn>
-    setOnStopped: ReturnType<typeof vi.fn>
-    setSymbols: ReturnType<typeof vi.fn>
-    setVisible: ReturnType<typeof vi.fn>
+    startSpin: Mock
+    stopReel: Mock
+    setOnStopped: Mock
+    setSymbols: Mock
+    setVisible: Mock
     simulateStop(symbols: string[]): void
   }
 }

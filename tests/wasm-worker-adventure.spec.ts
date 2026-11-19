@@ -5,7 +5,9 @@ import {
   startPlaying,
   stripIsolationHeaders,
   type GameHooks,
+  type WorkerTransportProbe,
 } from './helpers/wasm-owner-boot'
+import type { AdventureTrackType } from '../src/adventure/adventure-types'
 
 /**
  * #414 acceptance: `wasm-worker` owns an adventure track with Rapier unstepped,
@@ -17,24 +19,7 @@ import {
  * synchronous loop inside one `page.evaluate` would never see a snapshot.
  */
 
-type WorkerHooks = GameHooks & {
-  game?: GameHooks['game'] & {
-    adventureMode?: {
-      isActive: () => boolean
-      start: (ballBody: unknown, camera: unknown, ballMesh: unknown, trackType: string) => Promise<void>
-      getColliderDescriptors: () => readonly { kind: string; removed?: true }[]
-    } | null
-    scene?: { activeCamera?: unknown }
-    engine?: { getDeltaTime: () => number; stopRenderLoop?: () => void }
-    mapManager?: { update?: (dt: number) => void }
-    physicsController?: NonNullable<NonNullable<GameHooks['game']>['physicsController']> & {
-      getAdventureOwnership?: () => {
-        owned: boolean
-        unsupported: ReadonlyArray<{ reason: string; label?: string }>
-      }
-    }
-  }
-}
+type WorkerHooks = GameHooks
 
 const TRACK = 'SYNTHWAVE_SURF'
 
@@ -52,7 +37,7 @@ async function playTrackInWorker(page: Page) {
     const camera = g?.scene?.activeCamera
     if (!g?.adventureMode || !ball || !camera) return 'adventure mode, ball or camera missing'
     try {
-      await g.adventureMode.start(ball, camera, undefined, track)
+      await g.adventureMode.start(ball, camera, undefined, track as AdventureTrackType)
     } catch (err) {
       return err instanceof Error ? err.message : String(err)
     }
@@ -66,7 +51,7 @@ async function playTrackInWorker(page: Page) {
 
   return page.evaluate(async (steps) => {
     const g = (window as unknown as WorkerHooks).game!
-    const ball = g.ballManager!.getBallBody!()
+    const ball = g.ballManager!.getBallBody()!
     const before = ball.translation()
     const origDt = g.engine!.getDeltaTime.bind(g.engine)
     g.engine!.getDeltaTime = () => 1000 / 60
@@ -95,7 +80,7 @@ async function playTrackInWorker(page: Page) {
       unsupported: (ownership?.unsupported ?? []).map((u) => `${u.label ?? '?'}: ${u.reason}`),
       descriptors: g.adventureMode?.getColliderDescriptors().length ?? 0,
       travelled: Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z),
-      stats: g.physics?.getWasmEngine?.()?.getTransportStats?.() ?? null,
+      stats: (g.physics?.getWasmEngine?.() as WorkerTransportProbe)?.getTransportStats?.() ?? null,
     }
   }, 180)
 }
