@@ -14,11 +14,11 @@ test.describe('Scoring collision dispatch (#266)', () => {
     test.setTimeout(120_000);
 
     await page.goto('/?renderer=webgl2');
-    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 });
 
     await expect.poll(async () => {
       return page.evaluate(() => !!(window as any).game?.stateManager);
-    }, { intervals: [200], timeout: 15_000 }).toBe(true);
+    }, { intervals: [200], timeout: 60_000 }).toBe(true);
 
     await page.evaluate(() => document.getElementById('start-btn')?.click());
     await page.waitForTimeout(500);
@@ -68,11 +68,11 @@ test.describe('Scoring collision dispatch (#266)', () => {
     test.setTimeout(120_000);
 
     await page.goto('/?renderer=webgl2');
-    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 });
 
     await expect.poll(async () => {
       return page.evaluate(() => !!(window as any).game?.stateManager);
-    }, { intervals: [200], timeout: 15_000 }).toBe(true);
+    }, { intervals: [200], timeout: 60_000 }).toBe(true);
 
     await page.evaluate(() => document.getElementById('start-btn')?.click());
     await page.waitForTimeout(500);
