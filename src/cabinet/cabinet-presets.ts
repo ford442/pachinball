@@ -14,6 +14,7 @@ export const CLASSIC_CONFIG: CabinetPreset = {
   description: 'Traditional wooden cabinet with chrome trim',
 
   width: 32,
+  playfieldWidth: 28,
   depth: 44,
   sideHeight: 20,
   baseY: -10,
@@ -61,6 +62,7 @@ export const NEO_CONFIG: CabinetPreset = {
   description: 'Sleek black metal with aggressive angles and intense neon',
 
   width: 30,
+  playfieldWidth: 28,
   depth: 42,
   sideHeight: 18,
   baseY: -10,
@@ -109,6 +111,7 @@ export const VERTICAL_CONFIG: CabinetPreset = {
   description: 'Tall narrow cabinet for vertical orientation games',
 
   width: 26,
+  playfieldWidth: 28,
   depth: 38,
   sideHeight: 22,
   baseY: -10,
@@ -157,6 +160,7 @@ export const WIDE_CONFIG: CabinetPreset = {
   description: 'Extra wide cabinet for deluxe experience',
 
   width: 38,
+  playfieldWidth: 28,
   depth: 48,
   sideHeight: 20,
   baseY: -10,

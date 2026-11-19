@@ -9,12 +9,15 @@
 /** Voices the processor can sound at once. A new hit past this steals the quietest. */
 export const VOICE_POOL_SIZE = 24
 
-/**
- * Playfield half-width, in world units, that maps a contact's x to a full left/right pan.
- * The four cabinet presets are 26–38 wide; their playfields sit inside that, so a contact at
- * the side wall reads as ±1 and one on the centre line as 0.
- */
-export const PLAYFIELD_PAN_HALF_WIDTH = 12
+/** Playfield half-width used before any cabinet has loaded; all four presets are 28 wide. */
+export const DEFAULT_PLAYFIELD_PAN_HALF_WIDTH = 14
+
+let panHalfWidth = DEFAULT_PLAYFIELD_PAN_HALF_WIDTH
+
+/** Set once per cabinet build from the preset's playfield width: a contact at the wall pans to ±1. */
+export function setPlayfieldPanWidth(playfieldWidth: number): void {
+  panHalfWidth = playfieldWidth > 0 ? playfieldWidth / 2 : DEFAULT_PLAYFIELD_PAN_HALF_WIDTH
+}
 
 /**
  * One impact voice. Every field is already a finite number in range: the sender clamps, the
@@ -39,7 +42,7 @@ export interface VoiceHit {
 export const MIN_AUDIBLE_IMPACT = 0.02
 
 /** Playfield x → pan in [-1, 1]. */
-export function panFromPlayfieldX(x: number, halfWidth: number = PLAYFIELD_PAN_HALF_WIDTH): number {
+export function panFromPlayfieldX(x: number, halfWidth: number = panHalfWidth): number {
   if (!Number.isFinite(x)) return 0
   const pan = x / halfWidth
   return pan < -1 ? -1 : pan > 1 ? 1 : pan
