@@ -114,7 +114,7 @@ export function buildNeonStronghold(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(courtCenter, courtRadius, courtSpeed, stoneMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platformBody = adventureBodies[adventureBodies.length - 1]
+    const platformBody = adventureBodies[adventureBodies.length - 1]!
     const turretCount = 2
     const turretDist = 6.0
 

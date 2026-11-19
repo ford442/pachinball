@@ -147,7 +147,7 @@ export class PachinkoBuilder {
       // pin body is fixed, so pose sync skips it and the mesh stays at the origin; the binding
       // only keeps the mesh and a collider findable together. Table enable/disable reaches the
       // other pin bodies through `pinBodies`, and the mesh through `meshes`.
-      bindings.push({ mesh: lattice, rigidBody: pinBodies[0] })
+      bindings.push({ mesh: lattice, rigidBody: pinBodies[0]! })
       meshes.push(lattice)
       pins.push(lattice)
       this.meshes.push(lattice)

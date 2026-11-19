@@ -119,7 +119,7 @@ export function buildCampaignMapModel(
       placed.add(info.id)
       chain.push(info)
       const children = childrenOf.get(info.id) ?? []
-      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i])
+      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!)
     }
     return chain
   }

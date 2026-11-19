@@ -144,26 +144,6 @@ export default defineConfig([
     files: ['src/materials/**/*.ts'],
     rules: { 'no-restricted-syntax': ['error', ...TIMER_SYNTAX] },
   },
-  // `!` on an indexed read looks redundant until noUncheckedIndexedAccess is on for the whole
-  // project. These directories are already held to it by `npm run check:index-strict`, where the
-  // `!` is load-bearing, so don't let the autofixer strip it (#441).
-  {
-    // Keep in step with ENFORCED_DIRS in scripts/check-index-strict.mjs.
-    files: [
-      'src/core/**/*.ts',
-      'src/wasm/**/*.ts',
-      'src/game/physics/**/*.ts',
-      'src/materials/**/*.ts',
-      'src/audio/**/*.ts',
-      'src/game-elements/**/*.ts',
-      'src/effects/**/*.ts',
-      'src/shaders/**/*.ts',
-      'src/replay/**/*.ts',
-      'src/arcade/**/*.ts',
-      'src/game.ts',
-    ],
-    rules: { '@typescript-eslint/no-unnecessary-type-assertion': 'off' },
-  },
   // ── Layering (#322) ───────────────────────────────────────────────────────
   // Dependencies point one way: core <- game-elements <- game. These rules make
   // that mechanical instead of a convention people have to remember.

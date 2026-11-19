@@ -24,7 +24,7 @@ import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { ContactPhase, contactPhaseAt, contactPointXAt, contactStarted, type PhysicsContact, type WasmContactBatch, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
-import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
+import { simNowMs } from '../../core/sim-clock'
 import { bootError } from '../../boot-log'
 import { faultMessage } from '../../core/fault-window'
 import type { ScoringBridge } from './scoring-bridge'
@@ -373,7 +373,7 @@ export class CollisionDispatcher {
    * Hosts without a step counter (unit-test stubs) fall back to wall time.
    */
   private debounceClockMs(): number {
-    return simNowMs(this.host.physics as SimClockPhysics)
+    return simNowMs(this.host.physics)
   }
 
   /**

@@ -101,7 +101,7 @@ export function registerDrain(host: BallManagerHost, _drainedBody: PhysicsBody):
   let ballSaved = false
   if (canSaveDrain(host, current)) {
     const spawn = GameConfig.ball.spawnMain
-    const savedBody = host.spawnRandomBall({ x: spawn.x, y: spawn.y, z: spawn.z } as Vector3)
+    const savedBody = host.spawnRandomBall({ x: spawn.x, y: spawn.y, z: spawn.z })
     if (!host.ballBody || !host.ballBodies.includes(host.ballBody)) {
       host.ballBody = savedBody
     }

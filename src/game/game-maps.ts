@@ -55,7 +55,7 @@ export class TableMapManager {
   }
 
   getCurrentConfig(): TableMapConfig {
-    return TABLE_MAPS[this.currentMap]
+    return TABLE_MAPS[this.currentMap]!
   }
 
   getLCDTableState(): LCDTableState {
@@ -135,7 +135,7 @@ export class TableMapManager {
     const maps = this.mapSystem.getMapIds()
     const currentIndex = maps.indexOf(this.currentMap)
     const nextIndex = (currentIndex + 1) % maps.length
-    this.switchTableMap(maps[nextIndex])
+    this.switchTableMap(maps[nextIndex]!)
   }
 
   /**

@@ -47,7 +47,7 @@ export function buildCpuCore(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(fanCenter, fanRadius, -fanSpeed, pcbMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const fanBody = adventureBodies[adventureBodies.length - 1]
+    const fanBody = adventureBodies[adventureBodies.length - 1]!
     const bladeCount = 4
     const bladeLength = fanRadius - 1
     const bladeHeight = 1.5

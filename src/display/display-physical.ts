@@ -70,7 +70,7 @@ export class DisplayPhysicalLayer {
     ]
 
     for (let i = 0; i < drumConfigs.length; i++) {
-      const cfg = drumConfigs[i]
+      const cfg = drumConfigs[i]!
       const drum = MeshBuilder.CreateCylinder(
         `physicalDrum${i}`,
         { diameter: cfg.radius * 2, height: 0.35, tessellation: 24 },

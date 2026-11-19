@@ -79,8 +79,8 @@ export class BackboxScreenBorder {
     if (!this.visible) return
     this.model.update(dt)
     for (let i = 0; i < BORDER_SEGMENT_COUNT; i++) {
-      const [r, g, b] = this.model.colors[i]
-      this.materials[i].emissiveColor.set(r, g, b)
+      const [r, g, b] = this.model.colors[i]!
+      this.materials[i]!.emissiveColor.set(r, g, b)
     }
   }
 

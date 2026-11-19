@@ -196,7 +196,7 @@ export class DisplayLcdOverlayLayer {
       this.walkBy = {
         x: -0.12,
         speed: 0.08 + Math.random() * 0.06,
-        emoji: this.walkByEmojis[Math.floor(Math.random() * this.walkByEmojis.length)],
+        emoji: this.walkByEmojis[Math.floor(Math.random() * this.walkByEmojis.length)]!,
         active: true,
       }
     }

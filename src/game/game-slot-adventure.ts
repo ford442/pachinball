@@ -157,7 +157,7 @@ export class GameSlotAdventure {
     const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(this.nextAdventureTrack)
     const prevIndex = (currentIndex - 1 + GameSlotAdventure.TRACK_ORDER.length) % GameSlotAdventure.TRACK_ORDER.length
     const newIndex = (prevIndex + direction + GameSlotAdventure.TRACK_ORDER.length) % GameSlotAdventure.TRACK_ORDER.length
-    const newTrack = GameSlotAdventure.TRACK_ORDER[newIndex]
+    const newTrack = GameSlotAdventure.TRACK_ORDER[newIndex]!
     this.nextAdventureTrack = newTrack
     this.endAdventureMode()
     this.startAdventureMode()
@@ -206,7 +206,7 @@ export class GameSlotAdventure {
         getTrackThemingSystem()?.applyTheme(track)
 
         const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(track)
-        this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]
+        this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]!
       })
     }
   }
@@ -270,7 +270,7 @@ export class GameSlotAdventure {
     const idx = GameSlotAdventure.TRACK_ORDER.indexOf(trackType)
     if (idx !== -1) {
       this.nextAdventureTrack =
-        GameSlotAdventure.TRACK_ORDER[(idx + 1) % GameSlotAdventure.TRACK_ORDER.length]
+        GameSlotAdventure.TRACK_ORDER[(idx + 1) % GameSlotAdventure.TRACK_ORDER.length]!
     }
 
     const trackName = this.getTrackDisplayName(trackType)

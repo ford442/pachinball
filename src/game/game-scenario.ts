@@ -132,7 +132,7 @@ export class GameScenario {
     })
     this.applyScenarioLighting(scenario.globalLighting)
     if (scenario.zones.length > 0) {
-      this.applyZoneMapConfig(scenario.zones[0])
+      this.applyZoneMapConfig(scenario.zones[0]!)
     }
     this.host.display?.showZoneStory(
       scenario.name,
@@ -279,10 +279,10 @@ export class GameScenario {
   cycleScenario(direction: 1 | -1 = 1): void {
     const scenarios = ['samurai-realm', 'cyber-noir', 'quantum-dream', 'movie-gangster', 'fantasy-realm']
     const currentIndex = scenarios.findIndex(id => {
-      return this.host.zoneTriggerSystem?.getAllZones()[0]?.id?.startsWith(id.split('-')[0])
+      return this.host.zoneTriggerSystem?.getAllZones()[0]?.id?.startsWith(id.split('-')[0]!)
     })
     const nextIndex = (Math.max(0, currentIndex) + direction + scenarios.length) % scenarios.length
-    this.switchScenario(scenarios[nextIndex])
+    this.switchScenario(scenarios[nextIndex]!)
   }
 
   initializeDynamicZones(mapName: string, mapConfig: typeof TABLE_MAPS[string]): void {

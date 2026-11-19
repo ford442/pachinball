@@ -58,7 +58,7 @@ export function pickWeightedSymbol(
   }
 
   // Fallback to last symbol (handles floating-point edge cases)
-  return symbols[symbols.length - 1]
+  return symbols[symbols.length - 1]!
 }
 
 /** Generate a complete spin plan: speeds, staggered stops, and final symbols. */

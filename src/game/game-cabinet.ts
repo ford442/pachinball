@@ -88,7 +88,7 @@ export class CabinetManager {
     const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
     const currentIndex = types.indexOf(this.currentType)
     const nextIndex = (currentIndex + 1) % types.length
-    await this.loadCabinetPreset(types[nextIndex], options)
+    await this.loadCabinetPreset(types[nextIndex]!, options)
   }
 
   /**

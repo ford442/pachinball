@@ -109,7 +109,7 @@ export class RenderStateWatcher {
     const { meshes, materials, particleSystems, activeCamera, particlesEnabled } = this.scene
     mix(particlesEnabled === false ? 1 : 0)
     for (let i = 0; i < meshes.length; i++) {
-      const mesh = meshes[i]
+      const mesh = meshes[i]!
       mix(
         (mesh.isEnabled() ? 1 : 0) |
           (mesh.isVisible ? 2 : 0) |
@@ -118,11 +118,11 @@ export class RenderStateWatcher {
       )
     }
     for (let i = 0; i < materials.length; i++) {
-      const material = materials[i]
+      const material = materials[i]!
       mix((material.needAlphaBlending() ? 1 : 0) | (material.needAlphaTesting() ? 2 : 0))
     }
     for (let i = 0; i < particleSystems.length; i++) {
-      const system = particleSystems[i]
+      const system = particleSystems[i]!
       if (!system.isStarted() || !system.emitter) {
         mix(0)
         continue
@@ -193,7 +193,7 @@ export class FrozenActiveMeshes implements StaticSceneTarget {
     if (!this.isSupported || !this.scene.activeCamera) return true
     const { meshes } = this.scene
     for (let i = 0; i < meshes.length; i++) {
-      const mesh = meshes[i]
+      const mesh = meshes[i]!
       if (!mesh.subMeshes || mesh.subMeshes.length === 0) continue
       if (!mesh.isEnabled() || !mesh.isVisible) continue
       if (!mesh.isReady(true)) return false
@@ -225,7 +225,7 @@ export class FrozenActiveMeshes implements StaticSceneTarget {
     // Skip even the per-mesh computeWorldMatrix: a mesh that moved is still re-posed lazily by
     // getWorldMatrix() when it is drawn.
     scene._skipEvaluateActiveMeshesCompletely = true
-    for (let i = 0; i < active.length; i++) active.data[i]._freeze?.()
+    for (let i = 0; i < active.length; i++) active.data[i]!._freeze?.()
     this.frozen = true
   }
 }

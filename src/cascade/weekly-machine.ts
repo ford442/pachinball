@@ -76,7 +76,7 @@ function validateBumpers(bumpers: readonly BumperSpec[], errors: WeeklyMachineIs
       errors.push({ path: `bumpers[${i}]`, message: 'overlaps the flipper arcs' })
     }
     for (let j = i + 1; j < bumpers.length; j++) {
-      const o = bumpers[j]
+      const o = bumpers[j]!
       const gap = Math.hypot(b.x - o.x, b.z - o.z) - radius(b) - radius(o)
       if (gap < WEEKLY_ENVELOPE.bumperGap) {
         errors.push({ path: `bumpers[${i}]`, message: `only ${gap.toFixed(2)} clear of bumpers[${j}]` })
@@ -215,7 +215,7 @@ function drawFeeders(rng: SeededRng): Record<FeederKey, boolean> {
   const order = rng.shuffle(FEEDER_KEYS)
   const feeders = {} as Record<FeederKey, boolean>
   for (const key of FEEDER_KEYS) feeders[key] = false
-  for (let i = 0; i < armed; i++) feeders[order[i]] = true
+  for (let i = 0; i < armed; i++) feeders[order[i]!] = true
   return feeders
 }
 

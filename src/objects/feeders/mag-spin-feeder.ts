@@ -143,7 +143,7 @@ export class MagSpinFeeder {
         tessellation: 32,
       }, this.scene)
       ring.position.copyFrom(this.position)
-      ring.position.y += ringYOffsets[i]
+      ring.position.y += ringYOffsets[i]!
 
       const ringMat = createStandardMaterial(this.scene, `magSpinRingMat${i}`)
       ringMat.emissiveColor = color(FEEDER_STYLES.MAG_SPIN.active)
@@ -290,7 +290,7 @@ export class MagSpinFeeder {
 
     const ringSpin = dt * this.ringAngularVelocity
     for (let i = 0; i < this.ringMeshes.length; i++) {
-      const ring = this.ringMeshes[i]
+      const ring = this.ringMeshes[i]!
       ring.rotation.y += ringSpin * (i % 2 === 0 ? 1 : -1)
     }
 
@@ -304,8 +304,8 @@ export class MagSpinFeeder {
       this.releaseShakeIntensity *= this.config.animation.shakeDecay
     } else {
       for (let i = 0; i < this.ringMeshes.length; i++) {
-        this.ringMeshes[i].position.copyFrom(this.position)
-        this.ringMeshes[i].position.y += RING_Y_OFFSETS[i]
+        this.ringMeshes[i]!.position.copyFrom(this.position)
+        this.ringMeshes[i]!.position.y += RING_Y_OFFSETS[i]!
       }
     }
 

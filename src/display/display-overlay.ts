@@ -121,7 +121,7 @@ export class DisplayOverlay {
 
     if (this.items.length === 1) {
       // Single item celebration
-      const item = this.items[0]
+      const item = this.items[0]! // length === 1
       const isCampaignComplete = item.scope === 'campaign-complete'
 
       if (isFullDisplayState) {

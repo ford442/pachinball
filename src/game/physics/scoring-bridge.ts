@@ -64,7 +64,7 @@ export class ScoringBridge {
       chainCooldownSeconds: GAME_TUNING.combo.chainCooldownSeconds,
       namedChains: GAME_TUNING.combo.namedChains.map((chain) => ({
         ...chain,
-        sequence: chain.sequence as ComboHitType[],
+        sequence: chain.sequence,
       })),
     })
     this.comboMultiplierSystem = new ComboMultiplierSystem({

@@ -4,7 +4,7 @@ import { getMaterialLibrary } from '../materials'
 import type { DisplaySystem } from '../display'
 import type { EffectsSystem } from '../effects'
 import type { BallManager } from '../game-elements/ball-manager'
-import { TRACK_CATALOG, type TrackInfo } from './adventure-track-progression'
+import { TRACK_CATALOG } from './adventure-track-progression'
 import { PALETTE, SURFACES, INTENSITY, emissive, color, QualityTier } from '../game-elements/visual-language'
 import {
   getTrackThemeProfile,
@@ -186,7 +186,7 @@ export class TrackThemingSystem {
   }
 
   private getCatalogTheme(trackId: string): TrackVisualTheme | null {
-    const track = TRACK_CATALOG[trackId] as TrackInfo | undefined
+    const track = TRACK_CATALOG[trackId]
     if (!track?.visualTheme) return null
     return {
       primary: track.visualTheme.primary,

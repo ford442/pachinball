@@ -64,7 +64,7 @@ export function buildCasinoHeist(builder: TrackBuilderApi): void {
       const chip = MeshBuilder.CreateCylinder("pokerChip", { diameter: chipRadius * 2, height: stackHeight }, scene)
       chip.position.copyFrom(pos)
       // Cosmetic: chip colour never reaches physics.
-      chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]
+      chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]!
       adventureTrack.push(chip)
 
       const { body } = builder.emitCollider(
@@ -125,7 +125,7 @@ export function buildCasinoHeist(builder: TrackBuilderApi): void {
 
       const marker = MeshBuilder.CreateCylinder("zeroPocket", { diameter: 2, height: 0.1 }, scene)
       if (kinematicBindings.length > 0) {
-        const platformBinding = kinematicBindings[kinematicBindings.length - 1]
+        const platformBinding = kinematicBindings[kinematicBindings.length - 1]!
         marker.parent = platformBinding.mesh
         marker.position.set(lx, 0.55, lz)
         marker.material = chipMatBlack

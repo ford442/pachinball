@@ -12,13 +12,13 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { PhysicsBody } from '../core/physics-api'
 import { TrackBuilder } from './track-builder'
 import { CameraEasing } from './camera-easing'
-import { CAMERA_PRESETS } from './camera-presets'
+import { DEFAULT_CAMERA_PRESET } from './camera-presets'
 import type { CameraPreset } from './adventure-types'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
 
 export abstract class AdventureCameraMixin extends TrackBuilder {
   /** Current camera preset for active track */
-  protected currentCameraPreset: CameraPreset | null = CAMERA_PRESETS.DEFAULT
+  protected currentCameraPreset: CameraPreset | null = DEFAULT_CAMERA_PRESET
 
   /** Camera management */
   protected tableCamera: Camera | null = null

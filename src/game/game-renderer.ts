@@ -423,11 +423,11 @@ export class GameRenderer {
     for (let i = 0; i < 7; i++) {
       const line = MeshBuilder.CreateBox(`dataFall${i}`, { width: 0.18, height: 19, depth: 0.06 }, scene)
       line.position.set(-15 + i * 5.2, 11, 39.5)
-      line.material = dataFallMats[i % 2]
-      dataFallLines[i % 2].push(line)
+      line.material = dataFallMats[i % 2]!
+      dataFallLines[i % 2]!.push(line)
     }
-    mergeDecor('dataFallMagenta', dataFallLines[0])
-    mergeDecor('dataFallCyan', dataFallLines[1])
+    mergeDecor('dataFallMagenta', dataFallLines[0]!)
+    mergeDecor('dataFallCyan', dataFallLines[1]!)
 
     // Signature "NEXUS" style back-wall logo accent (abstract geometric)
     const logo = MeshBuilder.CreateTorus('backLogo', { diameter: 7, thickness: 0.25, tessellation: 24 }, scene)

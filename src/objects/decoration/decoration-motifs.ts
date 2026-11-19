@@ -203,7 +203,7 @@ export function createSideServerRacks(scene: Scene, parent: TransformNode): void
         const brace = MeshBuilder.CreateBox(`rackBraceL${ci}_${i}`, { width: 0.7, height: 0.05, depth: 0.08 }, scene)
         brace.parent = parent
         brace.position.set(cluster.x + 0.4, h * 0.6, z)
-        brace.material = getSharedMat(scene, 'brace', rackColors[(ci + i) % 3], 0.75)
+        brace.material = getSharedMat(scene, 'brace', rackColors[(ci + i) % 3]!, 0.75)
       }
       DecorationFactory.createTechNode(`rackNodeL${ci}_${i}`, scene, parent, new Vector3(cluster.x + 0.25, h + 0.15, z))
     }
@@ -356,7 +356,7 @@ export function createMicroLEDField(scene: Scene, parent: TransformNode): void {
       const led = MeshBuilder.CreateBox(`microLED_${idx++}`, { size: 0.08 }, scene)
       led.parent = parent
       led.position.set(x + (Math.random() - 0.5) * 0.3, 0.015, z + (Math.random() - 0.5) * 0.25)
-      led.material = getSharedMat(scene, `led${idx % 4}`, ledColors[idx % 4], 0.6 + Math.random() * 0.5)
+      led.material = getSharedMat(scene, `led${idx % 4}`, ledColors[idx % 4]!, 0.6 + Math.random() * 0.5)
     }
   }
 }
