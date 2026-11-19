@@ -7,6 +7,7 @@
  * for the flippers cannot accept it mid-ball.
  */
 
+/** @public Read by tests/register-sw.test.ts through a dynamic-import namespace, which knip cannot follow. */
 export const UPDATE_TOAST_ID = 'pwa-update-toast'
 
 export interface UpdateToastOptions {

@@ -20,7 +20,7 @@ import type { SpinnerBumperVisual, MovingGateState, GameObjects } from '../objec
  * which would invert the layering. `TableMapManager` satisfies this
  * structurally, so callers keep passing it unchanged.
  */
-export interface TrackThemingMapSource {
+interface TrackThemingMapSource {
   getCurrentConfig(): { baseColor: string; accentColor: string } | undefined
 }
 import type { AdventureMode } from './adventure-mode'
@@ -34,7 +34,7 @@ export interface TrackVisualTheme {
   surfaceTint?: SurfaceTintKey
 }
 
-export const TRACK_THEME_OVERRIDES: Record<string, TrackVisualTheme> = {
+const TRACK_THEME_OVERRIDES: Record<string, TrackVisualTheme> = {
   NEON_HELIX: { primary: 'CYAN', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   PACHINKO_HALL: { primary: 'GOLD', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   CYBER_CORE: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },

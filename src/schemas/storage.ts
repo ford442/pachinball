@@ -16,11 +16,11 @@ const stringList = () => v.pipe(v.array(v.unknown()), v.transform((items) => ite
 
 // ---------------------------------------------------------------- rewards
 
-export const REWARD_KINDS = ['ball-skin', 'cabinet-theme', 'flipper-style', 'backbox-tint'] as const
-export const REWARD_RARITIES = ['common', 'rare', 'legendary'] as const
+const REWARD_KINDS = ['ball-skin', 'cabinet-theme', 'flipper-style', 'backbox-tint'] as const
+const REWARD_RARITIES = ['common', 'rare', 'legendary'] as const
 
 /** A campaign reward the player has not been shown yet (`unseen-rewards`, sessionStorage). */
-export const UnlockedRewardSchema = v.object({
+const UnlockedRewardSchema = v.object({
   kind: v.picklist(REWARD_KINDS),
   id: v.string(),
   label: v.string(),
@@ -83,10 +83,10 @@ export const StoredCampaignSchema = v.object({
 
 // -------------------------------------------- legacy free-form adventure
 
-export const REWARD_TYPES = ['ball-trail', 'neon-pattern', 'skin'] as const
+const REWARD_TYPES = ['ball-trail', 'neon-pattern', 'skin'] as const
 export type RewardType = (typeof REWARD_TYPES)[number]
 
-export const UnlockableRewardSchema = v.object({
+const UnlockableRewardSchema = v.object({
   id: v.string(),
   name: v.string(),
   type: v.picklist(REWARD_TYPES),
@@ -109,14 +109,14 @@ export const StoredAdventureProgressSchema = v.object({
 
 // --------------------------------------------------------------- map cache
 
-export const BACKGROUND_PATTERNS = ['hex', 'grid', 'circuit', 'data-flow', 'none'] as const
+const BACKGROUND_PATTERNS = ['hex', 'grid', 'circuit', 'data-flow', 'none'] as const
 
 /**
  * One LCD table map from `maps.json`, the `/maps` API or the cache: `id` and
  * `name` are required, everything else is checked and falls back to the
  * built-in map (or a default) when absent or mistyped (`MapSystem.sanitizeRemoteMap`).
  */
-export const RemoteTableMapSchema = v.object({
+const RemoteTableMapSchema = v.object({
   id: v.string(),
   name: v.string(),
   baseColor: lenient(v.pipe(v.string(), v.minLength(1))),

@@ -18,14 +18,6 @@ export enum CameraMode {
 }
 
 /**
- * Framing zone definition for rule-of-thirds camera targeting
- */
-export interface FramingZone {
-  target: Vector3
-  weight: number
-}
-
-/**
  * Predefined framing zones for different gameplay areas
  * These targets are designed to create visually pleasing compositions
  * using rule-of-thirds principles adapted for vertical pinball playfield

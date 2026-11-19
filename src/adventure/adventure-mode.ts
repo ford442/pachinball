@@ -12,8 +12,8 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { AdventurePortalMixin } from './adventure-portal'
-import { CAMERA_PRESETS, cameraPresetFor } from './camera-presets'
-import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
+import { cameraPresetFor } from './camera-presets'
+import { AdventureTrackType } from './adventure-types'
 import { getTrackStartAnchor } from './portal-routing'
 import { getTrackManifest } from './manifests'
 import { TRACK_CATALOG } from './adventure-track-progression'
@@ -31,8 +31,7 @@ import {
   validateTrackDefinition,
 } from '../schemas/track'
 
-export { AdventureTrackType, CAMERA_PRESETS }
-export type { AdventureCallback, CameraPreset }
+export { AdventureTrackType }
 
 export class AdventureMode extends AdventurePortalMixin {
   /** Current zone/track type for zone transition detection */

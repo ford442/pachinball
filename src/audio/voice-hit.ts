@@ -10,7 +10,7 @@
 export const VOICE_POOL_SIZE = 24
 
 /** Playfield half-width used before any cabinet has loaded; all four presets are 28 wide. */
-export const DEFAULT_PLAYFIELD_PAN_HALF_WIDTH = 14
+const DEFAULT_PLAYFIELD_PAN_HALF_WIDTH = 14
 
 let panHalfWidth = DEFAULT_PLAYFIELD_PAN_HALF_WIDTH
 

@@ -62,7 +62,7 @@ async function loadBackboxGlsl(): Promise<void> {
 }
 
 /** WGSL on WebGPU (no glslang / twgsl download), GLSL on WebGL2; each from its own lazy chunk. */
-export function displayShaderSource(isWebGPU: boolean): DisplayShaderSource {
+function displayShaderSource(isWebGPU: boolean): DisplayShaderSource {
   return isWebGPU
     ? { shaderLanguage: ShaderLanguage.WGSL, extraInitializationsAsync: loadBackboxWgsl }
     : { shaderLanguage: ShaderLanguage.GLSL, extraInitializationsAsync: loadBackboxGlsl }

@@ -76,7 +76,7 @@ export function straightRampLayout(
   return { center, endPos }
 }
 
-export interface CurvedRampSegment {
+interface CurvedRampSegment {
   center: GeoVec3
   /** Heading at the segment's midpoint — the yaw its slab is built with. */
   heading: number

@@ -11,18 +11,15 @@ import {
   SlotActivationMode,
   SlotSpinState,
   type SlotMachineConfig,
-  type SlotReelConfig,
   type SlotWinCombination,
   type SlotSpinPlan,
   type SlotResult,
   type SlotActivationState,
 } from './slot-types'
 
-export { SlotSymbol, SlotActivationMode, SlotSpinState }
+export { SlotSymbol }
 export type {
   SlotMachineConfig,
-  SlotReelConfig,
-  SlotWinCombination,
   SlotSpinPlan,
   SlotResult,
   SlotActivationState,
@@ -30,17 +27,6 @@ export type {
 
 /** Re-export default configuration so tests and runtime share one source of truth. */
 export { SLOT_MACHINE_CONFIG as DEFAULT_SLOT_MACHINE_CONFIG }
-
-/** Validate that symbol weights sum to roughly 1.0 */
-export function validateSymbolWeights(weights: Record<SlotSymbol, number>): void {
-  const total = Object.values(weights).reduce((sum, w) => sum + w, 0)
-  if (total <= 0) {
-    throw new Error(`[SlotLogic] Symbol weights must sum to > 0, got ${total}`)
-  }
-  if (Math.abs(total - 1.0) > 0.001) {
-    console.warn(`[SlotLogic] Symbol weights sum to ${total}, normalizing`)
-  }
-}
 
 /** Pick a single symbol using the configured weights. */
 export function pickWeightedSymbol(

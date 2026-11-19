@@ -14,7 +14,7 @@ import {
   type TrackInfo,
 } from '../adventure-track-progression'
 
-export type CampaignStageStatus = 'completed' | 'current' | 'unlocked' | 'locked'
+type CampaignStageStatus = 'completed' | 'current' | 'unlocked' | 'locked'
 
 /** The slice of AdventureTrackProgression the map reads. */
 export interface CampaignProgressView {

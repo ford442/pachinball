@@ -3,7 +3,7 @@
  * Scenario data only: no runtime spawns these yet (the never-instantiated `PathMechanicsManager`
  * that once read them was deleted in #505).
  */
-export interface ZoneTrigger {
+interface ZoneTrigger {
   minZ: number
   maxZ: number
   mechanicType: 'gate' | 'magnet' | 'spinner' | 'jumppad' | 'pegs'

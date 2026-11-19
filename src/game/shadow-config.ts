@@ -14,7 +14,7 @@
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { QualityTier } from '../game-elements/visual-language'
 
-export type ShadowTechnique =
+type ShadowTechnique =
   /** Percentage-closer filtering with a hardware comparison sampler. HIGH only. */
   | 'pcf'
   /** Blurred exponential shadow map. The pre-existing MEDIUM / LOW behaviour, kept as is. */

@@ -11,7 +11,7 @@ import { STATIC_HANDLE_OVERFLOW } from '../../wasm/wasm-types'
 
 const IDENTITY_DESC: DescQuat = { x: 0, y: 0, z: 0, w: 1 }
 
-export interface ExportedMover {
+interface ExportedMover {
   /** Descriptor of the collider. */
   index: number
   handle: number
@@ -22,7 +22,7 @@ export interface ExportedMover {
 }
 
 /** A trigger volume riding on a moving body; see `exportAdventureCollidersToWasm`. */
-export interface MovingSensor {
+interface MovingSensor {
   index: number
   bodyIndex: number
   local: Pose
@@ -32,7 +32,7 @@ export interface MovingSensor {
 }
 
 /** A moving body whose pose WasmOwner advances each tick. */
-export interface KinematicBody {
+interface KinematicBody {
   bodyIndex: number
   /** World-space spin for `kinematic-velocity` bodies; null when an animator poses it. */
   angularVelocity: DescVec3 | null

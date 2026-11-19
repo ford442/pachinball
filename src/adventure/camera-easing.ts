@@ -69,32 +69,3 @@ export const CameraEasing = {
   },
 }
 
-/**
- * Smooth camera value with easing
- * @param current Current value
- * @param target Target value
- * @param speed Speed factor (0-1, where 1 = instant)
- * @param easing Easing function to use
- * @returns Interpolated value
- */
-export function lerpWithEasing(
-  current: number,
-  target: number,
-  speed: number,
-  easing: (t: number) => number = CameraEasing.easeInOutCubic
-): number {
-  const clamped = Math.min(1, Math.max(0, speed))
-  const easedSpeed = easing(clamped)
-  return current + (target - current) * easedSpeed
-}
-
-/**
- * Smooth camera value with exponential decay (traditional game camera feel)
- * @param current Current value
- * @param target Target value
- * @param decay Decay rate (0-1, where 0 = no change, 1 = instant)
- * @returns Interpolated value
- */
-export function lerpExponential(current: number, target: number, decay: number): number {
-  return current + (target - current) * Math.min(1, decay)
-}

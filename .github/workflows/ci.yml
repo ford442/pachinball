@@ -41,10 +41,15 @@ jobs:
       - name: Typecheck (TS 7 native + TS 6, diagnostics compared)
         run: npm run typecheck:compare
 
-      # `as unknown as` ratchet (#489): src/adventure is held to zero — track modules build through
-      # TrackBuilderApi; the rest of src/ is reported as backlog.
+      # `as unknown as` ratchet (#489): all of src/ is held to zero (track modules build through
+      # TrackBuilderApi; elsewhere a Window global, a Pick<> of the host, or one downcast).
       - name: Unknown-cast ratchet
         run: npm run check:unknown-casts
+
+      # Dead code: unused files, exports, types and dependencies (knip.jsonc). Zero findings; a
+      # symbol a test or a Playwright page reaches in a way knip cannot follow is tagged `@public`.
+      - name: Dead code (knip)
+        run: npm run check:knip
 
       # The voice AudioWorklet script in public/audio/ is build output of src/audio/pachinko-voice-processor.ts.
       - name: Worklet script drift

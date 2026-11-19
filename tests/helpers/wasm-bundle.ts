@@ -13,7 +13,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { WasmPhysicsModule } from '../../src/wasm/wasm-types'
 
-export const WASM_TEST_BUNDLE = resolve(
+const WASM_TEST_BUNDLE = resolve(
   __dirname,
   '..',
   '..',

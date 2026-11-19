@@ -29,9 +29,9 @@ import { resolveGpuCapabilities } from '../engine/gpu-capabilities'
 import type { FrameSystem } from '../core/frame-scheduler'
 
 /** GPU time a frame may take: the rest of a 60 Hz frame is the CPU's. */
-export const GPU_BUDGET_MS = 14
+const GPU_BUDGET_MS = 14
 /** Frame interval that still counts as on budget (the scene optimizer's 55 fps target). */
-export const INTERVAL_BUDGET_MS = 1000 / 55
+const INTERVAL_BUDGET_MS = 1000 / 55
 
 export interface RenderResolutionHost {
   readonly engine: Engine | WebGPUEngine

@@ -5,7 +5,7 @@
 
 import { DisplayState } from './display-types'
 
-export type DisplayLightingMode = 'idle' | 'reach' | 'fever' | 'jackpot'
+type DisplayLightingMode = 'idle' | 'reach' | 'fever' | 'jackpot'
 
 export interface DisplayTransitionSnapshot {
   current: DisplayState

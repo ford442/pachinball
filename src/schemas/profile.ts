@@ -18,7 +18,7 @@ import { ScoringBreakdownSchema, StoredAdventureProgressSchema, StoredCampaignSc
 export const PROFILE_VERSION = 1
 
 /** Limits the profile schema enforces. */
-export const PROFILE_LIMITS = {
+const PROFILE_LIMITS = {
   keysPerAction: 4,
   drafts: 32,
   achievements: 512,

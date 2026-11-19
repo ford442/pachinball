@@ -38,7 +38,7 @@ export type WasmDebugCollider =
 
 // Re-exported: the per-frame owner path imports it from `wasm-packed-views` directly, so this
 // debug-draw module stays out of the entry chunk.
-export { peekPackedPhysicsBuffers }
+
 
 const WASM_LINE_RGBA = [0, 0.85, 1, 1] as const
 const IDENTITY_QUAT: Quat = { x: 0, y: 0, z: 0, w: 1 }
@@ -111,7 +111,7 @@ export function appendOrientedBoxEdges(
   }
 }
 
-export function appendSphereWire(
+function appendSphereWire(
   positions: number[],
   colors: number[],
   center: Vec3,
@@ -139,7 +139,7 @@ export function appendSphereWire(
   }
 }
 
-export function appendCapsuleWire(
+function appendCapsuleWire(
   positions: number[],
   colors: number[],
   center: Vec3,
@@ -161,7 +161,7 @@ export function appendCapsuleWire(
 }
 
 /** Base ring plus four slant lines up to the apex. */
-export function appendConeWire(
+function appendConeWire(
   positions: number[],
   colors: number[],
   center: Vec3,

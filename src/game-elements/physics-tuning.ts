@@ -92,10 +92,6 @@ export function resetPhysicsTuningOverrides(): void {
   }
 }
 
-export function getPhysicsTuningOverrides(): Readonly<Partial<Record<PhysicsTuningKey, number>>> {
-  return overrides
-}
-
 export function getPhysicsTuningBaseValue(key: PhysicsTuningKey): number {
   return BASE_VALUES[key]
 }

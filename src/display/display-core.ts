@@ -41,7 +41,7 @@ import type { BackboxFrameGraph } from './backbox-frame-graph'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import { isSoftwareRasterizer } from '../engine/software-rasterizer'
 
-export type { BackboxGraphStatus, BackboxGraphReport } from './display-backbox-graph'
+export type { BackboxGraphReport } from './display-backbox-graph'
 
 export interface DisplaySystemOptions {
   /** `?nopp=1`: the backbox graph is the composite and nothing else (no CRT, no jackpot pass). */

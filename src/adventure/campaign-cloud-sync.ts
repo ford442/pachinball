@@ -24,7 +24,7 @@ import type { CampaignRewardsManager } from './campaign-rewards-manager'
 import { createTimerScope } from '../core/timers'
 
 /** The cloud slot the campaign lives in. */
-export const CAMPAIGN_SAVE_SLOT = 'campaign'
+const CAMPAIGN_SAVE_SLOT = 'campaign'
 const PUSH_DEBOUNCE_MS = 1500
 
 const union = (a: readonly string[], b: readonly string[]) => [...a, ...b.filter((x) => !a.includes(x))]

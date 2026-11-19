@@ -13,8 +13,8 @@ import { lenient } from './schema-kit'
 
 const finite = () => v.pipe(v.number(), v.finite())
 
-export const QUALITY_PRESETS = ['low', 'medium', 'high'] as const
-export const AUDIO_SOURCES = ['synth', 'samples'] as const
+const QUALITY_PRESETS = ['low', 'medium', 'high'] as const
+const AUDIO_SOURCES = ['synth', 'samples'] as const
 
 export const StoredSettingsSchema = v.object({
   reducedMotion: lenient(v.boolean()),
@@ -39,4 +39,3 @@ export const StoredSettingsSchema = v.object({
   scanlineIntensity: lenient(finite()),
 })
 
-export type StoredSettings = v.InferOutput<typeof StoredSettingsSchema>

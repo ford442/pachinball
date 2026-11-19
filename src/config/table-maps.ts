@@ -13,7 +13,7 @@ export type TableMapType = string
 
 /** The table map a fresh session, challenge link or replay falls back to. Always a `TABLE_MAPS` key. */
 export const DEFAULT_TABLE_MAP_ID: BuiltInTableMapId = 'neon-helix'
-export type WorldMode = 'fixed' | 'dynamic'
+type WorldMode = 'fixed' | 'dynamic'
 
 export interface TableMapConfig {
   name: string

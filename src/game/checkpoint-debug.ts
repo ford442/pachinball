@@ -1,6 +1,6 @@
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
-export type DebugStageStatus = 'idle' | 'loading' | 'success' | 'failed' | 'skipped'
+type DebugStageStatus = 'idle' | 'loading' | 'success' | 'failed' | 'skipped'
 
 interface DebugStageConfig {
   label: string

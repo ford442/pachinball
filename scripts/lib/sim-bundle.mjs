@@ -20,7 +20,7 @@ import { build } from 'esbuild'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-export const SIM_ENTRY = path.join(repoRoot, 'src', 'sim', 'node-replay.ts')
+const SIM_ENTRY = path.join(repoRoot, 'src', 'sim', 'node-replay.ts')
 /** Where a build keeps its bundle, relative to the dist directory. */
 export const SIM_BUNDLE = path.join('sim', 'node-replay.mjs')
 

@@ -16,7 +16,7 @@ export type TrackAmbientStyle =
   | 'ghost-mist'
   | 'pixel-scan'
 
-export interface TrackAtmosphereProfile {
+interface TrackAtmosphereProfile {
   fogDensity: number
   fogColor: string
   keyLightColor: string

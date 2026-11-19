@@ -9,8 +9,12 @@ npm run dev        # Start Vite dev server (http://localhost:5173)
 npm run build      # typecheck → build:wasm (skips without Emscripten) → Vite build; writes dist/build-info.json
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
 npm run typecheck  # `tsc -b` on TypeScript 7 (the native compiler, `typescript7` alias, ~5 s): app, node, worker, worklet and test projects. `typecheck:ts6` runs TS 6, `typecheck:compare` both and diffs their diagnostics (CI). Never run a bare `tsc` / `npx tsc`: both packages declare a `tsc` bin and which one `node_modules/.bin/tsc` is is not guaranteed
-npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero (track modules build through TrackBuilderApi)
+npm run check:unknown-casts # `as unknown as` ratchet: all of src/ holds zero (track modules build through TrackBuilderApi; elsewhere a `Window` global in src/vite-env.d.ts, a `Pick<Host, …>`, or one downcast to `T & Extra`)
+npm run check:knip  # dead code (knip.jsonc): unused files / exports / types / dependencies, zero findings. A barrel (`src/*/index.ts`) is a directory's public surface. An export that only a test or a Playwright page reaches in a way knip cannot follow (a dynamic-import namespace, `import('/src/…')`) gets a `/** @public <why> */` tag; the Playwright-imported modules are `entry` in knip.jsonc
 npm run preview    # Preview production build locally
+npm run print:wasm-flags  # The effective CMake WASM flags (SIMD / LTO / ENV / memory); CI prints them in the native-physics job
+npm run models:cabinet-placeholders  # Regenerate the dimension-matched placeholder cabinet GLBs in public/models/cabinet (docs/CABINET_GLTF.md)
+npm run models:insert-placeholders   # Same for the playfield-insert GLBs (docs/ASSETS_GUIDE.md)
 npm run machine:validate  # Weekly machine golden + next 53 ISO weeks + free seeds; MachineDescriptor: public/machines/*.json, 2027 weekly round-trip, share-link ≤ 8 KB
 npm run schemas:json      # Rewrite public/schemas/*.json (JSON Schema) from the Valibot schemas in src/schemas/; tests/json-schemas.test.ts fails on drift
 npm test           # Run Vitest unit tests
@@ -48,6 +52,10 @@ npx vitest run tests/ball-manager.test.ts
 ## Architecture
 
 **Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 9. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in-process (`wasm-owner`), the only mode whose runs replay step-exactly and can be verified for the leaderboard; a Dedicated Worker (`wasm-worker`) is opt-in (`?physics=wasm-worker`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config/physics.ts` (`WASM_PHYSICS.defaultEngine`; `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
+
+### Type checking
+
+`noUncheckedIndexedAccess` is on for all of `src/` (`tsconfig.app.json`, and `tsconfig.worker.json`): an indexed read is `T | undefined`. Use `x[i]!` where a loop bound or a length guard proves it in range (as `src/core` does) and a real fallback where it does not. `npm run typecheck` runs `tsc -b` on TypeScript 7's native compiler (the `typescript7` alias); `typescript` itself stays `~6.0` because `typescript-eslint` peers `<6.1`, and CI runs `typecheck:compare` (both, diagnostics diffed). Never call a bare `tsc` / `npx tsc`: both packages declare a `tsc` bin, so `node_modules/.bin/tsc` is whichever npm linked last. The Emscripten `--emit-tsd` shim (`scripts/emcc-tsc/tsc`) names TypeScript 6 by path so the committed `src/wasm/generated/PhysicsModule.d.ts` cannot change by accident. Switch `typescript` to 7 and delete the alias, `--ts6` and `--compare` when `typescript-eslint` supports TS 7 (the dependabot `ignore` in `.github/dependabot.yml` says when).
 
 ### Startup flow
 

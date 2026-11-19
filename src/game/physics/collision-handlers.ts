@@ -333,7 +333,7 @@ export function handleLaneRolloverCollision(
   ctx.host.updateHUD()
 }
 
-export function applySpinTransfer(
+function applySpinTransfer(
   ball: PhysicsBody,
   collisionNormal: Vec3Like,
   contactSpeed: number

@@ -18,7 +18,7 @@ const finite = () => v.pipe(v.number(), v.finite())
 const Nudge = v.object({ x: finite(), y: finite(), z: finite() })
 
 /** One input row of an uncompressed tape (`InputFrame`, older tapes included). */
-export const StoredInputFrameSchema = v.object({
+const StoredInputFrameSchema = v.object({
   flipperLeft: v.fallback(v.nullable(v.boolean()), null),
   flipperRight: v.fallback(v.nullable(v.boolean()), null),
   plungerCharge: lenient(v.nullable(finite())),

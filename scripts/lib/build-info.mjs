@@ -20,7 +20,7 @@ export const PARTIAL_MARK = '.partial-'
 const GOLDEN_KEYS = ['finalStateHash', 'score', 'steps']
 
 /** SHA-256 (hex) of a file, or null when it cannot be read. */
-export function sha256File(file) {
+function sha256File(file) {
   try {
     return createHash('sha256').update(readFileSync(file)).digest('hex')
   } catch {

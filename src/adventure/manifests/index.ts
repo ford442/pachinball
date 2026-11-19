@@ -1,11 +1,5 @@
 export type {
   TrackManifest,
-  TsTrackManifest,
-  JsonTrackManifest,
-  TrackManifestZone,
-  TrackManifestCatalog,
-  TrackBuildKind,
-  TrackBuilderFn,
 } from './track-manifest-types'
 
 export {

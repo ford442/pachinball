@@ -237,7 +237,7 @@ export interface AllocSample {
   topAllocators: AllocSite[]
 }
 
-export interface AllocSite {
+interface AllocSite {
   site: string
   bytes: number
 }
@@ -703,7 +703,7 @@ export interface RunFile {
   env: PerfEnv
 }
 
-export interface AllocAggregate {
+interface AllocAggregate {
   frames: number
   heapDeltaPerFrameBytes: number | null
   allocatedPerFrameBytes: number | null
@@ -715,7 +715,7 @@ function medianOrNull(values: Array<number | null>): number | null {
   return finite.length > 0 ? median(finite) : null
 }
 
-export function aggregateAlloc(repeats: RepeatResult[]): AllocAggregate | null {
+function aggregateAlloc(repeats: RepeatResult[]): AllocAggregate | null {
   const samples = repeats.map((r) => r.alloc).filter((a): a is AllocSample => a !== null && a !== undefined)
   const last = samples[samples.length - 1]
   if (!last) return null

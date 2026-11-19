@@ -254,7 +254,7 @@ export function planReplayIdRemap(live: LiveIdLayout, recorded: Pick<SnapshotIds
 }
 
 /** The remap that undoes `remap` (a refused worker restore left the world as it was). */
-export function invertReplayIdRemap(remap: ReplayIdRemap): ReplayIdRemap {
+function invertReplayIdRemap(remap: ReplayIdRemap): ReplayIdRemap {
   const flip = (m: ReadonlyMap<number, number>) => new Map([...m].map(([a, b]) => [b, a] as [number, number]))
   return { bodies: flip(remap.bodies), hinges: flip(remap.hinges) }
 }

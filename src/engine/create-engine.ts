@@ -69,7 +69,7 @@ export const DEBUG_LOSE_CONTEXT_GLOBAL = '__DEBUG_LOSE_CONTEXT'
 export const DEBUG_RESTORE_CONTEXT_GLOBAL = '__DEBUG_RESTORE_CONTEXT'
 
 /** Where those two hooks are published (`window` by default; tests pass a plain object). */
-export interface GpuDebugHookHost {
+interface GpuDebugHookHost {
   [DEBUG_LOSE_CONTEXT_GLOBAL]?: () => void
   [DEBUG_RESTORE_CONTEXT_GLOBAL]?: () => void
 }

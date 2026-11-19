@@ -30,4 +30,3 @@ export const DISPLAY_LAYER_Z = {
   COMPOSITE: -0.75,
 } as const
 
-export type DisplayLayerId = keyof typeof DISPLAY_LAYER_Z

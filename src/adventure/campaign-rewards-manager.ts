@@ -1,4 +1,4 @@
-import { PALETTE, QualityTier } from '../game-elements/visual-language'
+import { QualityTier } from '../game-elements/visual-language'
 import type { AdventureTrackProgression, SerializableProgressionState } from './adventure-track-progression'
 import { CampaignRewardNotifier } from './campaign-reward-notifier'
 import type { EventBus } from '../core/event-bus'
@@ -325,4 +325,3 @@ export function resetCampaignRewardsManager(): void {
   campaignRewardsManager = null
 }
 
-export const CAMPAIGN_DEFAULT_BACKBOX_TINT = PALETTE.CYAN

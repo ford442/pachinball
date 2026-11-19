@@ -45,7 +45,7 @@ export const SCENE_HEAVY_NODES: readonly SceneGraphNodeId[] = ['ssao', 'ssr', 'm
  */
 export const HEAVY_POST_MIN_DRAW_BUFFERS = 4
 
-export type SceneNodeOmitReason =
+type SceneNodeOmitReason =
   /** `?nopp=1`. */
   | 'nopp'
   /** The WebGPU tier is below what the node needs (adapter cap, or a runtime validation error). */

@@ -63,7 +63,7 @@ export type TableOptions = {
 }
 
 /** A `PhysicsWorkerClient` whose worker is `applyPhysicsCommand` on a second in-process engine. */
-export async function loopbackWorkerClient(module: WasmPhysicsModule) {
+async function loopbackWorkerClient(module: WasmPhysicsModule) {
   const workerEngine = new WasmPhysicsEngine()
   await workerEngine.load(undefined, module)
   const runtime = createWorkerRuntimeState()
@@ -177,7 +177,7 @@ export async function makeTable(module: WasmPhysicsModule, opts: TableOptions = 
 export type Table = Awaited<ReturnType<typeof makeTable>>
 
 /** Fixed flipper tape: the input is a pure function of the frame index. */
-export function tapeFrame(frame: number): InputFrame {
+function tapeFrame(frame: number): InputFrame {
   const left = frame % 50 >= 10 && frame % 50 < 22
   const right = (frame + 25) % 50 >= 10 && (frame + 25) % 50 < 22
   return { flipperLeft: left, flipperRight: right, plungerCharge: null, plunger: false, nudge: null, timestamp: frame * (1000 / 60) }
@@ -187,12 +187,12 @@ export function tapeFrame(frame: number): InputFrame {
 export const LAUNCH_FRAME = WARMUP_FRAMES + 30
 export const LAUNCH_CHARGE = 0.8
 
-export function launchTapeFrame(frame: number): InputFrame {
+function launchTapeFrame(frame: number): InputFrame {
   const f = tapeFrame(frame)
   return frame === LAUNCH_FRAME ? { ...f, plungerCharge: LAUNCH_CHARGE, plunger: true } : f
 }
 
-export function tapeInput(from: number, tape: (frame: number) => InputFrame = tapeFrame) {
+function tapeInput(from: number, tape: (frame: number) => InputFrame = tapeFrame) {
   let frame = from
   return { update: () => {}, processBufferedInputs: () => tape(frame++) }
 }
@@ -202,7 +202,7 @@ export function tapeInput(from: number, tape: (frame: number) => InputFrame = ta
  * an impulse scaled by the charge it is handed, falling back to the host's
  * live charge only when none is passed.
  */
-export function launchActions(t: { host: { plungerChargeLevel: number }; ball: WasmBody }) {
+function launchActions(t: { host: { plungerChargeLevel: number }; ball: WasmBody }) {
   return {
     handleFlipperLeft: () => {},
     handleFlipperRight: () => {},
@@ -221,7 +221,7 @@ export function ballPose(t: Table) {
 }
 
 /** Pin the table's render delta: the controller turns it into fixed steps (#444). */
-export function setFrameMs(t: Table, frameMs: number): void {
+function setFrameMs(t: Table, frameMs: number): void {
   ;(t.host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(frameMs)
 }
 

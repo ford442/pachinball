@@ -16,7 +16,7 @@ import path from 'node:path'
 import { goldenDiffs, inspectBuild, PARTIAL_MARK, RELEASE_FILE, RELEASE_TAPES, tapeFiles, WASM_FILE } from './build-info.mjs'
 import { launchBrowser, repoRoot, runTape, serveDist } from './replay-harness.mjs'
 
-export { listReleases } from './build-info.mjs'
+
 
 /**
  * Replay a build's golden tapes (`<dir>/release-tapes/`, or `tapesDir`) on

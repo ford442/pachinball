@@ -11,7 +11,7 @@
  * so the authored bits are identical with or without the renderer loaded.
  */
 
-import { supportsAxisPullFields, supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsImpulseJoint, type PhysicsRevoluteJoint, type PhysicsWorldSink } from '../core/physics-api'
+import { supportsAxisPullFields, supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsRevoluteJoint, type PhysicsWorldSink } from '../core/physics-api'
 import { resolvePinField } from '../core/pin-field'
 import type { PinLattice, SeededPinField } from '../cascade/daily-cascade-layout'
 import {
@@ -131,7 +131,7 @@ export function authorSlingshot(world: Sink, api: Api, pos: Vec3Like, rot: numbe
 // Flippers
 // ---------------------------------------------------------------------------
 
-export const FLIPPER_LENGTH = 3.5
+const FLIPPER_LENGTH = 3.5
 /** Left and right flipper pivots (`FlipperBuilder.createFlippers`). */
 export const FLIPPER_PIVOTS: Readonly<Record<'left' | 'right', Vec3Like>> = {
   // Slightly above the LCD deck (y=-1) so paddles clear the tilted playfield
@@ -237,7 +237,7 @@ export function authorPlungerBody(world: Sink, api: Api, restZ: number = PLUNGER
  * A side or flipper-area rail collider (`DecorationBuilder.createRailColliders`): a fixed box,
  * yawed by `2·halfYaw` when given.
  */
-export function authorRailCollider(
+function authorRailCollider(
   world: Sink, api: Api,
   px: number, py: number, pz: number,
   hx: number, hy: number, hz: number,
@@ -390,8 +390,6 @@ export const TABLE_OBSTACLES = {
   launcher: { x: 2, z: 16, color: '#00ff88', scale: 1.0 },
   gate: { x: -2, z: 16, color: '#ffaa00', scale: 1.0, animation: 'slide' as const, width: 2.0, height: 1.5 },
 } as const
-
-export type { PhysicsImpulseJoint }
 
 // ---------------------------------------------------------------------------
 // Pachinko field

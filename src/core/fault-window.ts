@@ -6,8 +6,8 @@
  * State is two numbers, touched only when a throw happens, so the success path costs nothing.
  */
 
-export const FAULT_WINDOW_SIZE = 8
-export const FAULT_WINDOW_LIMIT = 3
+const FAULT_WINDOW_SIZE = 8
+const FAULT_WINDOW_LIMIT = 3
 
 export interface FaultWindow {
   /** Bit i set: a throw `i` ticks before `lastTick`. */

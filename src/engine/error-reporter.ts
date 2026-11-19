@@ -10,7 +10,7 @@
 
 import { bootError, recentBootLog, type BootLogLine } from '../boot-log'
 
-export interface ReportedError {
+interface ReportedError {
   readonly kind: 'error' | 'unhandledrejection'
   readonly message: string
   readonly stack: string | null

@@ -57,7 +57,7 @@ export interface ActiveListParticleSystem {
   readonly emitter: unknown
 }
 
-export interface ActiveListCamera {
+interface ActiveListCamera {
   readonly uniqueId: number
   readonly fov?: number
   readonly globalPosition: { readonly x: number; readonly y: number; readonly z: number }
@@ -85,7 +85,7 @@ export interface ActiveMeshesSceneApi extends RenderStateScene {
  * so a `Scene` is not assignable to a type that names them; `FrozenActiveMeshes` narrows to
  * `ActiveMeshesScene` once, and `isSupported` checks each is really there.
  */
-export interface ActiveMeshesInternals {
+interface ActiveMeshesInternals {
   _evaluateActiveMeshes?: () => void
   _activeMeshes?: { readonly data: Array<{ _freeze?: () => void }>; readonly length: number }
   _activeMeshesFrozen?: boolean

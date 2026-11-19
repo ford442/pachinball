@@ -20,7 +20,7 @@ import {
 export { DecorationBuilder } from './decoration/decoration-builder'
 export { DecorationFactory } from './decoration/decoration-factory'
 export { createNeonDecal } from './decoration/decoration-decal'
-export type { DecalOptions } from './decoration/decoration-decal'
+
 
 // -----------------------------------------------------------------------------
 // MAIN EXPORT — applyTableDecorations

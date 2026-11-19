@@ -21,9 +21,9 @@
 /** `QualityTier`'s values. */
 export type RenderScaleTier = 'low' | 'medium' | 'high'
 
-export const RENDER_SCALE_PLATFORM_CAP = { mobile: 1.5, desktop: 2 } as const
+const RENDER_SCALE_PLATFORM_CAP = { mobile: 1.5, desktop: 2 } as const
 
-export const RENDER_SCALE_TIER_CAP: Record<RenderScaleTier, number> = {
+const RENDER_SCALE_TIER_CAP: Record<RenderScaleTier, number> = {
   high: Number.POSITIVE_INFINITY,
   medium: 1.5,
   low: 1,

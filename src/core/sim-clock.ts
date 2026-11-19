@@ -63,7 +63,7 @@ export interface SimClockPhysics {
 }
 
 /** Fixed steps the active engine has taken, or null when the host has no counter. */
-export function simStepCount(physics: SimClockPhysics | null | undefined): number | null {
+function simStepCount(physics: SimClockPhysics | null | undefined): number | null {
   if (!physics) return null
   const wasmActive = physics.isWasmActive ? physics.isWasmActive() : physics.isWasmOwnerMode?.()
   const wasm = wasmActive ? physics.getWasmEngine?.() ?? null : null

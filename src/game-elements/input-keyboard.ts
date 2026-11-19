@@ -1,10 +1,10 @@
 import { GameState } from './types'
 import type { PendingInputFrame } from './types'
 
-export const PLUNGER_KEYS = new Set(['Enter', 'NumpadEnter', 'Space'])
+const PLUNGER_KEYS = new Set(['Enter', 'NumpadEnter', 'Space'])
 // Digit1/Digit0 — never Shift. Holding Shift five times trips Windows Sticky Keys.
-export const LEFT_FLIPPER_KEYS = new Set(['Digit1'])
-export const RIGHT_FLIPPER_KEYS = new Set(['Digit0'])
+const LEFT_FLIPPER_KEYS = new Set(['Digit1'])
+const RIGHT_FLIPPER_KEYS = new Set(['Digit0'])
 
 /** Everything handleKeyDown/handleKeyUp need from InputHandler, kept narrow on purpose. */
 export interface KeyboardInputHost {

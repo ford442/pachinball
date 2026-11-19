@@ -51,7 +51,7 @@ export interface FrameSchedulerEngine {
 }
 
 /** Phases whose systems change the world: a fault there is never quarantined silently. */
-export const SIM_PHASES: ReadonlySet<FramePhase> = new Set<FramePhase>(['physics', 'sim'])
+const SIM_PHASES: ReadonlySet<FramePhase> = new Set<FramePhase>(['physics', 'sim'])
 
 export interface FrameFault {
   readonly phase: FramePhase

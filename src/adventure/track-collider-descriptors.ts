@@ -43,13 +43,13 @@ export interface DescQuat {
  * `kinematic-velocity` bodies spin under a prescribed angular velocity and
  * have no C++ equivalent yet; `dynamic` bodies are not exportable either.
  */
-export type AdventureBodyMotion =
+type AdventureBodyMotion =
   | 'fixed'
   | 'kinematic-position'
   | 'kinematic-velocity'
   | 'dynamic'
 
-export type AdventureColliderKind =
+type AdventureColliderKind =
   | 'box'
   | 'cylinder'
   | 'sphere'
@@ -162,7 +162,7 @@ export interface AdventureColliderDesc {
   removed?: true
 }
 
-export const IDENTITY_ROTATION: DescQuat = { x: 0, y: 0, z: 0, w: 1 }
+const IDENTITY_ROTATION: DescQuat = { x: 0, y: 0, z: 0, w: 1 }
 
 /** Rapier's own `ColliderDesc` defaults — keep these in sync with Rapier. */
 export const RAPIER_DEFAULT_FRICTION = 0.5

@@ -206,7 +206,7 @@ export function addCurvedRamp(
 }
 
 /** The pair of side walls flanking a track segment. */
-export function createWall(
+function createWall(
   ctx: TrackPrimitiveContext,
   center: Vector3,
   heading: number,
@@ -529,34 +529,6 @@ export function createResetBasin(
     })
   )
   ctx.resetSensors.push(sensorBody)
-}
-
-/** Dynamic physics block. */
-export function createDynamicBlock(
-  ctx: TrackPrimitiveContext,
-  pos: Vector3,
-  size: number,
-  mass: number,
-  material: StandardMaterial
-): void {
-  if (!ctx.hasWorld) return
-
-  const box = MeshBuilder.CreateBox('dynBlock', { size }, ctx.scene)
-  box.position.copyFrom(pos)
-  box.material = material
-  ctx.adventureTrack.push(box)
-
-  const { body } = ctx.emit(
-    boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: size / 2, y: size / 2, z: size / 2 }, {
-      density: mass / (size * size * size),
-      friction: 0.5,
-      restitution: 0.2,
-      motion: 'dynamic',
-      label: 'dynamicBlock',
-    })
-  )
-  ctx.adventureBodies.push(body)
-  ctx.kinematicBindings.push({ body, mesh: box })
 }
 
 /** Chroma gate that changes the ball's colour state. */
