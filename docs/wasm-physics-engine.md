@@ -76,8 +76,10 @@ native/
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
 │   ├── BodyStore.h / .cpp       SoA body storage (the only body model) + BodyView
 │   ├── HandleTable.h            Stable body / hinge handles
-│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
-│   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
+│   ├── BroadphaseGrid.h / .cpp  Uniform 3D grid broadphase, cubic cells (sleepers stay in as targets for awake bodies and movers)
+│   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics) + the contact impulse
+│   ├── ContactQueries.h / .cpp  Sphere-vs-static queries (normal + depth), one per static family; ProbeHit (#520 row 4)
+│   ├── ShapeContacts.cpp        Capsule / box bodies vs statics through probes (#520 row 4)
 │   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
 │   ├── StaticShapes.h / .cpp    Static plane / box / capsule / cylinder / sphere / cone descs, handle cap
 │   ├── WorldParams.h            WorldParams, NaNQuarantine, substep / accumulator bounds
@@ -119,6 +121,8 @@ native/
 │   ├── broadphase_test.cpp      Cell coordinates clamp before the int cast: playfield cells unchanged, NaN / ±inf / 1e25 finite (#487)
 │   ├── correctness_bugs_test.cpp #504 §1: box face normals (z depth, −Y), snapshot WorldParams validation, setRotation wakes
 │   ├── correctness_520_test.cpp #520 §1 rows 8–10, 12: restore validation, rawDt clamp, boundary sanitising, hinge lifetime
+│   ├── correctness_520_solver_test.cpp #520 §1 rows 1, 3, 6, 7, 11 + WorldParams: hinge impulse, sleep, kinematic sweeps, pin keys, plane restitution
+│   ├── shape_contacts_test.cpp  #520 row 4: capsules and boxes against every static family
 │   └── test_helpers.hpp         Shared test utilities
 └── fuzz/                        libFuzzer targets (clang, ASan + UBSan; `npm run fuzz`)
     ├── fuzz_common.hpp          Input reader, invariant hook, table builder matching a blob's static counts
@@ -667,8 +671,11 @@ engine.setCollisionGroups(id, membership, filter)  // one mask for every pin
   (`pin_field_test.cpp` and `run-wasm-parity.mjs` compare the two).
 - **Contacts.** Every pin contact reports the field id as `bodyId2`, with the
   pin's lattice index in contact slot 11 (`PhysicsContact.subIndex`; 0 for all
-  other colliders). Touching two pins of one field in a step folds into one
-  event per pair (peak impulse) — scoring does not need per-pin handles.
+  other colliders). The manifold is keyed by pair *and* pin index
+  (`ContactKey`, #520 row 7), so each pin is its own contact: a ball rolling
+  pin → pin gets an Enter per pin and an Exit as it leaves each, and two pins
+  touched in one step are two events — per-pin scoring and audio need no
+  per-pin handles.
 - **Determinism.** `resolvePinField` (TS) mirrors `buildPinField` (C++) rule
   for rule and does its lattice maths in float32 exactly as `PinField::worldPin`
   does, so the visual instances sit on precisely the pins that collide; the
@@ -771,8 +778,9 @@ trigger zones without a second physics engine:
 
 ```typescript
 // Kinematic oriented-box mover (piston, platter, gate). Push a new pose once
-// per tick; linear/angular velocity is derived from the pose delta so a
-// resting ball is actually launched by a rising piston or carried
+// per tick; linear/angular velocity is derived from the pose delta over the
+// tick's substeps, and the pose advances substep by substep (#520 row 6), so
+// a resting ball is actually launched by a rising piston or carried
 // tangentially by a rotating platter — it does not just teleport through it.
 const piston = engine.addKinematicMover(
   { x: 0, y: 0, z: 0 },        // position
@@ -792,8 +800,10 @@ const sensor = engine.addSensorVolume(
 )
 ```
 
-Sphere-vs-OBB and capsule-vs-OBB narrowphase are implemented for movers;
-OBB-vs-OBB is out of scope (movers never pair with statics or each other).
+Sphere-vs-OBB and capsule-vs-OBB narrowphase are implemented for movers, and
+dynamic boxes meet them through probes (`ShapeContacts.cpp`, #520 row 4);
+movers never pair with statics or each other. A tick that runs no substep
+leaves its pose push pending for the next one that does.
 Sensors are static-position OBBs — Enter/Stay/Exit lifecycle is entirely a
 byproduct of `ContactListener`'s existing pair-presence bookkeeping, so a
 ball leaving a sensor by teleport (`setBodyPosition`) is handled the same
@@ -1087,6 +1097,15 @@ or the missing-bundle fallback.
 The hinge angle is `2·atan2(sinHalf, w)` of the rest-relative rotation, via a
 portable `atan2` (HingeJoint.cpp) so native and WASM agree bit-for-bit (#422).
 
+The motor and the two angle limits clamp their *accumulated* impulse over a
+substep's solver iterations (#520 row 1): `|motorImpulse| ≤ motorMaxTorque·dt`,
+`lowerImpulse ≥ 0`, `upperImpulse ≤ 0`, each iteration applying only the
+change. Clamping each iteration's lambda let a saturated motor add
+`motorMaxTorque·dt` per iteration, so its strength scaled with
+`solverIterations`. The accumulators are zeroed before every substep's
+iterations and never snapshotted. A sleeping hinge body is not solved;
+`setHingeMotor` wakes it.
+
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
 
@@ -1166,7 +1185,7 @@ equal-content items of a table built in another order. Version-1 blobs carried
 the insertion-order hash and are refused as `BadVersion`. On success the transform buffer is re-scattered and the contact
 buffer is empty until the next step.
 
-Bit-exactness: contact events are emitted in pair-key order within each phase
+Bit-exactness: contact events are emitted in `ContactKey` order (pair key, then pin index) within each phase
 (the manifold maps iterate in hash order, which a restore does not reproduce),
 and the hinge angle uses a portable `atan2` built from correctly rounded IEEE
 ops, because glibc's and musl's `atan2f` differ by an ULP. With that, the
@@ -1410,6 +1429,26 @@ aarch64 (`native_release_ctest`, `native_arm64_ctest`).
 PACHINBALL_PRINT_GOLDEN=1 ./native/build-native/physics_world_test "[golden]"
 ```
 
+### Solver correctness (#520 §1)
+
+The rows of #520 §1 that move numbers, each with a failing-before test in
+`correctness_520_solver_test.cpp` / `shape_contacts_test.cpp`, and each
+re-recorded the golden traces and replay tapes it moved:
+
+| Row | Behaviour now | Was |
+|-----|---------------|-----|
+| 1 | Hinge motor / limits clamp the impulse accumulated over a substep (see [Joints](#joints)) | Clamped per iteration: a saturated flipper was `solverIterations`× as strong |
+| 3 | `BodyView` setters, forces and impulses leave the sleep state alone; the API (`applyImpulse`, `setVelocity`, `setBodyPosition`, …, `setHingeMotor`, `setBodyType`) wakes the body it touches, and a gravity change, `setCollisionGroups`, `clearStaticGeometry` and `removeRigidBody` wake every body. Sleep is tested after the solve, per contact island (dynamic bodies that touched this substep sleep together), and a body put to sleep has its velocity, spin and force zeroed. A kinematic body wakes a sleeper only while it moves; a moving mover wakes the sleepers it reaches. A sleeper's contacts stay in the manifold (Stay, impulse 0) while what it touches cannot have moved — a static, a parked mover, another sleeper — and a contact with an awake body or moving mover that is no longer observed wakes it | Every solver impulse woke its body and the test ran on post-integration velocity, so nothing resting under gravity slept |
+| 4 | Capsule and box bodies meet every static family through probes (`ShapeContacts.cpp`): a capsule as spheres at its ends and at its point nearest the static; a box by its corners, its point nearest the static's core, the core sunk into it, and the static's features inside it (cylinder caps / rims, cone apex / rim). Boxes keep corner probes for planes, boxes and triangles | A capsule met boxes, capsules, planes and triangles as a sphere at its centre and skipped cylinders, spheres, cones, pins; a box met capsules and movers as a sphere and skipped the rest |
+| 6 | A mover / kinematic body's pose push spans every substep of its tick: velocity over the whole tick, pose interpolated per substep (`placeKinematicPoses`) | Pose jumped before the first substep, velocity over one fixed step |
+| 7 | Manifold keyed by `ContactKey` = (pair, pin index) | Keyed by pair: a pin field was one contact |
+| 11 | Planes carry a restitution (`addStaticPlane(…, friction, restitution)`, default 1), combined by `min` for spheres and boxes | Spheres ignored the plane's; boxes met a hard-coded 0.4 |
+| 14 | 3D cubic-cell broadphase; static boxes, sensors and movers cover their rotated AABB | XZ hash (over-paired stacked geometry) with unrotated box extents (missed yawed walls near their ends) |
+
+Known open: 4 PGS iterations do not settle a 3-ball stack (its top balls keep
+sinking at ~0.1 m/s), so it does not sleep — the warm-started solver of #520
+slice 3.
+
 ### Input contract: UB, NaN and capacity (#487 slice 1a)
 
 Verified scores replay a world from untrusted input, so the engine has no
@@ -1423,11 +1462,13 @@ old code hit UB, aliased a handle, or exposed a platform-dependent NaN.
 | The 1001st triangle mesh or force field | Refused like every other static family: `STATIC_HANDLE_OVERFLOW`, `getDroppedStaticCount()` +1, no triangle reaches the table (it used to be handed `-7000` / `-8000`, the next family's first id). `WasmIdShadow` mirrors the cap | `meshes and force fields reject the 1001st entry without aliasing` |
 | A force-field / pin-field id above its base (`INT_MAX`, `STATIC_HANDLE_OVERFLOW`, another family's id) | Range-checked before `BASE - id`, so no signed overflow; a no-op / `-1` as before | `field ids at the integer limits are rejected and never decoded` |
 | A broadphase coordinate that is NaN, ±inf or past ±1e8 cells | `cellX` / `cellZ` clamp to `±CELL_COORD_LIMIT` (1e8 cells, 44,000 km) before the cast; NaN goes to cell 0. Not clamped to the grid extent, so no playfield body changes cell | `broadphase_test.cpp` |
-| `WorldParams::maxSubsteps` NaN or outside [1, 64] | NaN → the default 8; everything else clamped to [1, 64]. Applied in the constructor (stored sanitised) and again at the cast in `step()` (a restored snapshot keeps its params bit for bit). No binding takes `WorldParams` today; the constructor is where it enters | `maxSubsteps is validated at the boundary` |
+| `WorldParams::maxSubsteps` NaN or outside [1, 64] | NaN → the default 8; everything else clamped to [1, 64]. Applied in the constructor (stored sanitised) and again at the cast in `step()` (a restored snapshot keeps its params bit for bit) | `maxSubsteps is validated at the boundary` |
+| A whole `WorldParams` from JS (`new PhysicsWorld(params)`, #520) | `sanitizedWorldParams` in the constructor: every field `worldParamsValid` would refuse (non-finite gravity, a timestep outside (0, 1], negative or non-finite rolling resistance / sleep thresholds, negative sleep frames) takes its `WorldParams{}` default, `solverIterations` is clamped to [1, 64]. The identity on valid params. JS spreads `defaultWorldParams()` first: an Embind value object needs every field | `a world built from params keeps the valid ones…`, `wasm PhysicsWorld(WorldParams)` (parity) |
+| A plane restitution (#520 row 11) | Non-finite or negative → `PLANE_DEFAULT_RESTITUTION` (1): it feeds a `min`, where a NaN is build-dependent | `a non-finite or negative plane restitution…` |
 | A dynamic body whose position, rotation, velocity or angular velocity is not finite | Frozen after integration (before the broadphase and solver see it) and again after the solve: back to its substep-start pose (origin / identity if that was not finite), velocities and forces zeroed, asleep via the existing active flag. Recorded as `NaNQuarantine{bodyId, step, substep}` (`lastNaNQuarantines()`, Embind `getNaNQuarantineCount()` / `getNaNQuarantineBodyId(i)`), not in the contact buffer. The engine only freezes; the game decides what the ball means | `a NaN body is quarantined…`, `a body created at a non-finite pose…` |
 | `step(rawDt)` with a negative, NaN or −inf `rawDt` (#520 row 9) | A zero-length tick. A negative dt used to drive the accumulator below zero for good; NaN read as a full `1/30` s tick | `a negative rawDt cannot…`, `a NaN rawDt is a zero-length tick…` |
 | Accumulated time past one capped tick (#520 row 9) | Clamped to `maxAccumulator(params)` = `fixedTimestep · ⌊maxSubsteps⌋` after the substep loop. Only a world whose cap is below the `1/30` s one call adds (never the defaults, 8 · 1/60) reaches it; the debt used to grow without bound | `the accumulator stays within maxSubsteps fixed steps` |
-| A snapshot blob, every column (#520 row 8) | `restore()` refuses (`Corrupt`, world untouched) an accumulator outside `[0, maxAccumulator]` (NaN froze the world, +inf ran every substep of every tick); any non-finite body float; a non-unit body rotation; a body radius / half-extent outside `[0, 10]` m; an inverse mass or inertia that differs from the one re-derived from (type, shape, mass, dimensions); a hinge whose id is out of order or ≥ `nextHingeId`, whose body is not in the blob, or with a non-finite anchor, non-unit axis or rest rotation, a limit past ±π, a negative motor torque or a non-positive Baumgarte factor; a non-finite or non-unit kinematic target, a repeated target or driven id; a non-finite mover pose / velocity or force-field vector; a manifold out of pair-key order or with a negative pin index. Each is what a world's own setters can store, so a world's own snapshot always restores (`fuzz_command_stream` checks it at every serialize). Manifold floats are not checked: they only feed Exit events, never the solver | `restore refuses…` (five cases) |
+| A snapshot blob, every column (#520 row 8) | `restore()` refuses (`Corrupt`, world untouched) an accumulator outside `[0, maxAccumulator]` (NaN froze the world, +inf ran every substep of every tick); any non-finite body float; a non-unit body rotation; a body radius / half-extent outside `[0, 10]` m; an inverse mass or inertia that differs from the one re-derived from (type, shape, mass, dimensions); a hinge whose id is out of order or ≥ `nextHingeId`, whose body is not in the blob, or with a non-finite anchor, non-unit axis or rest rotation, a limit past ±π, a negative motor torque or a non-positive Baumgarte factor; a non-finite or non-unit kinematic target, a repeated target or driven id; a non-finite mover pose / velocity or force-field vector; a manifold out of `ContactKey` order (pair, then pin index) or with a negative pin index. Each is what a world's own setters can store, so a world's own snapshot always restores (`fuzz_command_stream` checks it at every serialize). Manifold floats are not checked: they only feed Exit events, never the solver | `restore refuses…` (five cases) |
 | An int → enum at the Embind boundary, or an unnamed enum in a descriptor (#520 row 10) | `Boundary.h`: `bodyTypeFromInt` / `shapeFromInt` / `volumeShapeFromInt` / `forceSpaceFromInt` and the core's `sanitized()` map anything unnamed to the default it already behaved as (`Dynamic`, `Sphere`, `Box`, `World`, `Directional`). A bare `static_cast` to a `uint8_t`-backed enum truncated (258 → `Box`) and kept unnamed values, which the snapshot decoder then refused. Sanitise, not refuse: a refused create would skip an id `WasmIdShadow` already handed out. `setBodyType` ignores an unnamed type, as its binding does | `int → enum conversions…`, `a body built from an out-of-range enum…`, `an out-of-range volume shape or force space…` |
 | A rotation entering the engine (#520 row 10) | `sanitizedRotation`: within `1e-4` of unit length (any caller's float32 rounding) it is kept bit for bit; otherwise normalised (scaled by its largest component first), zero or non-finite → identity. Applied to `setBodyRotation`, static boxes / capsules, movers, sensors, force fields and kinematic targets; cylinders, cones and pin fields already normalised unconditionally and still do. `Quat::rotate` is Rodrigues' formula, which skews and scales a non-unit input | `a non-unit static box rotation…`, `a zero or non-finite rotation…` |
 | A plane normal (#520 row 10) | Normalised the same way; zero or non-finite (or a non-finite distance) is refused and counted in `getDroppedStaticCount()` — a plane has no handle, so refusing it desyncs nothing. `(0, 2, 0)` sank a ball to half its radius | `a non-unit plane normal…`, `a plane with no direction…` |
