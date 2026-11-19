@@ -16,7 +16,6 @@ export { API_BASE, ASSET_BASE, resolveBackboxAssetPath, apiFetch, isRemoteApiBas
 export { EffectsConfig } from './visuals'
 export {
   GAME_TUNING,
-  getLaneRolloverPoints,
   type LaneRolloverKind,
   type LaneSensorConfig,
   type GameTuning,

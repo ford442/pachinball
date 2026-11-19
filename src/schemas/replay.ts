@@ -67,6 +67,12 @@ export const StoredReplaySchema = v.object({
   cascade: lenient(
     v.object({ mode: v.picklist(['daily', 'free']), seed: v.number(), seedId: str() }),
   ),
+  // Schema 4 (#556): the rules the run played under. `rules` is checked against `rulesHash` when the
+  // tape is replayed (`resolveRunRules`), not here: a tape with bad rules must be refused, not
+  // quietly replayed as vanilla.
+  rulesHash: lenient(str()),
+  rules_hash: lenient(str()),
+  rules: lenient(v.record(v.string(), v.unknown())),
 })
 
 export type StoredReplay = v.InferOutput<typeof StoredReplaySchema>

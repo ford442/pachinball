@@ -12,19 +12,31 @@ export interface BallSaveConfig {
 export class BallSaveSystem {
   private launchTimeMs = 0
   private graceActive = false
+  /** Length of the current window: the config's after a launch, a rules grant's after `grant`. */
+  private graceMs: number
 
-  constructor(private readonly config: BallSaveConfig) {}
+  constructor(private readonly config: BallSaveConfig) {
+    this.graceMs = config.graceMs
+  }
 
   /** Start the grace window. Called when the ball is physically launched. */
   onBallLaunched(nowMs: number): void {
     this.launchTimeMs = nowMs
     this.graceActive = true
+    this.graceMs = this.config.graceMs
+  }
+
+  /** A rules program's `ballSave` (#556): one save, good for `durationMs` from `nowMs` (sim clock). */
+  grant(nowMs: number, durationMs: number): void {
+    this.launchTimeMs = nowMs
+    this.graceActive = true
+    this.graceMs = durationMs
   }
 
   /** Returns true if the ball is still within the grace window. */
   canSave(nowMs: number): boolean {
     if (!this.graceActive) return false
-    return nowMs - this.launchTimeMs <= this.config.graceMs
+    return nowMs - this.launchTimeMs <= this.graceMs
   }
 
   /** Mark the one-time save as consumed. */
@@ -40,7 +52,7 @@ export class BallSaveSystem {
   /** Milliseconds remaining in the grace window (0 if inactive). */
   getRemainingMs(nowMs: number): number {
     if (!this.graceActive) return 0
-    return Math.max(0, this.config.graceMs - (nowMs - this.launchTimeMs))
+    return Math.max(0, this.graceMs - (nowMs - this.launchTimeMs))
   }
 
   /** Whether the grace window is currently active. */

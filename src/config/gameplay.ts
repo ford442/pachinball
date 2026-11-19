@@ -151,8 +151,3 @@ export const GAME_TUNING = {
     streakMaxMultiplier: 5,
   },
 } as const satisfies GameTuning
-
-/** Base points for a lane rollover sensor kind (no magic numbers in dispatch code). */
-export function getLaneRolloverPoints(kind: LaneRolloverKind): number {
-  return GAME_TUNING.scoring.laneRollover[kind]
-}

@@ -12,7 +12,15 @@ import type { Vec3Like } from '../core/vec3-scalar'
 import { BALL_TIERS, BallType, GameConfig } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../core/collision-groups'
 import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
-import { getDensityForMass, getTunedBallPhysics, nowMs, type BallManagerHost } from './ball-manager-context'
+import {
+  BALL_TYPE_ORDER,
+  getDensityForMass,
+  getTunedBallPhysics,
+  nowMs,
+  VANILLA_BALL_ECONOMY,
+  type BallEconomy,
+  type BallManagerHost,
+} from './ball-manager-context'
 
 export function createMainBall(host: BallManagerHost): PhysicsBody {
   // Use Config for Spawn Point
@@ -187,7 +195,7 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
   host.ballDataMap.set(body, {
     type,
     spawnTime: nowMs(),
-    points: config.basePoints,
+    points: host.economy.points[type],
     rigidBody: body,
   })
 
@@ -207,14 +215,17 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
 /**
  * Select a ball type using weighted tiers from a single [0, 1) draw.
  */
-export function selectWeightedBallType(rng: SeededRng = getSessionRngFork(RNG_FORK.SPAWN)): BallType {
+export function selectWeightedBallType(
+  rng: SeededRng = getSessionRngFork(RNG_FORK.SPAWN),
+  weights: BallEconomy['weights'] = VANILLA_BALL_ECONOMY.weights,
+): BallType {
   const rand = rng.next()
   let cumulative = 0
 
-  for (const [typeKey, config] of Object.entries(BALL_TIERS)) {
-    cumulative += config.spawnWeight
+  for (const type of BALL_TYPE_ORDER) {
+    cumulative += weights[type]
     if (rand <= cumulative) {
-      return typeKey as BallType
+      return type
     }
   }
 
@@ -225,7 +236,7 @@ export function selectWeightedBallType(rng: SeededRng = getSessionRngFork(RNG_FO
  * Spawn a random ball with weighted probability.
  */
 export function spawnRandomBall(host: BallManagerHost, position?: Vec3Like): PhysicsBody {
-  const type = selectWeightedBallType()
+  const type = selectWeightedBallType(getSessionRngFork(RNG_FORK.SPAWN), host.economy.weights)
   const spawnPos = position || GameConfig.ball.spawnMain
 
   // Gold-tier balls spawn as a chaotic swarm of small balls instead of one heavy ball

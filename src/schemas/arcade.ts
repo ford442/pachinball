@@ -209,6 +209,11 @@ const ScoreSubmissionSchema = v.object({
    * on a board. Absent means ranked.
    */
   ranked: v.optional(v.boolean()),
+  /**
+   * The rules the run was played under (#556): the board is (map_id, rules_hash). Absent on runs
+   * queued by older builds — the service files them on the legacy vanilla board.
+   */
+  rules_hash: v.optional(str()),
 })
 export type ScoreSubmission = v.InferOutput<typeof ScoreSubmissionSchema>
 

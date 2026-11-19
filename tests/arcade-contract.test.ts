@@ -17,6 +17,7 @@ import { load } from 'js-yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDEMPOTENCY_KEY, MAP_ID, TAG, UUID } from '../supabase/functions/_shared/arcade'
 import { ReplayRecorder } from '../src/replay/replay-recorder'
+import { VANILLA_RULES_HASH } from '../src/rules/rules-hash'
 
 vi.mock('../src/config/arcade', () => ({
   ARCADE_URL: 'https://arcade.test',
@@ -271,9 +272,12 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
 
   it('leaderboard reads (vanilla and an adventure board) and the rank lookup', async () => {
     const api = await arcade()
-    const rows = await api.fetchLeaderboard('neon-helix')
-    await api.fetchLeaderboard('neon-helix', 'NEON_HELIX', 25)
-    expect(await api.fetchPlayerRank('neon-helix', 5000)).toBe(3)
+    const rows = await api.fetchLeaderboard('neon-helix', undefined, 10, VANILLA_RULES_HASH)
+    await api.fetchLeaderboard('neon-helix', 'NEON_HELIX', 25, VANILLA_RULES_HASH)
+    expect(await api.fetchPlayerRank('neon-helix', 5000, undefined, VANILLA_RULES_HASH)).toBe(3)
+    // A board is (map, rules): every read names the rules (#556).
+    expect(captured.filter((r) => r.url.pathname === '/rest/v1/leaderboard').map((r) => r.url.searchParams.get('rules_hash')))
+      .toEqual([`eq.${VANILLA_RULES_HASH}`, `eq.${VANILLA_RULES_HASH}`])
     expect(rows[0]?.name).toBe('ACE')
     expectConformant()
   })

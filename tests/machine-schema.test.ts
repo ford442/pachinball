@@ -10,12 +10,13 @@ import {
   MACHINE_CABINETS,
   defaultMachineBackbox,
   machineFromWeekly,
-  rulesAreDefault,
   validateMachine,
   weeklyView,
   type MachineDescriptor,
 } from '../src/schemas/machine'
 import { SHIPPED_MACHINE_IDS } from '../src/machine/machine-loader'
+import { VANILLA_RULES_HASH, runRulesOf } from '../src/rules'
+import { rulesHash } from '../src/rules/rules-digest'
 import { generateWeeklyMachine } from '../src/cascade/weekly-machine'
 import { initSessionRng, seedFromWeeklyId, weeklySeedId } from '../src/core/seeded-rng'
 
@@ -45,7 +46,7 @@ describe('shipped machines (public/machines)', () => {
       expect(errorsOf(raw)).toEqual([])
       const machine = raw as MachineDescriptor
       expect(`${machine.id}.json`).toBe(file)
-      expect(rulesAreDefault(machine.rules)).toBe(true)
+      expect(rulesHash(runRulesOf(machine.rules))).toBe(VANILLA_RULES_HASH)
       for (const ref of [machine.backbox.idle, machine.backbox.reach, machine.backbox.fever]) {
         expect(existsSync(join(root, 'public/backbox', ref.video)), ref.video).toBe(true)
         if (ref.poster) expect(existsSync(join(root, 'public/backbox', ref.poster)), ref.poster).toBe(true)
@@ -156,6 +157,6 @@ describe('validateMachine rejects', () => {
     const d = base() as unknown as MachineDescriptor
     d.rules.fever.threshold = 20
     expect(errorsOf(d)).toEqual([])
-    expect(rulesAreDefault(d.rules)).toBe(false)
+    expect(rulesHash(runRulesOf(d.rules))).not.toBe(VANILLA_RULES_HASH)
   })
 })

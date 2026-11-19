@@ -3,7 +3,8 @@
  * on its own (tests/replay-verifier-judge.test.ts).
  *
  * A claim is a row of `claim_score_verifications`: { score_id, score, map_id,
- * replay_id, payload, physics_engine, attempts, challenge_* }. A result is what
+ * replay_id, payload, physics_engine, attempts, challenge_*, rules_hash,
+ * challenge_rules_hash }. A result is what
  * scripts/lib/replay-harness.mjs `runTape(…, 'verify', …)` returned.
  */
 
@@ -35,6 +36,22 @@ export function selectBuild(payload, builds, fallback) {
   const pick = same.find((b) => b.id === payload?.buildId) ?? same.find((b) => b.id === fallback.id) ?? same[0]
   if (pick) return { build: pick, binary: 'same' }
   return { build: byId ?? fallback, binary: 'missing' }
+}
+
+/**
+ * The rules hash of a tape older than replay schema 4, which names none: the vanilla rules of #556
+ * (`LEGACY_RULES_HASH`, src/rules/rules-hash.ts; tests/rules-hash.test.ts keeps the two equal).
+ */
+export const LEGACY_RULES_HASH = 'a46a08bbeb7d6b2db2e5bf5c43f16347343b10a89e82a50e60c8958b3edb8528'
+
+/**
+ * The rules a tape says it was played under (#556), or null when a schema 4+ tape names none. The
+ * replay itself then checks the tape's rules against it (a `rules-mismatch` rejection).
+ */
+export function tapeRulesHash(payload) {
+  const hash = payload?.rulesHash
+  if (typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash)) return hash
+  return (Number(payload?.version) || 1) < 4 ? LEGACY_RULES_HASH : null
 }
 
 /** Only the in-process owner replays step-exactly (docs/determinism-todo.md). */
@@ -80,6 +97,14 @@ export function precheck(claim) {
     return reject(`unverifiable engine ${claim.physics_engine}: ranked runs are recorded on ${VERIFIABLE_ENGINE}`)
   }
   if (!claim.payload.initialSnapshot) return reject('no frame-0 snapshot on the tape')
+  // The board is (map, rules) (#556): the score, its challenge and its tape must name the same rules.
+  const rules = tapeRulesHash(claim.payload)
+  if (!rules) return reject('the tape names no rules hash')
+  const submitted = claim.rules_hash ?? LEGACY_RULES_HASH
+  if (submitted !== rules) return reject(`rules mismatch: submitted under rules ${short(submitted)}, but the tape was played under ${short(rules)}`)
+  if (claim.challenge_id && claim.challenge_rules_hash && claim.challenge_rules_hash !== rules) {
+    return reject(`not played under the challenge's rules: ${short(rules)}, the challenge's are ${short(claim.challenge_rules_hash)}`)
+  }
   if (claim.challenge_id) {
     const mismatch = challengeMismatch(claim)
     if (mismatch) return reject(mismatch)

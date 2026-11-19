@@ -136,7 +136,8 @@ function replayAt(payload: ReplayPayload, hz: number) {
 describe('schema-3 replay tape: one row per fixed step (refresh-rate independent)', () => {
   it('records one row per fixed step, not per render frame', () => {
     const { live, payload } = record(144, 4)
-    expect(payload.version).toBe(3)
+    expect(payload.version).toBe(REPLAY_SCHEMA_VERSION)
+    expect(REPLAY_SCHEMA_VERSION).toBeGreaterThanOrEqual(3)
     expect(payload.frames).toHaveLength(live.engine.s.steps)
     // 144 Hz: most render frames run no step at all.
     expect(payload.frames.length).toBeLessThan(4 * 144 / 2)

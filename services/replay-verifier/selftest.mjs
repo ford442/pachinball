@@ -15,7 +15,7 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { inspectBuild } from '../../scripts/lib/build-info.mjs'
 import { freePort, repoRoot } from '../../scripts/lib/replay-harness.mjs'
-import { boardFor } from './judge.mjs'
+import { boardFor, LEGACY_RULES_HASH } from './judge.mjs'
 import { runVerifier } from './verifier.mjs'
 
 const KEY = 'sb_secret_selftest'
@@ -31,6 +31,17 @@ if (!dist?.wasmSha256) {
   process.exit(1)
 }
 const UNHELD_WASM = 'f'.repeat(64)
+// #556: rules no build plays as its vanilla ones, and a valid ruleset that does not hash to them.
+const OTHER_RULES = 'e'.repeat(64)
+const NO_SCORING_RULES = {
+  balls: {
+    weights: { standard: 1, gold_plated: 0, solid_gold: 0 },
+    points: { standard: 0, gold_plated: 0, solid_gold: 0 },
+    feverMultipliers: { standard: 1, gold_plated: 1, solid_gold: 1 },
+  },
+  fever: { threshold: 12 },
+  program: { handlers: [] },
+}
 
 let nextId = 1
 const claim = (label, payload, score, mapId, expect, challenge = {}, attempts = 1) => {
@@ -52,6 +63,8 @@ const claim = (label, payload, score, mapId, expect, challenge = {}, attempts = 
       challenge_seed: null,
       challenge_cascade_seed: null,
       challenge_board: null,
+      rules_hash: LEGACY_RULES_HASH,
+      challenge_rules_hash: null,
       ...challenge,
     },
   }
@@ -87,6 +100,19 @@ const cases = [
   claim('forged score on an unheld binary, attempts used up', { ...vanilla.replay, wasmSha256: UNHELD_WASM }, 5_000_000, 'neon-helix',
     { verified: false, reason: /score mismatch: .*\(the tape was played on PhysicsModule\.wasm ffffffffffff, which this verifier does not hold\)$/ },
     {}, 3),
+  // #556: the rules a run was played under. A score filed under other rules than its tape's never replays.
+  claim('score filed under other rules than its tape\'s', vanilla.replay, vanilla.golden.score, 'neon-helix',
+    { verified: false, reason: /rules mismatch: submitted under rules eeeeeeeeeeee, but the tape was played under a46a08bbeb7d/ },
+    { rules_hash: OTHER_RULES }),
+  // A tape naming rules it does not carry: the replay cannot play them, so it refuses the tape.
+  claim('tape naming rules it does not carry', { ...vanilla.replay, version: 4, rulesHash: OTHER_RULES }, vanilla.golden.score, 'neon-helix',
+    { verified: false, reason: /replay rejected: the tape was played under rules eeeeeeeeeeee and does not carry them/ },
+    { rules_hash: OTHER_RULES }),
+  // A tape whose rules do not hash to the hash it names (a forged hash): refused, never replayed under them.
+  claim('tape whose rules do not hash to the hash it names', { ...vanilla.replay, version: 4, rulesHash: OTHER_RULES, rules: NO_SCORING_RULES },
+    vanilla.golden.score, 'neon-helix',
+    { verified: false, reason: /replay rejected: the tape's rules hash to [0-9a-f]{12}, but it names eeeeeeeeeeee/ },
+    { rules_hash: OTHER_RULES }),
   // #503 A3: a contact handler threw during playback. The world may have diverged, so the run is
   // rejected even though the tape and its score are the golden ones.
   claim('sim fault during playback, matching score', vanilla.replay, vanilla.golden.score, 'neon-helix',

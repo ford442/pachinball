@@ -10,6 +10,7 @@
 
 import type { LeaderboardEntry, ScoreSubmission, SubmitResult } from '../arcade/arcade-api'
 import { createTimerScope } from '../core/timers'
+import { VANILLA_RULES_HASH } from '../rules/rules-hash'
 
 export type { LeaderboardEntry, ScoreSubmission, SubmitResult }
 
@@ -24,6 +25,8 @@ export class LeaderboardSystem {
   private isRefreshing = false
   private currentMapId = 'neon-helix'
   private currentAdventureLevel?: string
+  /** The rules the board is played under (#556): another machine's rules on the same table are another board. */
+  private currentRulesHash = VANILLA_RULES_HASH
   private onSpectateCallback: ((replayId: string) => void) | null = null
 
   // Polling retry state
@@ -58,9 +61,10 @@ export class LeaderboardSystem {
   /**
    * Set the current map/level context for filtering
    */
-  setContext(mapId: string, adventureLevel?: string): void {
+  setContext(mapId: string, adventureLevel?: string, rulesHash: string = VANILLA_RULES_HASH): void {
     this.currentMapId = mapId
     this.currentAdventureLevel = adventureLevel
+    this.currentRulesHash = rulesHash
     void this.refresh(true) // Force refresh on context change
   }
 
@@ -134,7 +138,7 @@ export class LeaderboardSystem {
     this.isRefreshing = true
 
     try {
-      this.scores = await (await arcade()).fetchLeaderboard(this.currentMapId, this.currentAdventureLevel, 10)
+      this.scores = await (await arcade()).fetchLeaderboard(this.currentMapId, this.currentAdventureLevel, 10, this.currentRulesHash)
       this.lastRefresh = now
       
       // Reset failure count on success
@@ -175,7 +179,7 @@ export class LeaderboardSystem {
    */
   async getPlayerRank(score: number): Promise<number | null> {
     try {
-      return await (await arcade()).fetchPlayerRank(this.currentMapId, score, this.currentAdventureLevel)
+      return await (await arcade()).fetchPlayerRank(this.currentMapId, score, this.currentAdventureLevel, this.currentRulesHash)
     } catch {
       return null
     }

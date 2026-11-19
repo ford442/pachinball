@@ -166,6 +166,8 @@ export type ReplaySnapshotOutcome =
   | 'tunables-mismatch'
   /** A physics / sim system threw during playback: the world may have diverged (#503 A3). */
   | 'sim-fault'
+  /** The tape's rules do not hash to the `rulesHash` it names, or this build cannot play them (#556). */
+  | 'rules-mismatch'
 
 export interface ReplaySnapshotResult {
   outcome: ReplaySnapshotOutcome
@@ -193,6 +195,7 @@ const MESSAGES: Record<Exclude<ReplaySnapshotOutcome, 'restored' | 'no-snapshot'
   invalid: 'Replay diverged: recording snapshot is corrupt or from another version',
   'tunables-mismatch': 'Replay diverged: feeder tuning changed since this recording',
   'sim-fault': 'Replay rejected: a physics system faulted during playback',
+  'rules-mismatch': 'Replay rejected: the rules it was played under do not match the ones it names',
 }
 
 function result(outcome: ReplaySnapshotOutcome, status: WasmSnapshotStatus | null = null): ReplaySnapshotResult {

@@ -1,7 +1,7 @@
 import { simClockMs } from '../core/sim-clock'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import type { Vec3Like } from '../core/vec3-scalar'
-import type { BallType } from '../config'
+import { BALL_TIERS, BallType } from '../config'
 import { getPhysicsTuningValue } from './physics-tuning'
 import type { BallSaveSystem } from './ball-save-system'
 import type { BallData } from './types'
@@ -61,6 +61,31 @@ export interface SwarmGroup {
   baseType: BallType
 }
 
+/**
+ * The ball economy a run plays under (#556): spawn weights and points per ball type, from the run's
+ * `rules.balls`. The default is the vanilla one (`BALL_TIERS`).
+ */
+export interface BallEconomy {
+  readonly weights: Readonly<Record<BallType, number>>
+  readonly points: Readonly<Record<BallType, number>>
+}
+
+/** Ball types in the order the spawn draw accumulates their weights. */
+export const BALL_TYPE_ORDER = [BallType.STANDARD, BallType.GOLD_PLATED, BallType.SOLID_GOLD] as const
+
+export const VANILLA_BALL_ECONOMY: BallEconomy = {
+  weights: {
+    [BallType.STANDARD]: BALL_TIERS[BallType.STANDARD].spawnWeight,
+    [BallType.GOLD_PLATED]: BALL_TIERS[BallType.GOLD_PLATED].spawnWeight,
+    [BallType.SOLID_GOLD]: BALL_TIERS[BallType.SOLID_GOLD].spawnWeight,
+  },
+  points: {
+    [BallType.STANDARD]: BALL_TIERS[BallType.STANDARD].basePoints,
+    [BallType.GOLD_PLATED]: BALL_TIERS[BallType.GOLD_PLATED].basePoints,
+    [BallType.SOLID_GOLD]: BALL_TIERS[BallType.SOLID_GOLD].basePoints,
+  },
+}
+
 export interface BallStuckTracker {
   stuckTime: number
 }
@@ -86,6 +111,8 @@ export interface BallManagerHost {
   readonly stuckBallsScratch: PhysicsBody[]
   chainMultiball: MultiballState
   ballSaveSystem: BallSaveSystem
+  /** Spawn weights and points (the run's rules). */
+  readonly economy: BallEconomy
 
   removeBall(body: PhysicsBody): void
   createMainBall(): PhysicsBody

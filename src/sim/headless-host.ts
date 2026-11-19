@@ -28,13 +28,16 @@ import { SimPhysicsController } from '../game/physics/sim-physics-controller'
 import { freshNudgeState, type NudgeState, type PhysicsHost } from '../game/physics/types'
 import {
   applyMachineOnStart,
+  applyRunRules,
   initSessionRng,
   resetPlayBall,
   resetRunState,
+  resolveRunRules,
   resolveRunStart,
   startSeed,
   type RunStartInput,
 } from '../game/run-start'
+import { VANILLA_RULES_HASH, vanillaRunRules } from '../rules'
 import { DisplayState } from '../display/display-types'
 import type { ReplayPayload } from '../replay/replay-recorder'
 import { ReplayRunner } from '../replay/replay-runner'
@@ -174,6 +177,10 @@ export class HeadlessHost implements PhysicsHost, InputActionsHost {
    */
   async playReplay(payload: ReplayPayload): Promise<void> {
     this.replayRunner.load(payload)
+    // The tape's rules (#556): a tape whose rules do not match the hash it names is refused.
+    const runRules = await resolveRunRules({ replay: payload, machineRules: null })
+    if (!runRules.ok) this.replayRunner.reject('rules-mismatch', runRules.reason)
+    const { rules, hash } = runRules.ok ? runRules : { rules: vanillaRunRules(), hash: VANILLA_RULES_HASH }
     const runStart: RunStartInput = {
       replay: { seed: payload.seed, machine: payload.machine, cascade: payload.cascade ?? null },
       challengeSeed: null,
@@ -188,6 +195,7 @@ export class HeadlessHost implements PhysicsHost, InputActionsHost {
       rebuildHandleCaches: () => this.rebuildHandleCaches(),
     })
 
+    applyRunRules({ scoringBridge: this.physicsController.scoringBridge, ballManager: this.ballManager }, rules, hash)
     getScoringBreakdownManager().reset()
     this.simFaultPolicy.reset()
     resetRunState(this)

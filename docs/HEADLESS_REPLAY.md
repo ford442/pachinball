@@ -80,7 +80,10 @@ sends those tapes to Chromium; `verify:replay:node` reports them as skipped.
 | A jackpot | the phase clock is owned by `EffectsSystem` | own the `JackpotPhaseClock` in the sim |
 
 The golden tapes today: vanilla-rally, free-cascade and multiball replay in Node; the three adventure
-tapes and magspin-capture are Chromium-only. #521's `rulesHash` plugs into `replayTapeInNode`.
+tapes and magspin-capture are Chromium-only. The run's scoring is its rules program (#556,
+docs/RULES.md): `HeadlessHost.playReplay` resolves the tape's rules with the game's own
+`resolveRunRules`, and a tape whose rules do not hash to its `rulesHash` comes back
+`{ ok: false, code: 'rejected', outcome: 'rules-mismatch' }`.
 
 ## Keeping it Babylon-free
 

@@ -5,12 +5,14 @@ import { BallType, GAME_TUNING } from '../config'
 import { BallSaveSystem } from './ball-save-system'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import {
+  type BallEconomy,
   type BallManagerHost,
   type BallStuckTracker,
   type BallView,
   type MultiballState,
   nowMs,
   type SwarmGroup,
+  VANILLA_BALL_ECONOMY,
 } from './ball-manager-context'
 import {
   cleanupSwarmTrackingOnRemove,
@@ -84,6 +86,9 @@ export class BallManager implements BallManagerHost {
 
   ballSaveSystem = new BallSaveSystem({ graceMs: GAME_TUNING.feedback.ballSaveGraceSeconds * 1000 })
 
+  /** Spawn weights and points: the run's `rules.balls` (`setEconomy`), vanilla until a run sets them. */
+  economy: BallEconomy = VANILLA_BALL_ECONOMY
+
   /** `presentation` draws the balls; null runs the sim alone (headless replay, unit tests). */
   constructor(world: PhysicsWorldSink, rapier: PhysicsApi, presentation: BallPresentation | null = null) {
     this.world = world
@@ -92,6 +97,11 @@ export class BallManager implements BallManagerHost {
     this.presentation = presentation
     this.view = presentation
     presentation?.attach(this)
+  }
+
+  /** The run's ball economy (#556): spawn weights and points from its `rules.balls`. */
+  setEconomy(economy: BallEconomy): void {
+    this.economy = economy
   }
 
   /** Balls come and go in a scene the gate may have frozen; every spawn / removal thaws it. */

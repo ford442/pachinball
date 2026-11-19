@@ -155,7 +155,7 @@ export async function challengeFriends(
   if (run?.payload) {
     if (!run.replayId) {
       await host.overlays.ensure()
-      host.overlays.leaderboard.setContext(run.board)
+      host.overlays.leaderboard.setContext(run.board, undefined, run.rulesHash)
       await submitRun(run, await host.overlays.leaderboard.checkRank(run.score))
     }
     if (run.replayId && run.name) {

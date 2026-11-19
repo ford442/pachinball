@@ -13,8 +13,26 @@ import { TABLE_MAPS } from '../../config/table-maps'
 import { PALETTE } from '../../game-elements/visual-palette'
 import type { PhysicsHost } from './types'
 import { getFeverScoreMultiplier, applyFeverGoldMultiplier } from './scoring-multipliers'
-import { simClockMs, simClockSeconds } from '../../core/sim-clock'
+import { FIXED_TIMESTEP, simClockMs, simClockSeconds } from '../../core/sim-clock'
 import { createTimerScope } from '../../core/timers'
+import type { RulesEventName } from '../../schemas/rules-program'
+import {
+  RulesEngine,
+  VANILLA_RULES_HASH,
+  vanillaRunRules,
+  type RulesDisplayState,
+  type RulesEmit,
+  type RulesEventContext,
+  type RulesSink,
+  type RunRules,
+} from '../../rules'
+
+const RULES_DISPLAY: Record<RulesDisplayState, DisplayState> = {
+  idle: DisplayState.IDLE,
+  reach: DisplayState.REACH,
+  fever: DisplayState.FEVER,
+  jackpot: DisplayState.JACKPOT,
+}
 
 /**
  * ScoringBridge — owns combo/fever/tally/streak state, score awards, and the
@@ -31,6 +49,14 @@ import { createTimerScope } from '../../core/timers'
  *  - `comboMultiplierSystem` (ComboMultiplierSystem) — rolling-window score
  *    multiplier. `host.comboMultiplier` (read by the HUD and debug HUD) always
  *    comes from here; it emits `combo:multiplier:changed`.
+ *
+ * What an event is *worth* is the run's rules program (#556): the collision
+ * handlers, the drain and the combo clock raise events into `RulesEngine`
+ * (`dispatchRules`), and the program's actions come back through the sink below
+ * — points via `awardScore`, combo hits, multiball, ball save, kickback, the
+ * backbox state and EventBus events; presentation cues go out as `rules:cue`.
+ * The combo / chain trackers, the gold-ball streak, the bonus tally and ball
+ * loss stay here: the machinery a program's events and values come from.
  */
 export class ScoringBridge {
   private readonly timers = createTimerScope()
@@ -40,6 +66,35 @@ export class ScoringBridge {
   private readonly bonusTallySystem: BonusTallySystem
   private readonly goldBallStreakSystem: GoldBallStreakSystem
   private readonly scoringBreakdown = getScoringBreakdownManager()
+  /** The rules this run plays under (`setRules`), and their engine. */
+  private runRules: RunRules = vanillaRunRules()
+  private runRulesHash = VANILLA_RULES_HASH
+  private rules: RulesEngine
+  /** A program action added balls during this dispatch: the handle caches need a rebuild. */
+  private rulesAddedBalls = false
+
+  private readonly rulesSink: RulesSink = {
+    displayState: () => this.host.displayState.get(),
+    award: (base, source, multiplier, tally, ctx) => {
+      this.awardScore(base, source, ctx.position, multiplier)
+      if (tally) this.bonusTallySystem.recordScore(tally, base)
+    },
+    comboHit: () => this.registerComboMultiplierHit(),
+    multiball: (balls, reason) => this.startChainMultiball(reason, balls),
+    addBalls: (count) => {
+      this.host.ballManager?.spawnExtraBalls(count)
+      this.rulesAddedBalls = true
+    },
+    ballSave: (ticks) => {
+      this.host.ballManager?.ballSaveSystem.grant(simClockMs(), ticks * FIXED_TIMESTEP * 1000)
+    },
+    kickback: (impulse, ctx) => {
+      ctx.ball?.applyImpulse({ x: impulse[0], y: impulse[1], z: impulse[2] }, true)
+    },
+    display: (state) => this.host.eventBus.emit('display:set', RULES_DISPLAY[state]),
+    emit: (event) => this.emitRulesEvent(event),
+    cue: (cue) => this.host.eventBus.emit('rules:cue', cue),
+  }
 
   // Per-ball scoring coverage instrumentation (reset on launch; for debug/audit)
   private bumperHitsThisBall = 0
@@ -75,13 +130,14 @@ export class ScoringBridge {
     this.bonusTallySystem = new BonusTallySystem({
       comboPeakBase: GAME_TUNING.feedback.bonusTallyComboPeakBase,
     })
+    this.rules = new RulesEngine(this.runRules, this.rulesSink)
 
     // Subscribe to 'points:awarded' from new obstacle builders so their scores
     // are reflected in the game score alongside legacy direct mutations.
     this.eventBusUnsubscribers.push(
       host.eventBus.on('points:awarded', (data) => {
         const comboMultiplier = this.comboMultiplierSystem.getState().multiplier
-        const effectiveMultiplier = (data.multiplier ?? 1) * this.getActiveScoreMultiplier() * comboMultiplier
+        const effectiveMultiplier = (data.multiplier ?? 1) * this.getActiveScoreMultiplier() * comboMultiplier * this.rules.getMultiplier()
         const awardedPoints = Math.round(data.amount * effectiveMultiplier)
         this.host.score += awardedPoints
         this.scoringBreakdown.recordScore(awardedPoints, data.source)
@@ -113,10 +169,11 @@ export class ScoringBridge {
       })
     )
 
+    // A jackpot from any source (the gold-ball program, the slot machine) is a program event.
     this.eventBusUnsubscribers.push(
       host.eventBus.on('jackpot:start', () => {
         if (!this.host.stateManager.isPlaying()) return
-        this.startChainMultiball('jackpot', 3)
+        this.dispatchRules('jackpot')
       })
     )
 
@@ -157,11 +214,78 @@ export class ScoringBridge {
     this.host.zoneTriggerSystem?.resetBallCounters?.()
   }
 
-  awardScore(basePoints: number, source: string, position?: Vec3Like): number {
+  /**
+   * The rules this run plays under (#556): a new engine on them, its state fresh. Called at the start
+   * of every run — live (the machine's rules) and replayed (the tape's) — before the first step.
+   */
+  setRules(rules: RunRules, hash: string): void {
+    this.runRules = rules
+    this.runRulesHash = hash
+    this.rules = new RulesEngine(rules, this.rulesSink)
+  }
+
+  getRunRules(): RunRules {
+    return this.runRules
+  }
+
+  /** `rulesHash` of the rules this run plays under: the tape, the submission and the board carry it. */
+  getRulesHash(): string {
+    return this.runRulesHash
+  }
+
+  /** The program's engine (debug HUD, tests). */
+  getRulesEngine(): RulesEngine {
+    return this.rules
+  }
+
+  /**
+   * Raise `event` into the run's program; returns the base points its handlers awarded. Balls a
+   * handler added are in the dispatch sets when this returns.
+   */
+  dispatchRules(event: RulesEventName, ctx?: RulesEventContext): number {
+    const awarded = this.rules.dispatch(event, ctx)
+    if (this.rulesAddedBalls) {
+      this.rulesAddedBalls = false
+      this.host.rebuildHandleCaches()
+    }
+    return awarded
+  }
+
+  /** One fixed step of the program's timers and modes (`StepGameplay`). */
+  tickRules(): void {
+    this.rules.tick()
+    if (this.rulesAddedBalls) {
+      this.rulesAddedBalls = false
+      this.host.rebuildHandleCaches()
+    }
+  }
+
+  private emitRulesEvent(event: RulesEmit): void {
+    switch (event) {
+      case 'fever:start':
+        this.host.eventBus.emit('fever:start')
+        return
+      case 'fever:end':
+        this.host.eventBus.emit('fever:end')
+        return
+      case 'reach:start':
+        this.host.eventBus.emit('reach:start')
+        return
+      case 'jackpot:start':
+        this.host.eventBus.emit('jackpot:start')
+        return
+    }
+  }
+
+  /**
+   * Add `basePoints` × multiball × combo × `rulesMultiplier` (the program's playfield × mode
+   * multiplier; 1 under the vanilla rules) to the score.
+   */
+  awardScore(basePoints: number, source: string, position?: Vec3Like, rulesMultiplier = 1): number {
     this.awardScoreCalls++
     const multiballMultiplier = this.getActiveScoreMultiplier()
     const comboMultiplier = this.comboMultiplierSystem.getState().multiplier
-    const totalMultiplier = multiballMultiplier * comboMultiplier
+    const totalMultiplier = multiballMultiplier * comboMultiplier * rulesMultiplier
     const awardedPoints = Math.round(basePoints * totalMultiplier)
     this.host.score += awardedPoints
     this.scoringBreakdown.recordScore(awardedPoints, source)
@@ -252,12 +376,9 @@ export class ScoringBridge {
       this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
     }
     this.syncComboSnapshot()
+    // Read before the program runs: a gold ball drained in FEVER scores FEVER's multiplier.
     const wasFeverActive = this.host.displayState.get() === DisplayState.FEVER
-    if (wasFeverActive) {
-      this.host.eventBus.emit('fever:end')
-      this.host.eventBus.emit('display:set', DisplayState.IDLE)
-      this.host.effects?.setLightingMode('normal', 0)
-    }
+    this.dispatchRules('drain', { values: { primary: wasPrimaryBall ? 1 : 0 }, ball: body })
 
     const collected = this.host.ballManager?.collectBall(body)
     if (collected && collected.type !== BallType.STANDARD) {
@@ -273,8 +394,9 @@ export class ScoringBridge {
       const streakAdjustedBase = Math.round(collected.points * streak.multiplier)
       // Stacking: base → streak → fever → combo/multiball (awardScore)
       const feverDisplayState = wasFeverActive ? DisplayState.FEVER : DisplayState.IDLE
-      const feverMultiplier = getFeverScoreMultiplier(feverDisplayState, collected.type)
-      const feverAdjustedBase = applyFeverGoldMultiplier(feverDisplayState, collected.type, streakAdjustedBase)
+      const feverMultipliers = this.runRules.balls.feverMultipliers
+      const feverMultiplier = getFeverScoreMultiplier(feverDisplayState, collected.type, feverMultipliers)
+      const feverAdjustedBase = applyFeverGoldMultiplier(feverDisplayState, collected.type, streakAdjustedBase, feverMultipliers)
       if (feverMultiplier > 1) {
         this.host.eventBus.emit('score:multiplier', {
           basePoints: streakAdjustedBase,
@@ -306,6 +428,7 @@ export class ScoringBridge {
           feverDisplayState,
           collected.type,
           collected.quickCollectBonus.totalPoints,
+          feverMultipliers,
         )
         const bonusAwarded = this.awardScore(
           quickCollectAdjustedBase,
@@ -322,18 +445,12 @@ export class ScoringBridge {
         this.host.showMessage(`QUICK COLLECT x${collected.quickCollectBonus.multiplier.toFixed(1)} +${bonusAwarded}`, 1800)
       }
 
-      if (GAME_TUNING.multiball.triggerGoldThresholds.includes(this.host.sessionGoldBalls)) {
-        this.startChainMultiball('gold-threshold', 2)
-      }
-
-      if (collected.jackpotEligible) {
-        this.host.effects?.startSolidGoldPulse()
-        this.host.eventBus.emit('jackpot:start')
-        this.host.eventBus.emit('display:set', DisplayState.JACKPOT)
-        this.host.hapticManager?.jackpot()
-      } else {
-        this.host.effects?.setBloomEnergy(1.5)
-      }
+      this.dispatchRules('goldCollect', {
+        kind: collected.type,
+        values: { goldBalls: this.host.sessionGoldBalls, jackpot: collected.jackpotEligible ? 1 : 0 },
+        ball: body,
+        position: collectPos,
+      })
       this.host.updateGoldBallDisplay()
     }
 
@@ -420,10 +537,6 @@ export class ScoringBridge {
     return this.comboSystem.registerBumperHit(this.nowSeconds())
   }
 
-  recordChainBonus(points: number): void {
-    this.bonusTallySystem.recordScore('chain-bonus', points)
-  }
-
   getComboImpactTier(): 'light' | 'medium' | 'heavy' {
     if (this.host.accessibility.reducedMotion || GameConfig.accessibility.photosensitiveMode) {
       return 'light'
@@ -449,11 +562,7 @@ export class ScoringBridge {
       })
       this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
       this.host.updateHUD()
-      if (this.host.displayState.get() === DisplayState.FEVER) {
-        this.host.eventBus.emit('fever:end')
-        this.host.eventBus.emit('display:set', DisplayState.IDLE)
-        this.host.effects?.setLightingMode('normal', 0)
-      }
+      this.dispatchRules('comboExpire', { values: { finalCombo: broken.finalComboCount } })
     }
 
     const expired = this.comboMultiplierSystem.update(dt)

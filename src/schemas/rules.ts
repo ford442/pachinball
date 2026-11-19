@@ -1,10 +1,14 @@
 /**
- * Machine rules (`MachineDescriptor.rules`), as a Valibot schema (#505 §A):
- * ball spawn weights / points / fever multipliers, the fever threshold and
- * the Daily Cascade constraints (`cascade.weekly`: a weekly machine's seeded
- * table). This is rules v1 — what the runtime plays today. Slice 1 (#506)
- * grows it into rules v2 (scoring, combos, multiball, modes, wizard) behind
- * a `RulesEngine`, and records its hash in the replay tape.
+ * Machine rules (`MachineDescriptor.rules`), as a Valibot schema (#505 §A).
+ *
+ * Rules v1 is the ball economy — spawn weights / points / fever multipliers —
+ * the fever threshold and the Daily Cascade constraints (`cascade.weekly`: a
+ * weekly machine's seeded table). Rules v2 (#556 Slice 1) adds `program`: the
+ * scoring as event handlers (`rules-program.ts`), run by `RulesEngine`
+ * (`src/rules/`). A v1 file is a valid v2 file: a rules object without a
+ * `program` plays the vanilla program (`src/rules/vanilla.ts`), the scoring the
+ * game has always had. The rules a run played under are recorded in its tape
+ * as `rulesHash` (`src/rules/rules-hash.ts`).
  *
  * Pure TS — no Babylon, no DOM.
  */
@@ -12,7 +16,8 @@
 import * as v from 'valibot'
 import { BALL_SPAWN_CONFIG, BallType } from '../config/balls'
 import { GAME_TUNING } from '../config/gameplay'
-import { canonicalJson, inRange, intInRange, isRecord, strict, withCrossCheck } from './schema-kit'
+import { inRange, intInRange, isRecord, strict, withCrossCheck } from './schema-kit'
+import { RulesProgramSchema } from './rules-program'
 import { WeeklyMachineSchema } from './weekly'
 
 const BALL_TYPE_KEYS = [BallType.STANDARD, BallType.GOLD_PLATED, BallType.SOLID_GOLD] as const
@@ -54,9 +59,21 @@ export const MachineRulesSchema = strict({
   cascade: strict({
     weekly: v.optional(WeeklyMachineSchema),
   }),
+  /** Rules v2: the scoring program. Absent → the vanilla program. */
+  program: v.optional(RulesProgramSchema),
 })
 
 export type MachineRules = v.InferOutput<typeof MachineRulesSchema>
+
+/**
+ * The rules a run plays under, as a tape carries them inline (#556): the scoring part of the rules
+ * with the program resolved (`src/rules/rules-types.ts` `RunRules`).
+ */
+export const RunRulesSchema = strict({
+  balls: MachineRulesSchema.entries.balls,
+  fever: MachineRulesSchema.entries.fever,
+  program: RulesProgramSchema,
+})
 /** The rules the game plays today (`BALL_SPAWN_CONFIG`, `GAME_TUNING.combo`), as machine rules. */
 export function defaultMachineRules(): MachineRules {
   return {
@@ -70,9 +87,3 @@ export function defaultMachineRules(): MachineRules {
   }
 }
 
-/** True when `rules` are the ones the game plays without a machine (the only rules the runtime applies yet); key order does not matter. */
-export function rulesAreDefault(rules: MachineRules): boolean {
-  const { cascade: _cascade, ...rest } = rules
-  const { cascade: _defaultCascade, ...defaults } = defaultMachineRules()
-  return canonicalJson(rest) === canonicalJson(defaults)
-}
