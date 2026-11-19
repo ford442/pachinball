@@ -56,8 +56,8 @@ bool moverValid(const KinematicMover& m) {
 }
 
 /**
- * Manifold entries as flushEvents leaves them: strictly ascending pair keys,
- * pin indices ≥ 0. Their floats are not checked: they only ever feed an Exit
+ * Manifold entries as flushEvents leaves them: strictly ascending ContactKey
+ * (pair, then pin index — #520 row 7), pin indices ≥ 0. Their floats are not checked: they only ever feed an Exit
  * event, never the solver, and a live world can store an overflowed impulse.
  */
 bool manifoldValid(const std::vector<ContactEvent>& manifold) {
@@ -66,7 +66,7 @@ bool manifoldValid(const std::vector<ContactEvent>& manifold) {
     if (e.subIndex < 0) return false;
     if (i > 0) {
       const ContactEvent& p = manifold[i - 1];
-      if (contactPairKey(p.bodyId1, p.bodyId2) >= contactPairKey(e.bodyId1, e.bodyId2)) return false;
+      if (!(contactKey(p) < contactKey(e))) return false;
     }
   }
   return true;

@@ -293,6 +293,7 @@ if(NOT EMSCRIPTEN)
     tests/broadphase_test.cpp
     tests/correctness_bugs_test.cpp
     tests/correctness_520_test.cpp
+    tests/correctness_520_solver_test.cpp
   )
   # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_link_libraries(physics_world_test PRIVATE
