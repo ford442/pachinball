@@ -117,6 +117,7 @@ float PhysicsWorld::step(float rawDt) {
   if (accumulator_ > debtCap) accumulator_ = debtCap;
 
   if (substepsDone > 0) {
+    carrySleepingContacts();
     contactListener_.flushEvents();
     scatterTransforms();
   }
@@ -129,13 +130,88 @@ int PhysicsWorld::getActiveBodyCount() const {
 }
 
 void PhysicsWorld::wakeOnContact(BodyView& a, BodyView* b) {
+  // An awake dynamic body always wakes a sleeper it touches (their island
+  // then sleeps as one); a kinematic one only while it moves, or a ball at
+  // rest against a parked toy would be woken by it every substep.
   auto wakesSleepers = [](BodyView* partner) -> bool {
     if (!partner || !partner->valid() || !partner->isActive()) return false;
     const BodyType t = partner->getType();
-    return t == BodyType::Dynamic || t == BodyType::Kinematic;
+    if (t == BodyType::Dynamic) return true;
+    if (t != BodyType::Kinematic) return false;
+    return partner->getVelocity().lengthSq() > 0.f || partner->getAngularVelocity().lengthSq() > 0.f;
   };
   if (!a.isActive() && wakesSleepers(b)) a.wake();
   if (b && b->valid() && !b->isActive() && wakesSleepers(&a)) b->wake();
+
+  // Two dynamic bodies that touch share an island for this substep's sleep test.
+  if (b && b->valid() && a.getType() == BodyType::Dynamic && b->getType() == BodyType::Dynamic) {
+    uniteSleepIslands(a.denseIndex(), b->denseIndex());
+  }
+}
+
+void PhysicsWorld::uniteSleepIslands(int a, int b) {
+  auto root = [this](int i) {
+    while (sleepIsland_[static_cast<std::size_t>(i)] != i) {
+      // Path halving: deterministic, and keeps the forest shallow.
+      int& parent = sleepIsland_[static_cast<std::size_t>(i)];
+      parent = sleepIsland_[static_cast<std::size_t>(parent)];
+      i = parent;
+    }
+    return i;
+  };
+  const int ra = root(a);
+  const int rb = root(b);
+  if (ra != rb) sleepIsland_[static_cast<std::size_t>(std::max(ra, rb))] = std::min(ra, rb);
+}
+
+void PhysicsWorld::wakeAllBodies() {
+  for (int i = 0; i < bodies_.denseCount(); ++i) {
+    BodyView body = bodies_.view(i);
+    if (!body.isActive()) body.wake();
+  }
+}
+
+namespace {
+
+bool moverMoves(const KinematicMover& mover) {
+  return mover.linearVelocity.lengthSq() > 0.f || mover.angularVelocity.lengthSq() > 0.f;
+}
+
+} // namespace
+
+void PhysicsWorld::carrySleepingContacts() {
+  // A sleeper is not re-solved, so its contacts would read as Exit — a ball
+  // asleep in a zone sensor would leave it, then enter again on waking. It
+  // keeps them (as Stay, impulse 0) while what it touches cannot have moved
+  // away: a static, a parked mover, another sleeper. A contact with an awake
+  // body or a moving mover that was not observed again has ended: the sleeper
+  // wakes, and the Exit stands.
+  contactListener_.forEachPrevious([this](const ContactEvent& e) {
+    if (contactListener_.observed(e)) return;
+    BodyView a = findViewMut(e.bodyId1);
+    if (!a.valid()) return;
+    BodyView b = e.bodyId2 >= 0 ? findViewMut(e.bodyId2) : BodyView{};
+    if (e.bodyId2 >= 0 && !b.valid()) return;
+    const bool aSleeps = !a.isActive();
+    const bool bSleeps = b.valid() && !b.isActive();
+    if (!aSleeps && !bSleeps) return;
+
+    bool ended = false;
+    if (b.valid()) {
+      ended = !(aSleeps && bSleeps);
+    } else if (e.bodyId2 <= KINEMATIC_MOVER_ID_BASE && e.bodyId2 > SENSOR_VOLUME_ID_BASE) {
+      const std::size_t idx = static_cast<std::size_t>(KINEMATIC_MOVER_ID_BASE - e.bodyId2);
+      ended = idx >= movers_.size() || moverMoves(movers_[idx]);
+    }
+    if (ended) {
+      if (aSleeps) a.wake();
+      if (bSleeps) b.wake();
+      return;
+    }
+    ContactEvent kept = e;
+    kept.impulse = 0.f;
+    contactListener_.pushContact(kept);
+  });
 }
 
 // ---- Non-finite quarantine ------------------------------------------------
@@ -186,9 +262,9 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
   bodies_.integrateAll(dt, params_.gravity);
   quarantineNonFinite(substepIndex);
 
-  bodies_.updateSleep(params_.sleepLinearThreshold,
-                      params_.sleepAngularThreshold,
-                      params_.sleepFramesRequired);
+  // Every body its own island until a contact unites it with another (wakeOnContact).
+  sleepIsland_.resize(static_cast<std::size_t>(bodies_.denseCount()));
+  for (std::size_t i = 0; i < sleepIsland_.size(); ++i) sleepIsland_[i] = static_cast<int>(i);
 
   broadphase_.buildPairs(bodies_, boxes_, capsules_, cylinders_, spheres_, cones_,
                          sensors_, movers_, triangles_, meshes_, prevPositions_, pairs_);
@@ -307,7 +383,13 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
         }
       } else if (pair.type == BroadphaseGrid::Pair::BodyMover) {
         BodyView body = bodies_.view(pair.bodyA);
-        if (!meetsStatics(body)) continue;
+        if (body.getType() != BodyType::Dynamic) continue;
+        // The broadphase pairs sleepers with movers as well: a moving one
+        // nearby wakes them (a piston rising under a parked ball).
+        if (!body.isActive()) {
+          if (!moverMoves(movers_[static_cast<std::size_t>(pair.bodyB)])) continue;
+          body.wake();
+        }
         if (body.getShape() == Shape::Capsule) {
           resolveCapsuleVsMover(body, pair.bodyB);
         } else if (body.getShape() == Shape::Box) {
@@ -337,6 +419,14 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
   }
 
   quarantineNonFinite(substepIndex);
+
+  // On the velocities the solve left (#520 row 3): tested after integration,
+  // a body resting under gravity always carried a full substep of it and
+  // could never sleep.
+  bodies_.updateSleep(params_.sleepLinearThreshold,
+                      params_.sleepAngularThreshold,
+                      params_.sleepFramesRequired,
+                      sleepIsland_);
 }
 
 } // namespace pachinball

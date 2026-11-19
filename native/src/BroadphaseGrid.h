@@ -91,7 +91,8 @@ public:
    *
    * A sleeping Dynamic body stays in the grid as a target: an awake body
    * (a steered kinematic ball, one rolling in) pairs with it so contact can
-   * wake it, but two sleepers never pair and a sleeper never meets statics.
+   * wake it, and so does a mover (one that moves wakes it); but two sleepers
+   * never pair and a sleeper never meets other statics.
    *
    * `previous` holds each body's pose at the start of the substep, dense-indexed
    * (see SensorVolume.h). A body that travelled is also paired with every sensor

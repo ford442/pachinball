@@ -44,6 +44,12 @@ public:
   void setAngularVelocity(const Vec3& w);
   void setRotation(const Quat& q);
 
+  /**
+   * Setters, forces and impulses leave the sleep state alone (#520 row 3):
+   * the solver applies them to a resting body every substep, and while they
+   * woke it a ball in contact could never sleep. A sleeper is woken
+   * explicitly — wake(), the PhysicsWorld API, contact with something moving.
+   */
   void applyForce(const Vec3& f);
   void applyImpulse(const Vec3& imp);
   void applyTorqueImpulse(const Vec3& torqueImp);
@@ -93,7 +99,18 @@ public:
   void setType(int denseIndex, BodyType type);
 
   void integrateAll(float dt, const Vec3& gravity);
-  void updateSleep(float linearThreshold, float angularThreshold, int framesRequired);
+  /**
+   * Count each awake dynamic body's resting substeps (velocity and spin at or
+   * under the thresholds; anything faster resets it), then put to sleep every
+   * contact island whose bodies have all rested `framesRequired` substeps.
+   * `island` is a union-find parent array over dense indices (PhysicsWorld
+   * unites bodies that touched this substep); bodies past its end are
+   * islands of their own. Runs after the solve, on the velocities the
+   * contacts left (#520 row 3). A body put to sleep has its velocity, spin
+   * and force zeroed.
+   */
+  void updateSleep(float linearThreshold, float angularThreshold, int framesRequired,
+                   std::vector<int>& island);
 
   [[nodiscard]] int activeCount() const;
 
@@ -147,6 +164,9 @@ private:
   std::vector<uint16_t> sleepCounter_;
   std::vector<uint32_t> membership_;
   std::vector<uint32_t> filter_;
+
+  /** updateSleep's per-island flags, reused across substeps. */
+  std::vector<uint8_t> sleepScratch_;
 };
 
 } // namespace pachinball

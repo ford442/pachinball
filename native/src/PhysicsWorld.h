@@ -400,7 +400,13 @@ private:
   void applyProbeHits(BodyView& body, const ProbeHit* hits, int count, float restitution, float friction,
                       int otherId, int subIndex, const KinematicMover* mover);
 
+  /** Wake a sleeper touched by something moving; unite dynamic pairs' sleep islands. */
   void wakeOnContact(BodyView& a, BodyView* b);
+  /** Union of two dense indices in `sleepIsland_` (BodyStore::updateSleep). */
+  void uniteSleepIslands(int a, int b);
+  void wakeAllBodies();
+  /** Keep a sleeper's contacts in the manifold (carried as Stay) while nothing it touches moved. */
+  void carrySleepingContacts();
 
   static Vec3 closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB);
 
@@ -461,6 +467,8 @@ private:
   /** Dense-indexed rotation at the start of the current substep (quarantine restore). Transient. */
   std::vector<Quat>              substepStartRotations_;
   std::vector<NaNQuarantine>     quarantines_;
+  /** Per-substep union-find of dynamic bodies in contact (sleep islands). Transient. */
+  std::vector<int>               sleepIsland_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 

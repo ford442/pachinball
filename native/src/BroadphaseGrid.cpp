@@ -411,6 +411,24 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     }
   }
 
+  // Sleeper vs mover: a mover that moves wakes the sleepers it reaches
+  // (PhysicsWorld::substep), so a piston rising under a parked ball lifts it.
+  if (!sleeperCells_.empty() && !moverCells_.empty()) {
+    for (const auto& entry : sleeperCells_) {
+      const auto mit = moverCells_.find(entry.first);
+      if (mit == moverCells_.end()) continue;
+      for (int sleeper : entry.second) {
+        for (int moverIdx : mit->second) {
+          const KinematicMover& mover = movers[static_cast<std::size_t>(moverIdx)];
+          if (!groupsInteract(bodies.membership(sleeper), bodies.filter(sleeper),
+                              mover.membership, mover.filter)) continue;
+          if (!seenStatic.insert(pairKeyStatic(sleeper, moverIdx, Pair::BodyMover)).second) continue;
+          outPairs.push_back({Pair::BodyMover, sleeper, moverIdx});
+        }
+      }
+    }
+  }
+
   // Swept sensor candidates. A body that crossed a thin sensor inside one
   // substep ends on the far side of it, in cells the loops above never paired
   // with that sensor. Reach the sensors along the whole segment; `seenStatic`

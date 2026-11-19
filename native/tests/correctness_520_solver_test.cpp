@@ -323,3 +323,131 @@ TEST_CASE("a tick that runs no substep leaves the pose push pending", "[520][kin
   CHECK(near(readPos(w, id).x, 0.5f, 1e-6f));
   CHECK(near(readVel(w, id).x, 0.5f / FIXED_DT, 1e-2f));
 }
+
+// ---- Row 3: a body at rest in contact sleeps --------------------------------
+
+namespace {
+
+WorldParams sleepy() {
+  WorldParams p;
+  p.gravity = {0.f, -9.81f, 0.f};
+  p.sleepFramesRequired = 8;
+  return p;
+}
+
+RigidBodyDesc restingBall(float x, float y, float z) {
+  RigidBodyDesc d;
+  d.position = {x, y, z};
+  d.radius = 0.2f;
+  d.restitution = 0.f;
+  d.friction = 0.3f;
+  return d;
+}
+
+} // namespace
+
+TEST_CASE("a ball resting on the floor under gravity falls asleep", "[520][sleep]") {
+  // The solver's contact impulse and positional correction woke the ball
+  // every substep, and the sleep test ran after integration, on a velocity
+  // that always held a substep of gravity: nothing in contact ever slept.
+  PhysicsWorld w(sleepy());
+  w.addStaticBox(0.f, -0.5f, 0.f, 4.f, 0.5f, 4.f, 0.f, 0.f, 0.f, 1.f);
+  const int id = w.createRigidBody(restingBall(0.f, 0.2f, 0.f));
+  stepFixed(w, 60);
+  CHECK(w.getActiveBodyCount() == 0);
+  CHECK(readVel(w, id).lengthSq() < 1e-4f);
+  CHECK(near(readPos(w, id).y, 0.2f, 0.01f));
+
+  // The API wakes it.
+  w.applyImpulse(id, 0.f, 0.f, 0.3f);
+  stepFixed(w, 5);
+  CHECK(w.getActiveBodyCount() == 1);
+  CHECK(readPos(w, id).z > 0.01f);
+}
+
+TEST_CASE("balls at rest on each other sleep as one island", "[520][sleep]") {
+  // A ball dropped onto a sleeping one wakes it; from then on the two sleep
+  // and wake together, never one without the other. (A taller stack does
+  // not come to rest yet: 4 PGS iterations leave its top ball sinking at
+  // ~0.1 m/s — the warm-started solver of #520 slice 3.)
+  PhysicsWorld w(sleepy());
+  w.addStaticBox(0.f, -0.5f, 0.f, 4.f, 0.5f, 4.f, 0.f, 0.f, 0.f, 1.f);
+  const int bottom = w.createRigidBody(restingBall(0.f, 0.2f, 0.f));
+  stepFixed(w, 30);
+  REQUIRE(w.getActiveBodyCount() == 0);
+
+  const int top = w.createRigidBody(restingBall(0.f, 0.9f, 0.f));
+  bool landed = false;
+  int lonelySleeper = 0;
+  for (int f = 0; f < 240; ++f) {
+    w.step(FIXED_DT);
+    landed |= readPos(w, top).y < 0.62f;
+    if (landed && w.getActiveBodyCount() == 1) ++lonelySleeper;
+  }
+  CHECK(landed);
+  CHECK(lonelySleeper <= 1);  // the step the top ball lands on
+  CHECK(w.getActiveBodyCount() == 0);
+  CHECK(readVel(w, top).lengthSq() == 0.f);   // asleep at rest
+  CHECK(readVel(w, bottom).lengthSq() == 0.f);
+}
+
+TEST_CASE("a sleeper keeps its contacts: no Exit while it sleeps", "[520][sleep]") {
+  // A ball asleep in a zone sensor must not read as having left it.
+  PhysicsWorld w(sleepy());
+  w.addStaticBox(0.f, -0.5f, 0.f, 4.f, 0.5f, 4.f, 0.f, 0.f, 0.f, 1.f);
+  SensorVolumeDesc zone;
+  zone.center = {0.f, 0.5f, 0.f};
+  zone.halfExtents = {1.f, 0.5f, 1.f};
+  const int zoneId = w.addSensorVolume(zone);
+  w.createRigidBody(restingBall(0.f, 0.2f, 0.f));
+
+  int exits = 0;
+  int zoneStays = 0;
+  for (int f = 0; f < 60; ++f) {
+    w.step(FIXED_DT);
+    for (const ContactEvent& e : w.lastContactEvents()) {
+      if (e.phase == ContactPhase::Exit) ++exits;
+      if (e.bodyId2 == zoneId && e.phase == ContactPhase::Stay) ++zoneStays;
+    }
+  }
+  REQUIRE(w.getActiveBodyCount() == 0);
+  CHECK(exits == 0);
+  CHECK(zoneStays == 59);  // every step after the Enter, asleep or not
+}
+
+TEST_CASE("a moving mover wakes the ball asleep on it", "[520][sleep]") {
+  PhysicsWorld w(sleepy());
+  KinematicMoverDesc piston;
+  piston.halfExtents = {0.6f, 0.1f, 0.6f};
+  const int pistonId = w.addKinematicMover(piston);
+  const int id = w.createRigidBody(restingBall(0.f, 0.3f, 0.f));
+  stepFixed(w, 60);
+  REQUIRE(w.getActiveBodyCount() == 0);
+
+  for (int f = 0; f < 20; ++f) {
+    w.setNextKinematicTransform(pistonId, 0.f, 0.02f * static_cast<float>(f + 1), 0.f, 0.f, 0.f, 0.f, 1.f);
+    w.step(FIXED_DT);
+  }
+  CHECK(readPos(w, id).y > 0.3f + 0.35f);  // carried up with the piston
+}
+
+TEST_CASE("a sleeper wakes when what it rests on goes away", "[520][sleep]") {
+  // Removing the ball underneath, or a gravity change, leaves a sleeper
+  // resting on nothing; the world wakes it.
+  PhysicsWorld w(sleepy());
+  w.addStaticBox(0.f, -0.5f, 0.f, 4.f, 0.5f, 4.f, 0.f, 0.f, 0.f, 1.f);
+  const int bottom = w.createRigidBody(restingBall(0.f, 0.2f, 0.f));
+  const int top = w.createRigidBody(restingBall(0.f, 0.6f, 0.f));
+  stepFixed(w, 240);
+  REQUIRE(w.getActiveBodyCount() == 0);
+
+  w.removeRigidBody(bottom);
+  stepFixed(w, 30);
+  CHECK(readPos(w, top).y < 0.25f);  // fell onto the floor
+
+  stepFixed(w, 120);
+  REQUIRE(w.getActiveBodyCount() == 0);
+  w.setGravity(3.f, -9.81f, 0.f);
+  stepFixed(w, 30);
+  CHECK(readPos(w, top).x > 0.05f);
+}

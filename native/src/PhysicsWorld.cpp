@@ -32,7 +32,8 @@ void PhysicsWorld::removeRigidBody(int id) {
   // A hinge cannot outlive its body (#520 row 12): erased, not just disabled,
   // so it leaves the solve loop, the snapshot and the state hash.
   eraseHingesIf([id](const HingeJoint& h) { return h.bodyId == id; });
-  bodies_.remove(handles_, id);
+  // Whatever was resting on it must fall (#520 row 3).
+  if (bodies_.remove(handles_, id)) wakeAllBodies();
 }
 
 // ---- Hinges ---------------------------------------------------------------
@@ -107,8 +108,10 @@ void PhysicsWorld::removeHinge(int id) {
 void PhysicsWorld::solveHinges(float dt) {
   for (HingeJoint& h : hinges_) {
     BodyView body = findViewMut(h.bodyId);
-    // removeRigidBody erases a body's hinges, so every hinge here has one.
-    if (body.valid()) solveWorldHinge(h, body, dt);
+    // removeRigidBody erases a body's hinges, so every hinge here has one. A
+    // sleeping body is not integrated, so its hinge waits for it to wake
+    // (setHingeMotor, or a ball's contact).
+    if (body.valid() && body.isActive()) solveWorldHinge(h, body, dt);
   }
 }
 
@@ -122,34 +125,48 @@ BodyView PhysicsWorld::findView(int id) const {
   return const_cast<BodyStore&>(bodies_).view(dense);
 }
 
+// The API wakes the body it touches; BodyView's own setters do not (#520 row 3).
+
 void PhysicsWorld::applyForce(int id, float fx, float fy, float fz) {
   BodyView b = findViewMut(id);
-  if (b.valid()) b.applyForce({fx, fy, fz});
+  if (!b.valid()) return;
+  b.applyForce({fx, fy, fz});
+  b.wake();
 }
 
 void PhysicsWorld::applyImpulse(int id, float ix, float iy, float iz) {
   BodyView b = findViewMut(id);
-  if (b.valid()) b.applyImpulse({ix, iy, iz});
+  if (!b.valid()) return;
+  b.applyImpulse({ix, iy, iz});
+  b.wake();
 }
 
 void PhysicsWorld::setVelocity(int id, float vx, float vy, float vz) {
   BodyView b = findViewMut(id);
-  if (b.valid()) b.setVelocity({vx, vy, vz});
+  if (!b.valid()) return;
+  b.setVelocity({vx, vy, vz});
+  b.wake();
 }
 
 void PhysicsWorld::setAngularVelocity(int id, float wx, float wy, float wz) {
   BodyView b = findViewMut(id);
-  if (b.valid()) b.setAngularVelocity({wx, wy, wz});
+  if (!b.valid()) return;
+  b.setAngularVelocity({wx, wy, wz});
+  b.wake();
 }
 
 void PhysicsWorld::setBodyPosition(int id, float px, float py, float pz) {
   BodyView b = findViewMut(id);
-  if (b.valid()) b.setPosition({px, py, pz});
+  if (!b.valid()) return;
+  b.setPosition({px, py, pz});
+  b.wake();
 }
 
 void PhysicsWorld::setBodyRotation(int id, float qx, float qy, float qz, float qw) {
   BodyView b = findViewMut(id);
-  if (b.valid()) b.setRotation(sanitizedRotation({qx, qy, qz, qw}));
+  if (!b.valid()) return;
+  b.setRotation(sanitizedRotation({qx, qy, qz, qw}));
+  b.wake();
 }
 
 void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance, float friction,
@@ -272,9 +289,13 @@ void PhysicsWorld::clearStaticGeometry() {
   // Mover cells are rebuilt from scratch every substep, so clearing the
   // vector above is all that is needed there.
   contactListener_.resetManifold();
+  // Nothing a sleeper rested on is left.
+  wakeAllBodies();
 }
 
 void PhysicsWorld::setCollisionGroups(int id, uint32_t membership, uint32_t filter) {
+  // A sleeper may rest on whatever stops colliding (#520 row 3).
+  wakeAllBodies();
   if (id >= 0) {
     BodyView b = findViewMut(id);
     if (b.valid()) b.setCollisionGroups(membership, filter);
@@ -320,7 +341,11 @@ void PhysicsWorld::setGravity(float gx, float gy, float gz) {
   // A non-finite world parameter is never applied: worldParamsValid() would
   // then refuse the world's own snapshot.
   const Vec3 g{gx, gy, gz};
-  if (isFiniteVec3(g)) params_.gravity = g;
+  if (!isFiniteVec3(g)) return;
+  const Vec3& old = params_.gravity;
+  // A sleeper rests against the old gravity (#520 row 3).
+  if (g.x != old.x || g.y != old.y || g.z != old.z) wakeAllBodies();
+  params_.gravity = g;
 }
 
 void PhysicsWorld::setRollingResistance(float rr) {

@@ -235,6 +235,19 @@ public:
     droppedTotal_ = droppedTotal;
   }
 
+  /** True when this step already observed `e`'s contact. */
+  bool observed(const ContactEvent& e) const { return current_.find(contactKey(e)) != current_.end(); }
+
+  /**
+   * Visit the persistent manifold (last flush's contacts) in hash order.
+   * `fn` may pushContact(): it inserts into the step's observations, not
+   * the manifold being visited.
+   */
+  template <typename Fn>
+  void forEachPrevious(Fn fn) const {
+    for (const auto& kv : previous_) fn(kv.second);
+  }
+
   /** Discard queued observations without emitting. Does not clear the manifold. */
   void clearEvents() { current_.clear(); }
 

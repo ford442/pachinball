@@ -92,7 +92,6 @@ void BodyView::setPosition(const Vec3& p) {
   store_->posX_[i] = p.x;
   store_->posY_[i] = p.y;
   store_->posZ_[i] = p.z;
-  wake();
 }
 
 void BodyView::setVelocity(const Vec3& v) {
@@ -100,7 +99,6 @@ void BodyView::setVelocity(const Vec3& v) {
   store_->velX_[i] = v.x;
   store_->velY_[i] = v.y;
   store_->velZ_[i] = v.z;
-  wake();
 }
 
 void BodyView::setAngularVelocity(const Vec3& w) {
@@ -108,7 +106,6 @@ void BodyView::setAngularVelocity(const Vec3& w) {
   store_->angVelX_[i] = w.x;
   store_->angVelY_[i] = w.y;
   store_->angVelZ_[i] = w.z;
-  wake();
 }
 
 void BodyView::setRotation(const Quat& q) {
@@ -117,7 +114,6 @@ void BodyView::setRotation(const Quat& q) {
   store_->rotY_[i] = q.y;
   store_->rotZ_[i] = q.z;
   store_->rotW_[i] = q.w;
-  wake();
 }
 
 void BodyView::applyForce(const Vec3& f) {
@@ -125,7 +121,6 @@ void BodyView::applyForce(const Vec3& f) {
   store_->forceX_[i] += f.x;
   store_->forceY_[i] += f.y;
   store_->forceZ_[i] += f.z;
-  wake();
 }
 
 void BodyView::applyImpulse(const Vec3& imp) {
@@ -135,7 +130,6 @@ void BodyView::applyImpulse(const Vec3& imp) {
   store_->velX_[i] += imp.x * invM;
   store_->velY_[i] += imp.y * invM;
   store_->velZ_[i] += imp.z * invM;
-  wake();
 }
 
 void BodyView::applyTorqueImpulse(const Vec3& torqueImp) {
@@ -145,7 +139,6 @@ void BodyView::applyTorqueImpulse(const Vec3& torqueImp) {
   store_->angVelX_[i] += torqueImp.x * invI;
   store_->angVelY_[i] += torqueImp.y * invI;
   store_->angVelZ_[i] += torqueImp.z * invI;
-  wake();
 }
 
 void BodyView::applyImpulseAt(const Vec3& impulse, const Vec3& worldPoint) {
@@ -423,13 +416,19 @@ void BodyStore::integrateAll(float dt, const Vec3& gravity) {
   }
 }
 
-void BodyStore::updateSleep(float linearThreshold, float angularThreshold, int framesRequired) {
+void BodyStore::updateSleep(float linearThreshold, float angularThreshold, int framesRequired,
+                            std::vector<int>& island) {
   const float linSq = linearThreshold * linearThreshold;
   const float angSq = angularThreshold * angularThreshold;
-  const int n = denseCount();
+  const std::size_t count = static_cast<std::size_t>(denseCount());
+  if (island.size() < count) {
+    // Bodies no contact grouped this substep are islands of their own.
+    const std::size_t from = island.size();
+    island.resize(count);
+    for (std::size_t i = from; i < count; ++i) island[i] = static_cast<int>(i);
+  }
 
-  for (int i = 0; i < n; ++i) {
-    const std::size_t si = static_cast<std::size_t>(i);
+  for (std::size_t si = 0; si < count; ++si) {
     if (active_[si] == 0) continue;
     if (static_cast<BodyType>(type_[si]) != BodyType::Dynamic) {
       // Kinematic proxies stay awake.
@@ -445,12 +444,35 @@ void BodyStore::updateSleep(float linearThreshold, float angularThreshold, int f
     if (vSq <= linSq && wSq <= angSq) {
       const int next = static_cast<int>(sleepCounter_[si]) + 1;
       sleepCounter_[si] = static_cast<uint16_t>(std::min(next, 65535));
-      if (next >= framesRequired) {
-        active_[si] = 0;
-      }
     } else {
       sleepCounter_[si] = 0;
     }
+  }
+
+  // An island sleeps when every awake dynamic body in it is ready: bodies
+  // resting on each other fall asleep together instead of waking each other
+  // in turn. `island` is a union-find forest whose roots name the islands.
+  auto root = [&island](std::size_t i) {
+    std::size_t r = i;
+    while (island[r] != static_cast<int>(r)) r = static_cast<std::size_t>(island[r]);
+    return r;
+  };
+  auto sleepsHere = [this](std::size_t i) {
+    return active_[i] != 0 && static_cast<BodyType>(type_[i]) == BodyType::Dynamic;
+  };
+  std::vector<uint8_t>& ready = sleepScratch_;
+  ready.assign(count, 1);
+  for (std::size_t si = 0; si < count; ++si) {
+    if (sleepsHere(si) && static_cast<int>(sleepCounter_[si]) < framesRequired) ready[root(si)] = 0;
+  }
+  for (std::size_t si = 0; si < count; ++si) {
+    if (!sleepsHere(si) || ready[root(si)] == 0) continue;
+    // Asleep at rest: whatever the solve left under the thresholds is
+    // dropped, so a woken body starts from rest and reports none meanwhile.
+    active_[si] = 0;
+    velX_[si] = velY_[si] = velZ_[si] = 0.f;
+    angVelX_[si] = angVelY_[si] = angVelZ_[si] = 0.f;
+    forceX_[si] = forceY_[si] = forceZ_[si] = 0.f;
   }
 }
 
