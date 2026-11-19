@@ -45,7 +45,8 @@ public:
   void setBodyPosition(int id, float px, float py, float pz);
   void setBodyRotation(int id, float qx, float qy, float qz, float qw);
 
-  void addStaticPlane(float nx, float ny, float nz, float distance, float friction = 0.2f);
+  void addStaticPlane(float nx, float ny, float nz, float distance, float friction = 0.2f,
+                      float restitution = PLANE_DEFAULT_RESTITUTION);
 
   int addStaticBox(float px, float py, float pz,
                    float hx, float hy, float hz,

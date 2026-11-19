@@ -9,11 +9,22 @@
 
 namespace pachinball {
 
-/** Parameters for creating an infinite half-space (static plane). */
+/** A plane's restitution when none is given: the identity of the `min` combine. */
+inline constexpr float PLANE_DEFAULT_RESTITUTION = 1.f;
+
+/**
+ * Parameters for creating an infinite half-space (static plane).
+ *
+ * `restitution` combines with the body's by `min`, as every other static
+ * does (#520 row 11). Spheres used to ignore the plane's (they bounced with
+ * their own) and dynamic boxes met a hard-coded 0.4. The default 1 caps
+ * nothing, so a ball on a plane built without one bounces as it always did.
+ */
 struct PlaneDesc {
-  Vec3  normal   = Vec3::up();
-  float distance = 0.f;
-  float friction = 0.2f;
+  Vec3  normal      = Vec3::up();
+  float distance    = 0.f;
+  float friction    = 0.2f;
+  float restitution = PLANE_DEFAULT_RESTITUTION;
 };
 
 /** Oriented static box collider (half-extents in local space). */

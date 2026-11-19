@@ -222,8 +222,8 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.enqueue({ type: 'setRollingResistance', rr })
   }
 
-  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2): void {
-    this.enqueue({ type: 'addStaticPlane', normal, d, friction })
+  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2, restitution = 1): void {
+    this.enqueue({ type: 'addStaticPlane', normal, d, friction, restitution })
   }
 
   addStaticBox(

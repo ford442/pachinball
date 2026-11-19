@@ -32,7 +32,7 @@ export interface WasmSimEngine {
 
   setGravity(x: number, y: number, z: number): void
   setRollingResistance(rr: number): void
-  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction?: number): void
+  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction?: number, restitution?: number): void
   addStaticBox(
     center: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },

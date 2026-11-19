@@ -152,7 +152,8 @@ void PhysicsWorld::setBodyRotation(int id, float qx, float qy, float qz, float q
   if (b.valid()) b.setRotation(sanitizedRotation({qx, qy, qz, qw}));
 }
 
-void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance, float friction) {
+void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance, float friction,
+                                  float restitution) {
   // The solver reads `normal` as unit: (0, 2, 0) sank a ball to half its
   // radius. A plane has no handle, so one with no direction is simply refused.
   Vec3 normal;
@@ -160,7 +161,9 @@ void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance, 
     ++droppedStatics_;
     return;
   }
-  planes_.push_back({normal, distance, friction});
+  // Feeds a `min` in the solver, where a NaN is build-dependent (std::min vs f32.min).
+  const float e = (std::isfinite(restitution) && restitution >= 0.f) ? restitution : PLANE_DEFAULT_RESTITUTION;
+  planes_.push_back({normal, distance, friction, e});
 }
 
 int PhysicsWorld::addStaticBox(float px, float py, float pz,

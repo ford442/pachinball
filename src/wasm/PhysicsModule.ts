@@ -174,9 +174,10 @@ export class WasmPhysicsEngine {
    * Add a static infinite half-space plane.
    * @param normal  Unit normal (outward-facing).
    * @param d       Signed plane offset from origin along the normal.
+   * @param restitution  Combined with the body's by `min`; 1 (the default) caps nothing.
    */
-  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2): void {
-    bodies.addStaticPlane(this.world, normal, d, friction)
+  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2, restitution = 1): void {
+    bodies.addStaticPlane(this.world, normal, d, friction, restitution)
   }
 
   /**

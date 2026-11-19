@@ -192,7 +192,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("removeHinge", &PhysicsWorld::removeHinge)
 
     // Static geometry
-    .function("addStaticPlane", &PhysicsWorld::addStaticPlane)
+    .function("addStaticPlane", &PhysicsWorld::addStaticPlane)  // (nx, ny, nz, d, friction, restitution)
     .function("addStaticBox",    &PhysicsWorld::addStaticBox)
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
     .function("addStaticCylinder", &PhysicsWorld::addStaticCylinder)

@@ -189,7 +189,7 @@ void PhysicsWorld::resolveSphereVsPlane(BodyView& body, const PlaneDesc& plane) 
   float velN   = vel.dot(plane.normal);
   if (velN >= 0.5f) return;
 
-  float e = body.getRestitution();
+  float e = std::min(body.getRestitution(), plane.restitution);
   const Vec3 contactPoint = body.getPosition() - plane.normal * body.getRadius();
   const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(plane.friction, 0.f));
   float j = applyContactImpulse(body, nullptr, contactPoint, plane.normal, e, mu, penetration);

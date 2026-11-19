@@ -57,8 +57,12 @@ export interface WasmHingeDesc {
 // Table statics
 // ---------------------------------------------------------------------------
 
-export function addStaticPlane(world: World, normal: Vec3, d: number, friction = 0.2): void {
-  world?.addStaticPlane(normal.x, normal.y, normal.z, d, friction)
+/**
+ * `restitution` combines with the body's by `min`, like every other static
+ * (#520 row 11); the default 1 caps nothing — a ball bounces with its own.
+ */
+export function addStaticPlane(world: World, normal: Vec3, d: number, friction = 0.2, restitution = 1): void {
+  world?.addStaticPlane(normal.x, normal.y, normal.z, d, friction, restitution)
 }
 
 export function addStaticBox(

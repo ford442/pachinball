@@ -61,7 +61,9 @@ void foldFamily(SnapshotHasher& h, const std::vector<SnapshotRank>& rank) {
 }
 
 uint64_t digestPlane(const PlaneDesc& p) {
-  return digestOf([&](SnapshotHasher& h) { hashVec(h, p.normal); h.f32(p.distance); h.f32(p.friction); });
+  return digestOf([&](SnapshotHasher& h) {
+    hashVec(h, p.normal); h.f32(p.distance); h.f32(p.friction); h.f32(p.restitution);
+  });
 }
 uint64_t digestBox(const BoxDesc& b) {
   return digestOf([&](SnapshotHasher& h) {

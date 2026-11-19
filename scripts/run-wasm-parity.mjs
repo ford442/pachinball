@@ -106,7 +106,7 @@ failed ||= !runScenario('wasm ball-on-capsule', (w) => {
 
 failed ||= !runScenario('wasm ball+bumper drop', (w) => {
   w.setGravity(0, -9.81, -5)
-  w.addStaticPlane(0, 1, 0, 0, 0.18)
+  w.addStaticPlane(0, 1, 0, 0, 0.18, 1)
   w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.25, 0.76, 0.1, 0, 0, 0.5, 0.14, 0.18)
   w.createRigidBody(0, 0.5, 0, 0, 0, 0, 0, 0.4, 0.94, 0, 1, 0, 0.5, 0.05, 0)
 }, (w) => {
@@ -125,7 +125,7 @@ failed ||= !runScenario('wasm kinematic capsule flings ball', (w) => {
 failed ||= !runScenario('wasm spinning ball picks up tangential velocity', (w) => {
   w.setGravity(0, 0, 0)
   w.setRollingResistance(0)
-  w.addStaticPlane(-1, 0, 0, -1, 0.8)
+  w.addStaticPlane(-1, 0, 0, -1, 0.8, 1)
   const id = w.createRigidBody(0.7, 0, 0, 2, 0, 0, 1, 0.25, 0.4, 0, 0, 0, 0.5, 0.8, 0)
   w.setAngularVelocity(id, 0, 10, 0)
 }, (w) => {
@@ -144,7 +144,7 @@ failed ||= !runScenario('wasm spinning ball picks up tangential velocity', (w) =
   const wasm = new Module.PhysicsWorld()
   wasm.setGravity(0, 0, 0)
   wasm.setRollingResistance(0)
-  wasm.addStaticPlane(-1, 0, 0, -1, 0.8)
+  wasm.addStaticPlane(-1, 0, 0, -1, 0.8, 1)
   const wasmId = wasm.createRigidBody(0.7, 0, 0, 2, 0, 0, 1, 0.25, 0.4, 0, 0, 0, 0.5, 0.8, 0)
   wasm.setAngularVelocity(wasmId, 0, 10, 0)
 
@@ -239,7 +239,7 @@ function readContacts(mod, world) {
 {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, -9.81, 0)
-  world.addStaticPlane(0, 1, 0, 0, 0.2)
+  world.addStaticPlane(0, 1, 0, 0, 0.2, 1)
   world.createRigidBody(0, 0.25, 0, 0, 0, 0, 1, 0.25, 0, 0.05, 0, 0, 0.5, 0.5, 0.15)
 
   const planePhases = []
@@ -795,7 +795,7 @@ failed ||= !runScenario('wasm dynamic box rests on a static box', (w) => {
 {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, -9.81, 0)
-  world.addStaticPlane(0, 1, 0, 0, 0.3)
+  world.addStaticPlane(0, 1, 0, 0, 0.3, 1)
   const held = world.createRigidBody(0, 0.25, 0, 0, 0, 0, 1, 0.25, 0.5, 0, 0, 0, 0.5, 0.2, 0)
   const roller = world.createRigidBody(-1.2, 0.25, 0, 8, 0, 0, 1, 0.25, 0.5, 0, 0, 0, 0.5, 0.2, 0)
   world.setBodyType(held, 2)

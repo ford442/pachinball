@@ -388,7 +388,7 @@ describe('WasmPhysicsEngine', () => {
   it('addStaticPlane() delegates to world.addStaticPlane', async () => {
     await injectWorld(engine, worldStub)
     engine.addStaticPlane({ x: 0, y: 1, z: 0 }, -2)
-    expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2, 0.2)
+    expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2, 0.2, 1)
   })
 
   it('addStaticBox() delegates to world.addStaticBox', async () => {

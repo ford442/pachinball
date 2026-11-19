@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <vector>
@@ -196,4 +197,57 @@ TEST_CASE("a hinge limit holds a motor driving into it at any iteration count", 
     CHECK(w.getHingeAngle(b.hinge) < 0.3f + 0.02f);
     CHECK(w.getHingeAngle(b.hinge) > 0.3f - 0.05f);
   }
+}
+
+// ---- Row 11: a plane has its own restitution -------------------------------
+
+namespace {
+
+/** Peak upward speed after a 0.8-restitution body falls 2 m onto a y = 0 plane. */
+float reboundSpeed(Shape shape, float planeRestitution) {
+  WorldParams params;
+  params.gravity = {0.f, -9.81f, 0.f};
+  PhysicsWorld w(params);
+  w.addStaticPlane(0.f, 1.f, 0.f, 0.f, 0.f, planeRestitution);
+  RigidBodyDesc d;
+  d.shape = shape;
+  d.position = {0.f, 2.f, 0.f};
+  d.radius = 0.2f;
+  d.boxHalfExtents = {0.2f, 0.2f, 0.2f};
+  d.restitution = 0.8f;
+  d.friction = 0.f;
+  d.linearDamping = 0.f;
+  d.angularDamping = 0.f;
+  const int id = w.createRigidBody(d);
+  float peak = 0.f;
+  for (int f = 0; f < 90; ++f) {
+    w.step(FIXED_DT);
+    peak = std::max(peak, readVel(w, id).y);
+  }
+  return peak;
+}
+
+} // namespace
+
+TEST_CASE("plane restitution combines by min for spheres and boxes alike", "[520][plane]") {
+  // ~6 m/s at impact. Spheres used to bounce with their own 0.8 whatever the
+  // plane, and boxes always met a hard-coded 0.4.
+  const float impact = std::sqrt(2.f * 9.81f * 1.8f);
+
+  CHECK(reboundSpeed(Shape::Sphere, 0.f) < 0.05f * impact);
+  CHECK(reboundSpeed(Shape::Box, 0.f) < 0.05f * impact);
+
+  const float sphereHalf = reboundSpeed(Shape::Sphere, 0.5f);
+  CHECK(sphereHalf > 0.45f * impact);
+  CHECK(sphereHalf < 0.55f * impact);
+
+  // No restitution given: the body's own 0.8, for the crate as well.
+  CHECK(reboundSpeed(Shape::Sphere, PLANE_DEFAULT_RESTITUTION) > 0.75f * impact);
+  CHECK(reboundSpeed(Shape::Box, PLANE_DEFAULT_RESTITUTION) > 0.6f * impact);
+}
+
+TEST_CASE("a non-finite or negative plane restitution falls back to the default", "[520][plane]") {
+  const float impact = std::sqrt(2.f * 9.81f * 1.8f);
+  CHECK(reboundSpeed(Shape::Sphere, std::nanf("")) > 0.75f * impact);
+  CHECK(reboundSpeed(Shape::Sphere, -1.f) > 0.75f * impact);
 }
