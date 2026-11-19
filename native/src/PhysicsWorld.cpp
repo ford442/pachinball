@@ -9,10 +9,10 @@
 namespace pachinball {
 
 PhysicsWorld::PhysicsWorld(const WorldParams& params)
-    : params_(params) {
-  // The boundary WorldParams enters through; stored sanitised, so the state
-  // hash of a NaN cap equals the default's.
-  params_.maxSubsteps = sanitizedMaxSubsteps(params_.maxSubsteps);
+    : params_(sanitizedWorldParams(params)) {
+  // The boundary WorldParams enters through (Embind's PhysicsWorld(params)):
+  // stored sanitised, so a world never holds params its own snapshot refuses,
+  // and the state hash of a NaN cap equals the default's.
 }
 
 PhysicsWorld::~PhysicsWorld() {

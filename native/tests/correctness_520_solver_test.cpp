@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <set>
 #include <vector>
 
@@ -450,4 +451,48 @@ TEST_CASE("a sleeper wakes when what it rests on goes away", "[520][sleep]") {
   w.setGravity(3.f, -9.81f, 0.f);
   stepFixed(w, 30);
   CHECK(readPos(w, top).x > 0.05f);
+}
+
+// ---- WorldParams enters whole through Embind (#520) ------------------------
+
+TEST_CASE("a world built from params keeps the valid ones and defaults the rest", "[520][params]") {
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  WorldParams p;
+  p.gravity = {0.f, -3.f, 0.f};
+  p.solverIterations = 8;
+  p.sleepFramesRequired = 12;
+  CHECK(sanitizedWorldParams(p).gravity.y == -3.f);
+  CHECK(sanitizedWorldParams(p).solverIterations == 8);
+  CHECK(sanitizedWorldParams(p).sleepFramesRequired == 12);
+  CHECK(worldParamsValid(sanitizedWorldParams(p)));
+
+  WorldParams bad;
+  bad.gravity = {kNaN, 0.f, 0.f};
+  bad.fixedTimestep = -1.f;
+  bad.maxSubsteps = kNaN;
+  bad.solverIterations = 1000;
+  bad.rollingResistance = -0.5f;
+  bad.sleepLinearThreshold = std::numeric_limits<float>::infinity();
+  bad.sleepAngularThreshold = kNaN;
+  bad.sleepFramesRequired = -3;
+  const WorldParams s = sanitizedWorldParams(bad);
+  const WorldParams d;
+  CHECK(worldParamsValid(s));
+  CHECK(s.gravity.x == d.gravity.x);
+  CHECK(s.fixedTimestep == d.fixedTimestep);
+  CHECK(s.maxSubsteps == d.maxSubsteps);
+  CHECK(s.solverIterations == MAX_SOLVER_ITERATIONS);
+  CHECK(s.rollingResistance == d.rollingResistance);
+  CHECK(s.sleepLinearThreshold == d.sleepLinearThreshold);
+  CHECK(s.sleepAngularThreshold == d.sleepAngularThreshold);
+  CHECK(s.sleepFramesRequired == d.sleepFramesRequired);
+
+  // The world stores them sanitised, so its own snapshot restores.
+  PhysicsWorld w(bad);
+  w.createRigidBody(restingBall(0.f, 1.f, 0.f));
+  w.step(FIXED_DT);
+  const std::vector<uint8_t> blob = w.serialize();
+  PhysicsWorld copy(bad);
+  copy.createRigidBody(restingBall(0.f, 1.f, 0.f));
+  CHECK(copy.restore(blob.data(), blob.size()) == SnapshotStatus::Ok);
 }

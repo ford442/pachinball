@@ -1217,4 +1217,25 @@ const stateHex = (w) => {
     if (!ok) failed = true
   }
 }
+
+// WorldParams enters whole through Embind (#520): new PhysicsWorld(params)
+// over defaultWorldParams(); a non-finite field falls back to its default.
+{
+  const fallTime = (params) => {
+    const world = new Module.PhysicsWorld(params)
+    // px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType, shape, capsuleHalfHeight, friction, angularDamping
+    const id = world.createRigidBody(0, 0, 0, 0, 0, 0, 1, 0.25, 0.5, 0, 0, 0, 0.5, 0.2, 0)
+    for (let f = 0; f < 60; f++) world.step(1 / 60)
+    const vy = world.getVelY(id)
+    world.delete()
+    return vy
+  }
+  const defaults = Module.defaultWorldParams()
+  const weak = fallTime({ ...defaults, gravity: { x: 0, y: -3, z: 0 }, solverIterations: 8 })
+  const sanitised = fallTime({ ...defaults, gravity: { x: Number.NaN, y: 0, z: 0 }, fixedTimestep: -1 })
+  const ok = Math.abs(weak + 3) < 0.01 && Math.abs(sanitised - defaults.gravity.y) < 0.02 &&
+    defaults.solverIterations === 4 && defaults.sleepFramesRequired === 60
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm PhysicsWorld(WorldParams) (vy=${weak.toFixed(3)} sanitised vy=${sanitised.toFixed(3)})`)
+  if (!ok) failed = true
+}
 process.exit(failed ? 1 : 0)
