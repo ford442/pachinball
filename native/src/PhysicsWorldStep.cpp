@@ -188,6 +188,8 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
     return body.isActive() && body.getType() == BodyType::Dynamic;
   };
 
+  for (HingeJoint& h : hinges_) beginHingeSubstep(h);
+
   for (int iter = 0; iter < params_.solverIterations; ++iter) {
     for (const auto& pair : pairs_) {
       if (pair.type == BroadphaseGrid::Pair::BodyBody) {
