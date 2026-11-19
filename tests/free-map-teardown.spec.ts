@@ -28,7 +28,7 @@ interface TestGame {
 }
 
 async function bootGame(page: Page): Promise<void> {
-  await page.goto('http://localhost:5173/?renderer=webgl2')
+  await page.goto('/?renderer=webgl2')
   const startBtn = page.locator('#start-btn')
   await expect(startBtn).toBeVisible({ timeout: 30_000 })
 

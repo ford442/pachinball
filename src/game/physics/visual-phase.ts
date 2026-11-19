@@ -82,10 +82,7 @@ export class VisualPhase {
 
     this.host.gameObjects?.updateBumpers(dt)
 
-    effects?.updateShards(dt)
-    effects?.updateBloom()
-    effects?.updateCabinetLighting()
-    effects?.updateSlotLighting()
+    // Shards, bloom, cabinet and slot lighting advance in `effects.update()` below — once per frame.
     effects?.updateAtmosphere(dt, ballPos)
 
     ballManager?.updateTrailEffects()

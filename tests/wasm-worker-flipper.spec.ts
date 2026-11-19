@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test'
  * Skips when the worker/WASM bundle is not ready.
  */
 test.describe('wasm-worker physics mode', () => {
-  test('owner path launches a ball, reports wasm-worker, skips Rapier step', async ({ page }) => {
+  test('owner path swings the flipper hinge, reports wasm-worker, skips Rapier step', async ({ page }) => {
     test.setTimeout(120_000)
 
     await page.addInitScript(() => {
@@ -46,45 +46,37 @@ test.describe('wasm-worker physics mode', () => {
       })
     }, { timeout: 30_000 }).toBe(true)
 
-    const launched = await page.evaluate(async () => {
-      const g = (window as unknown as {
-        game?: {
-          ballManager?: { getBallBody?: () => { setTranslation: (v: unknown, w: boolean) => void; setLinvel: (v: unknown, w: boolean) => void; linvel: () => { z: number } } }
-          physics?: {
-            getLastRapierStepMs?: () => number
-            getWasmMode?: () => string
-          }
-          inputActions?: { handleFlipperLeft: (p: boolean) => void }
-          physicsController?: { rebuildHandleCaches?: () => void }
-        }
-      }).game
-      const ball = g?.ballManager?.getBallBody?.()
-      if (!ball) return { ok: false, vz: 0, rapierMs: -1, mode: g?.physics?.getWasmMode?.() ?? '' }
-
-      g.physicsController?.rebuildHandleCaches?.()
-      ball.setTranslation({ x: -2.5, y: 0.4, z: -6.2 }, true)
-      ball.setLinvel({ x: 0, y: 0, z: -1.5 }, true)
-      g.physicsController?.rebuildHandleCaches?.()
-
-      const waitFrames = (n: number) => new Promise<void>((resolve) => {
-        let i = 0
-        const tick = () => { if (++i >= n) resolve(); else requestAnimationFrame(tick) }
-        requestAnimationFrame(tick)
-      })
-
-      g.inputActions?.handleFlipperLeft(true)
-      await waitFrames(45)
-      g.inputActions?.handleFlipperLeft(false)
-      await waitFrames(15)
-
-      const vz = ball.linvel().z
-      const rapierMs = g.physics?.getLastRapierStepMs?.() ?? -1
-      return { ok: true, vz, rapierMs, mode: g.physics?.getWasmMode?.() ?? '' }
+    // Drive the flipper through the real keyboard path (Digit1 = left flipper). A
+    // `handleFlipperLeft(true)` from page.evaluate does not stick under the live render loop:
+    // the held-key poll releases it on the next frame (see tests/wasm-owner-flipper.spec.ts,
+    // which steps by hand instead). The hinge must swing the body from its rest angle
+    // towards the active one, with every step in the worker and none in Rapier.
+    type FlipperHooks = {
+      game?: {
+        gameObjects?: { getFlipper?: (name: string) => { body: { rotation: () => { y: number } } } | undefined }
+        physics?: { getLastRapierStepMs?: () => number; getWasmMode?: () => string }
+      }
+    }
+    const flipperYaw = () => page.evaluate(() => {
+      const q = (window as unknown as FlipperHooks).game?.gameObjects?.getFlipper?.('left')?.body.rotation()
+      return q ? q.y : NaN
     })
 
-    expect(launched.ok).toBe(true)
-    expect(launched.mode).toBe('wasm-worker')
-    expect(launched.rapierMs).toBe(0)
-    expect(Math.abs(launched.vz)).toBeGreaterThan(0.5)
+    const rest = await flipperYaw()
+    expect(Number.isFinite(rest), 'left flipper body').toBe(true)
+    await page.keyboard.down('Digit1')
+    // Under SwiftShader a frame can take a second: wait for the swing, not a fixed delay.
+    await expect.poll(async () => Math.abs((await flipperYaw()) - rest), { timeout: 30_000, intervals: [100] }).toBeGreaterThan(0.2)
+    const held = Math.abs((await flipperYaw()) - rest)
+    await page.keyboard.up('Digit1')
+    // Released, the (damped) hinge swings back towards rest.
+    await expect.poll(async () => Math.abs((await flipperYaw()) - rest), { timeout: 30_000, intervals: [100] }).toBeLessThan(held * 0.8)
+
+    const physics = await page.evaluate(() => {
+      const g = (window as unknown as FlipperHooks).game
+      return { rapierMs: g?.physics?.getLastRapierStepMs?.() ?? -1, mode: g?.physics?.getWasmMode?.() ?? '' }
+    })
+    expect(physics.mode).toBe('wasm-worker')
+    expect(physics.rapierMs).toBe(0)
   })
 })

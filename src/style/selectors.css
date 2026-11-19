@@ -283,11 +283,17 @@
   }
 }
 
-/* In-play widgets sit on top of the menu row (Start / Try WebGPU / Settings)
-   and intercept clicks. Hide them while the menu overlay is showing
-   (MENU and GAME_OVER); keyboard shortcuts C / M / L still work. */
+/* In-play widgets (z-index 50) sit above every overlay (z-index 30) and
+   intercept clicks. Hide them while the menu (MENU and GAME_OVER), the pause
+   menu or the settings panel is showing; keyboard shortcuts C / M / L still work. */
 #menu-overlay:not(.hidden) ~ #map-selector,
 #menu-overlay:not(.hidden) ~ #cabinet-selector,
-#menu-overlay:not(.hidden) ~ #levels-selector {
+#menu-overlay:not(.hidden) ~ #levels-selector,
+#pause-overlay:not(.hidden) ~ #map-selector,
+#pause-overlay:not(.hidden) ~ #cabinet-selector,
+#pause-overlay:not(.hidden) ~ #levels-selector,
+#settings-overlay:not(.hidden) ~ #map-selector,
+#settings-overlay:not(.hidden) ~ #cabinet-selector,
+#settings-overlay:not(.hidden) ~ #levels-selector {
   display: none;
 }

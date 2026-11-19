@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 /**
  * E2E regression for #266: collision events must resolve collider handles to
  * parent body handles before bumper/flipper dispatch. Vitest covers the
- * dispatcher in isolation; this spec runs real Rapier in the browser.
+ * dispatcher in isolation; this spec runs the default engine (C++ wasm-owner) in the browser.
  *
  * Headless play rarely routes the ball from the plunger lane (x≈10.5) onto the
  * main field in time, so after one launch we place the ball on a bumper and
@@ -14,11 +14,11 @@ test.describe('Scoring collision dispatch (#266)', () => {
     test.setTimeout(120_000);
 
     await page.goto('/?renderer=webgl2');
-    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 });
 
     await expect.poll(async () => {
       return page.evaluate(() => !!(window as any).game?.stateManager);
-    }, { intervals: [200], timeout: 15_000 }).toBe(true);
+    }, { intervals: [200], timeout: 60_000 }).toBe(true);
 
     await page.evaluate(() => document.getElementById('start-btn')?.click());
     await page.waitForTimeout(500);
@@ -68,11 +68,11 @@ test.describe('Scoring collision dispatch (#266)', () => {
     test.setTimeout(120_000);
 
     await page.goto('/?renderer=webgl2');
-    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 });
 
     await expect.poll(async () => {
       return page.evaluate(() => !!(window as any).game?.stateManager);
-    }, { intervals: [200], timeout: 15_000 }).toBe(true);
+    }, { intervals: [200], timeout: 60_000 }).toBe(true);
 
     await page.evaluate(() => document.getElementById('start-btn')?.click());
     await page.waitForTimeout(500);
@@ -82,7 +82,12 @@ test.describe('Scoring collision dispatch (#266)', () => {
     }, { intervals: [200], timeout: 30_000 }).toBe(true);
 
     await page.evaluate(() => (window as any).game?.inputActions?.handlePlunger?.());
-    await page.waitForTimeout(3000);
+    // The ball needs a variable number of render frames to roll up the lane to `launch-mid`
+    // (slow on SwiftShader under load): wait for the rollover, not a fixed delay.
+    await expect.poll(async () => page.evaluate(() => (window as any).game?.physicsController?.getLastLaneHit?.() ?? null), {
+      intervals: [200],
+      timeout: 30_000,
+    }).not.toBeNull();
 
     const pipeline = await page.evaluate(() => {
       const g = (window as any).game;

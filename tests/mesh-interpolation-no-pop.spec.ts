@@ -72,6 +72,9 @@ test('ball mesh moves on frames without a step and never draws behind the pre-st
     if (!mesh) return { ...empty, reason: 'no ball mesh' }
 
     // A moving, awake ball. Collisions are fine: every check is against the two physics poses.
+    // It starts in the plunger lane, where a -z push only drives it into the plunger and stops it
+    // within ~40 frames; (5, 0) on the open field rolls freely for the whole run.
+    ball.setTranslation({ x: 5, y: 0.5, z: 0 }, true)
     ball.setLinvel({ x: 0.4, y: 0, z: -3 }, true)
     g.physicsController.rebuildHandleCaches?.()
 

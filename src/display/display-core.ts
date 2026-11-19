@@ -357,6 +357,11 @@ export class DisplaySystem {
     this.videoLayer.loadVideo(url)
   }
 
+  /** The story line the LCD currently shows (adventure portals, zone entry). */
+  get storyText(): string {
+    return this.lcdOverlayLayer.getStoryText()
+  }
+
   /** Set story text for adventure mode */
   setStoryText(text: string): void {
     this.lcdOverlayLayer.setStoryText(text)

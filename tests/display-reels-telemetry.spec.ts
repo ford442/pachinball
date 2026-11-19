@@ -26,7 +26,7 @@ type MeasurementResult = {
 }
 
 async function bootGame(page: Page, renderer: 'webgl2' | 'webgpu'): Promise<void> {
-  await page.goto(`http://localhost:5173/?renderer=${renderer}`)
+  await page.goto(`/?renderer=${renderer}`)
   await page.evaluate(() => {
     localStorage.setItem('debug:reels-telemetry', 'true')
   })

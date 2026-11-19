@@ -64,7 +64,8 @@ export class SimPhysicsController {
   }
   private readonly replaySnapshots: ReplaySnapshotSync
 
-  private readonly scoringBridge: ScoringBridge
+  /** Contact scoring and ball loss; public so E2E specs can drive a drain (`tests/game-test-handle.ts`). */
+  readonly scoringBridge: ScoringBridge
   protected readonly collisionDispatcher: CollisionDispatcher
   private readonly nudgeTilt: NudgeTilt
   private readonly gameplay: StepGameplay

@@ -128,6 +128,61 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # Blocking behaviour specs on the shipped default engine (C++ wasm-owner from the pinned SDK).
+  # The `e2e` job above runs without public/wasm (Rapier degrade) and the preview job cannot
+  # import /src, so these specs — scoring dispatch, the race ghost, transient materials and the
+  # scoring breakdown — used to run only nightly, and a refactor like #528 broke them silently
+  # for days. They are dev-server specs (challenge-v2 imports /src modules).
+  e2e-behaviour:
+    name: playwright behaviour (dev server, wasm-owner, blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up the pinned Emscripten SDK
+        uses: ./.github/actions/setup-emsdk
+
+      - name: Build WASM module (Release)
+        env:
+          CI: 'true'
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build:wasm
+          test -s public/wasm/PhysicsModule.wasm
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # One worker: two SwiftShader pages at once stall each other's main thread for seconds.
+      - name: Playwright behaviour specs
+        env:
+          CI: 'true'
+        run: >
+          npx playwright test
+          --project=chromium
+          --workers=1
+          tests/scoring-collision-dispatch.spec.ts
+          tests/scoring-breakdown.spec.ts
+          tests/challenge-v2.spec.ts
+          tests/transient-materials.spec.ts
+
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behaviour-playwright-results
+          path: test-results/
+          retention-days: 7
+
   # Blocking smoke against the production bundle: `vite build` + `vite preview`, the desktop
   # smoke specs, twice. wasm=true builds the C++ bundle and expects the `wasm-owner` default;
   # wasm=false removes public/wasm and expects the fail-closed `rapier` path. The dev-server

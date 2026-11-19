@@ -94,6 +94,10 @@ export class GameUIManager {
     ensurePauseButton(this.state)
   }
 
+  /** The OS `prefers-reduced-motion` preference the HUD animations honour (tracked live; settable for tests). */
+  get prefersReducedMotion(): boolean { return this.state.prefersReducedMotion }
+  set prefersReducedMotion(value: boolean) { this.state.prefersReducedMotion = value }
+
   setPauseButtonHandler(handler: () => void): void { setPauseButtonHandler(this.state, handler) }
   showCabinetPopup(name: string): void { showCabinetPopup(this.state, name) }
   showMapNamePopup(name: string, color: string): void { showMapNamePopup(this.state, name, color) }

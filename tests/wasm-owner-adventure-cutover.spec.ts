@@ -41,7 +41,7 @@ async function bootGame(page: Page): Promise<void> {
   await page.addInitScript(() => {
     localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
   })
-  await page.goto('http://localhost:5173/?renderer=webgl2')
+  await page.goto('/?renderer=webgl2')
 
   const startBtn = page.locator('#start-btn')
   await expect(startBtn).toBeVisible({ timeout: 30_000 })
@@ -114,7 +114,7 @@ test.describe('wasm-owner adventure cutover', () => {
     await page.addInitScript(() => {
       localStorage.setItem('pachinball:physics-engine', 'rapier')
     })
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 })
     await expect.poll(
       () => page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager),

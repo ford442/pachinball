@@ -192,6 +192,17 @@ export function simClockSeconds(): number {
   return simClockMs() / 1000
 }
 
+/**
+ * `simClockSeconds()` plus the steps of the render frame in progress (see `simClockLiveSteps`):
+ * the gameplay time of the tick or contact callback that is running. Wall time when no clock
+ * is installed (unit tests).
+ */
+export function simClockLiveSeconds(): number {
+  if (!installed) return performance.now() / 1000
+  const pending = installed.liveSteps ? installed.liveSteps() - installed.steps() : 0
+  return (installed.ms() + pending * FIXED_TIMESTEP * 1000) / 1000
+}
+
 /** Gameplay clock in fixed steps; 0 when none is installed. */
 export function simClockSteps(): number {
   return installed ? installed.steps() : 0

@@ -11,7 +11,7 @@ test.describe('Engine bootstrap', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('default boot exposes preserveDrawingBuffer=false', async ({ page }) => {
-    await page.goto('http://localhost:5173/')
+    await page.goto('/')
     await waitForBootstrapOptions(page)
 
     const preserveDrawingBuffer = await page.evaluate(() => {
@@ -25,7 +25,7 @@ test.describe('Engine bootstrap', () => {
   })
 
   test('?preserveBuffer=1 enables preserveDrawingBuffer', async ({ page }) => {
-    await page.goto('http://localhost:5173/?preserveBuffer=1')
+    await page.goto('/?preserveBuffer=1')
     await waitForBootstrapOptions(page)
 
     const preserveDrawingBuffer = await page.evaluate(() => {
@@ -39,7 +39,7 @@ test.describe('Engine bootstrap', () => {
   })
 
   test('?renderer=webgl2 boots and tags canvas', async ({ page }) => {
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await waitForBootstrapOptions(page)
 
     const renderer = await page.evaluate(() => {
@@ -55,7 +55,7 @@ test.describe('Engine bootstrap', () => {
   })
 
   test('boot publishes the context-loss hook and an empty degrade buffer', async ({ page }) => {
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await waitForBootstrapOptions(page)
 
     await expect(page.locator('body')).toHaveAttribute('data-gpu-context', 'ok')
@@ -71,7 +71,7 @@ test.describe('Engine bootstrap', () => {
   })
 
   test('boot publishes a render-path probe', async ({ page }) => {
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await waitForBootstrapOptions(page)
 
     // The post-process half of the probe is filled when the pipeline is built, which is
@@ -95,7 +95,7 @@ test.describe('Engine bootstrap', () => {
   })
 
   test('context loss flips the hook to lost and toasts, restore flips it back', async ({ page }) => {
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await waitForBootstrapOptions(page)
 
     // WebGPU has no reliable cross-browser programmatic context loss, so the bootstrap
@@ -127,7 +127,7 @@ test.describe('Engine bootstrap', () => {
 
   test('the restore toast does not animate under prefers-reduced-motion', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await waitForBootstrapOptions(page)
 
     await page.evaluate(() => {
@@ -141,7 +141,7 @@ test.describe('Engine bootstrap', () => {
   test('?renderer=webgl2 game start and screenshot', async ({ page }, testInfo) => {
     test.setTimeout(180_000)
 
-    await page.goto('http://localhost:5173/?renderer=webgl2')
+    await page.goto('/?renderer=webgl2')
     await waitForBootstrapOptions(page)
     await page.locator('#start-btn').click()
     await page.waitForFunction(() => {
