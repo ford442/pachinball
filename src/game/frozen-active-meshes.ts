@@ -73,17 +73,28 @@ export interface RenderStateScene {
   readonly particlesEnabled?: boolean
 }
 
-/** What the target drives, including the Babylon internals it needs. */
-export interface ActiveMeshesScene extends RenderStateScene {
+/** The part of what the target drives that Babylon's own `Scene` type declares (a `Scene` is one). */
+export interface ActiveMeshesSceneApi extends RenderStateScene {
   skipFrustumClipping: boolean
   updateTransformMatrix(force?: boolean): void
   unfreezeActiveMeshes(): unknown
+}
+
+/**
+ * The Babylon internals the freeze needs. They are private in `Scene`'s types (or not typed at all),
+ * so a `Scene` is not assignable to a type that names them; `FrozenActiveMeshes` narrows to
+ * `ActiveMeshesScene` once, and `isSupported` checks each is really there.
+ */
+export interface ActiveMeshesInternals {
   _evaluateActiveMeshes?: () => void
   _activeMeshes?: { readonly data: Array<{ _freeze?: () => void }>; readonly length: number }
   _activeMeshesFrozen?: boolean
   _activeMeshesFrozenButKeepClipping?: boolean
   _skipEvaluateActiveMeshesCompletely?: boolean
 }
+
+/** What the target drives, including the Babylon internals it needs. */
+export type ActiveMeshesScene = ActiveMeshesSceneApi & ActiveMeshesInternals
 
 /** The camera's position is compared on this grid, so only a real move counts. */
 const CAMERA_POSITION_STEP = 0.25
@@ -154,7 +165,9 @@ export class FrozenActiveMeshes implements StaticSceneTarget {
   private frozen = false
   private _declined = false
 
-  constructor(scene: ActiveMeshesScene) {
+  constructor(scene: ActiveMeshesSceneApi) {
+    // The internals are all optional, so the public shape is already an ActiveMeshesScene; `isSupported`
+    // checks each is really there.
     this.scene = scene
   }
 

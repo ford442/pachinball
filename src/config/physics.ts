@@ -126,9 +126,10 @@ export const WASM_PHYSICS = {
    *                     are not verifiable (the lag varies by machine). Snapshots come back over a
    *                     SharedArrayBuffer when `isCrossOriginIsolated()`, else as transferred
    *                     `postMessage` buffers (see docs/wasm-physics-engine.md, #414).
-   * Legacy `wasm` is treated as `wasm-mirror`.
+   * The legacy flag value `wasm` is still accepted on input and read as `wasm-mirror`
+   * (`parseEnginePreference`); it is never a resolved preference, so it is not listed here.
    */
-  allowedEngines: ['rapier', 'wasm', 'wasm-mirror', 'wasm-owner', 'wasm-worker'] as const,
+  allowedEngines: ['rapier', 'wasm-mirror', 'wasm-owner', 'wasm-worker'] as const,
   bundleUrl: './wasm/PhysicsModule.js',
   enabled: true,
   tunables: {
@@ -144,7 +145,7 @@ export const WASM_PHYSICS = {
 export type WasmPhysicsEnginePreference = (typeof WASM_PHYSICS.allowedEngines)[number]
 
 /** Resolved runtime mode after normalising legacy flag values. */
-export type WasmPhysicsRuntimeMode = 'rapier' | 'wasm-mirror' | 'wasm-owner' | 'wasm-worker'
+export type WasmPhysicsRuntimeMode = WasmPhysicsEnginePreference
 
 function parseEnginePreference(v: string | null): WasmPhysicsEnginePreference | null {
   if (v === 'rapier') return 'rapier'
@@ -169,13 +170,12 @@ export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
   return WASM_PHYSICS.defaultEngine
 }
 
-/** Normalise localStorage values to the documented runtime modes. */
+/**
+ * The runtime mode for this page load. `getPhysicsEnginePreference` has already normalised the
+ * legacy `wasm` value (the old check for it here could never be true), so the two agree.
+ */
 export function getWasmPhysicsRuntimeMode(): WasmPhysicsRuntimeMode {
-  const pref = getPhysicsEnginePreference()
-  if (pref === 'wasm-mirror' || pref === 'wasm') return 'wasm-mirror'
-  if (pref === 'wasm-owner') return 'wasm-owner'
-  if (pref === 'wasm-worker') return 'wasm-worker'
-  return 'rapier'
+  return getPhysicsEnginePreference()
 }
 
 /**

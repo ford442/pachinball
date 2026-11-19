@@ -42,12 +42,37 @@ import { selectWebGPUFeatures } from './gpu-capabilities'
 
 export type EngineCreationPlan = 'webgl2' | 'webgpu'
 
+/**
+ * The options the engine was actually built with, not the ones first asked for: the WebGPU
+ * compatibility retry drops `setMaximumLimits`, the adapter negotiation picks `requiredFeatures`,
+ * and a failed WebGPU boot ends up on WebGL2. Exposed as `window.bootstrapEngineOptions`.
+ */
+export interface AppliedEngineOptions extends ResolvedEngineOptions {
+  /** The backend that is running (after any fallback), not the one requested. */
+  backend: 'webgpu' | 'webgl2'
+  /** WebGPU `requiredFeatures` the device was created with (the adapter-negotiated list); empty on WebGL2. */
+  requiredFeatures: string[]
+}
+
+let appliedEngineOptions: AppliedEngineOptions | null = null
+
+/** What the last `createEngine` built the engine with; null before one has been created. */
+export function getAppliedEngineOptions(): AppliedEngineOptions | null {
+  return appliedEngineOptions
+}
+
 /** Greppable marker for "we booted on a degraded GPU path" — see docs/ENGINE_BOOTSTRAP.md. */
 export const GPU_DEGRADE_MARKER = '[Bootstrap][gpu-degrade]'
 
 /** Dev/test-only globals that drive the context-loss UX without a real device loss. */
 export const DEBUG_LOSE_CONTEXT_GLOBAL = '__DEBUG_LOSE_CONTEXT'
 export const DEBUG_RESTORE_CONTEXT_GLOBAL = '__DEBUG_RESTORE_CONTEXT'
+
+/** Where those two hooks are published (`window` by default; tests pass a plain object). */
+export interface GpuDebugHookHost {
+  [DEBUG_LOSE_CONTEXT_GLOBAL]?: () => void
+  [DEBUG_RESTORE_CONTEXT_GLOBAL]?: () => void
+}
 
 /** Pure routing for tests — which backend createEngine will attempt. */
 export function resolveEngineCreationPlan(
@@ -124,9 +149,39 @@ interface ContextObservable {
   removeCallback: (callback: () => void) => unknown
 }
 
+/** The part of a `GPUDevice` the loss log reads (`WebGPUEngine._device` is public in Babylon). */
+interface LostDevice {
+  lost?: Promise<{ reason?: string; message?: string }>
+}
+
 interface ContextLostEngine {
   onContextLostObservable?: ContextObservable
   onContextRestoredObservable?: ContextObservable
+  /** WebGPU only. While `onContextLostObservable` fires it is still the lost device. */
+  _device?: LostDevice
+}
+
+/**
+ * Babylon logs WebGPU loss as `"WebGPU context lost. " + info`, which prints `[object
+ * GPUDeviceLostInfo]`. `GPUDevice.lost` is one promise per device, so reading it again here gives the
+ * same `{ reason, message }` Babylon got: `destroyed` is our own `dispose()`, `unknown` is the
+ * driver / OS taking the device (TDR, GPU process crash, adapter removed).
+ */
+function logWebGPUDeviceLost(device: LostDevice | undefined, level: () => GpuDegradeFeatureLevel | null): void {
+  const lost = device?.lost
+  if (!lost) return
+  void lost.then(
+    (info) => {
+      bootWarn(
+        `${GPU_DEGRADE_MARKER} WebGPU device lost: reason=${info.reason ?? 'unknown'}` +
+          (info.message ? ` message=${JSON.stringify(info.message)}` : '') +
+          ` featureLevel=${level() ?? 'unknown'}`,
+      )
+    },
+    () => {
+      // A rejecting `lost` is a browser bug; the loss itself is already recorded.
+    },
+  )
 }
 
 export interface GpuContextLoggingDeps extends GpuContextToastDeps {
@@ -138,13 +193,13 @@ export interface GpuContextLoggingDeps extends GpuContextToastDeps {
    * Where `__DEBUG_LOSE_CONTEXT` / `__DEBUG_RESTORE_CONTEXT` are published.
    * Defaults to `window` outside production builds; pass `null` to skip them.
    */
-  debugHookHost?: Record<string, unknown> | null
+  debugHookHost?: GpuDebugHookHost | null
 }
 
-function defaultDebugHookHost(): Record<string, unknown> | null {
+function defaultDebugHookHost(): GpuDebugHookHost | null {
   // Production builds get no debug globals; dev server and Playwright do.
   if (import.meta.env?.PROD) return null
-  return typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null
+  return typeof window !== 'undefined' ? window : null
 }
 
 /**
@@ -175,6 +230,7 @@ export function attachGpuContextLogging(
   const onLost = (): void => {
     console.warn(`${GPU_DEGRADE_MARKER} GPU context lost — Babylon will attempt to restore it`)
     recordGpuDegrade('context-lost', level())
+    logWebGPUDeviceLost(engine._device, level)
     toast.onLost()
   }
   const onRestored = (): void => {
@@ -242,6 +298,8 @@ const defaultAdapterFeatureProbe: AdapterFeatureProbe = async (options) => {
 export interface WebGPUCreationResult {
   engine: WebGPUEngineLike
   featureLevel: GpuFeatureLevel
+  /** The options of the attempt that succeeded (incl. the negotiated `requiredFeatures`). */
+  options: WebGPUEngineOptions
 }
 
 /**
@@ -278,7 +336,7 @@ export async function createWebGPUEngineWithFallback(
           `requested ${options.featureLevel}`,
         )
       }
-      return { engine, featureLevel }
+      return { engine, featureLevel, options: gpuOptions }
     } catch (err) {
       bootWarn(`WebGPU init failed (${featureLevel})`, err)
       // Dispose before the next attempt — a half-initialised WebGPUEngine keeps
@@ -350,6 +408,7 @@ export async function createEngine(
         : 'WebGL2 preference'
     console.log(`[Bootstrap] Renderer preference: WebGL2 (${reason})`)
     const engine = createWebGL2Engine(canvas, engineOptions)
+    appliedEngineOptions = { ...engineOptions, backend: 'webgl2', requiredFeatures: [] }
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
     return engine
   }
@@ -358,9 +417,16 @@ export async function createEngine(
   const created = await createWebGPUEngineWithFallback(canvas, engineOptions, webgpuFactory)
 
   if (created) {
-    const engine = created.engine as unknown as WebGPUEngineType
+    const engine = created.engine as WebGPUEngineType
     setActiveGpuFeatureLevel(created.featureLevel)
     recordGpuProbeEngine('webgpu', created.featureLevel)
+    appliedEngineOptions = {
+      ...engineOptions,
+      backend: 'webgpu',
+      featureLevel: created.featureLevel,
+      setMaximumLimits: created.options.setMaximumLimits ?? false,
+      requiredFeatures: [...(created.options.deviceDescriptor?.requiredFeatures ?? [])],
+    }
     detachOnDispose(engine, attachGpuContextLogging(engine, { featureLevel: created.featureLevel }))
     console.log(
       `[Bootstrap] Active renderer: ${engine.getClassName()} (featureLevel=${created.featureLevel})`,
@@ -372,6 +438,7 @@ export async function createEngine(
   recordGpuDegrade('webgl2-fallback', 'webgl2', `requested ${engineOptions.featureLevel}`)
   try {
     const engine = createWebGL2Engine(replaceCanvas(canvas), engineOptions)
+    appliedEngineOptions = { ...engineOptions, backend: 'webgl2', requiredFeatures: [] }
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
     return engine
   } catch (err) {

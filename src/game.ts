@@ -276,6 +276,7 @@ export class Game
     await this.systemsInitializer.initAll()
 
     this.ballAnimator = new BallAnimator(scene)
+    this.ballAnimator.setMeshResolver((body) => this.ballManager?.presentation?.meshForBody(body) ?? null)
 
     await this.runCheckpointStage('input_runtime', () => {
       // Provide scene reference so the per-frame plunger animation can find meshes by name

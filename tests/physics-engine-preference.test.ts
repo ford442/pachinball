@@ -72,6 +72,14 @@ describe('physics engine preference', () => {
     expect(getWasmPhysicsRuntimeMode()).toBe('wasm-worker')
   })
 
+  it('reads the legacy `wasm` flag value as wasm-mirror, never as a preference of its own', () => {
+    setIsolated(true)
+    localStorage.setItem(WASM_PHYSICS.flagKey, 'wasm')
+    expect(getPhysicsEnginePreference()).toBe('wasm-mirror')
+    expect(getWasmPhysicsRuntimeMode()).toBe('wasm-mirror')
+    expect(WASM_PHYSICS.allowedEngines as readonly string[]).not.toContain('wasm')
+  })
+
   it('honors an explicit rapier override', () => {
     setIsolated(true)
     localStorage.setItem(WASM_PHYSICS.flagKey, 'rapier')

@@ -68,7 +68,7 @@ export function installErrorReporter(
 
   const reporter: ErrorReporter = { reports }
   if (typeof window !== 'undefined' && target === window) {
-    ;(window as unknown as { pachinballErrors?: ErrorReporter }).pachinballErrors = reporter
+    window.pachinballErrors = reporter
   }
   return reporter
 }

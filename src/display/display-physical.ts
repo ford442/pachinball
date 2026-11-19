@@ -1,5 +1,5 @@
 /**
- * PLAN.md §1 Layer 1 — Physical / mechanical backbox depth.
+ * docs/archive/PLAN.md §1 Layer 1 — Physical / mechanical backbox depth.
  * Rotating drum cylinders and a static backdrop simulate the "real" props
  * behind the glass LCD screen.
  */

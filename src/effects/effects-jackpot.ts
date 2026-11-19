@@ -25,7 +25,7 @@ interface JackpotSequenceCallbacks {
 }
 
 /**
- * The Cyber-Shock jackpot sequence (docs/PLAN.md §8): Breach 0–2 s, Critical
+ * The Cyber-Shock jackpot sequence (docs/archive/PLAN.md §8): Breach 0–2 s, Critical
  * 2–5 s, Meltdown 5–10 s. The phase is a pure function of the sim steps since
  * it started (`JackpotPhaseClock`); this class turns the clock's transitions
  * into the `jackpot:phase` event, the burst particles and the countdown beeps.

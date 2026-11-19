@@ -9,7 +9,7 @@
  * is the one the simulation is in.
  *
  * Accessibility, in three tiers:
- *   - default: the jackpot script of docs/PLAN.md §8 — a red pulse in the
+ *   - default: the jackpot script of docs/archive/PLAN.md §8 — a red pulse in the
  *     breach, a white/gold strobe in the critical phase, a rainbow wave from the
  *     top down in the meltdown. PLAN names 4 Hz and 10 Hz; every pulse is
  *     clamped to `flashFrequencyMax` (2 Hz by default, the project's seizure
@@ -39,7 +39,7 @@ export interface ScreenBorderAccessibility {
   flashFrequencyMax: number
 }
 
-/** Nominal pulse rates from docs/PLAN.md §8 and the state pulses of `BackboxBorderGlow`. */
+/** Nominal pulse rates from docs/archive/PLAN.md §8 and the state pulses of `BackboxBorderGlow`. */
 export const BORDER_NOMINAL_HZ = { breach: 4, critical: 10, fever: 4, reach: 2 } as const
 
 const WAVE_HZ = 0.5

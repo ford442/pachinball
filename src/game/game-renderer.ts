@@ -559,7 +559,7 @@ export class GameRenderer {
     const loaderObservers: Array<[StatefulLoader, unknown]> = []
     const pluginObserver: Observer<ISceneLoaderPlugin | ISceneLoaderPluginAsync> =
       SceneLoader.OnPluginActivatedObservable.add((plugin) => {
-        const loader = plugin as unknown as StatefulLoader
+        const loader = plugin as typeof plugin & StatefulLoader
         const observable = loader.onLoaderStateChangedObservable
         if (!observable) return
         loaderObservers.push([loader, observable.add(clampAll)])

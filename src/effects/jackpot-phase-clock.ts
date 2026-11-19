@@ -1,5 +1,5 @@
 /**
- * Jackpot phase clock — the Cyber-Shock sequence (docs/PLAN.md §8) counted in
+ * Jackpot phase clock — the Cyber-Shock sequence (docs/archive/PLAN.md §8) counted in
  * fixed physics steps, never render dt or `setTimeout`.
  *
  * The sequence decides when the display returns to IDLE, and the display state

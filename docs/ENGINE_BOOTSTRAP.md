@@ -12,11 +12,11 @@ Resolved by [`src/engine/engine-options.ts`](../src/engine/engine-options.ts) vi
 |--------|-------------------|----------------------------|
 | `antialias` | **`false`** — the scene renders into its own HDR target (4× MSAA on MEDIUM/HIGH, FXAA on LOW; see [`FRAME_GRAPH.md`](FRAME_GRAPH.md)) | `?antialias=1` |
 | `preserveDrawingBuffer` | **`false`** | `?preserveBuffer=1`, `window.DEBUG_PRESERVE_DRAWING_BUFFER = true` |
-| `stencil` | `true` | — |
+| `stencil` | **`false`** — nothing in `src/` draws with stencil state (no `HighlightLayer`, no stencil masks), so no stencil buffer is requested; the WebGPU swapchain and the scene target are depth-only | a feature that needs it must turn it on in `engine-options.ts` and say why |
 | `setMaximumLimits` | `true` (WebGPU MRT defense) | `?maxLimits=0` — do **not** disable to "fix" Safari; see [`webgpu-post-process-profile.ts`](../src/game/webgpu-post-process-profile.ts) |
 | `powerPreference` | `'high-performance'` (desktop), `'default'` (mobile UA) | `?power=high-performance\|low-power\|default` |
 | `adaptToDeviceRatio` | **`false`** | Documented only — the resolution policy owns DPR (see [Resolution](#resolution--hardware-scaling-pipeline)) |
-| `audioEngine` | **`false`** | — (SoundSystem + EffectsSystem own audio; avoid a third AudioContext) |
+| `audioEngine` | **`false`** | — (Babylon's own audio engine stays off: the single `AudioEngine` in `src/audio/` owns the one `AudioContext`) |
 | `doNotHandleContextLost` | **`false`** | — Babylon owns the rebuild; we only log (see [Context loss](#context-loss)) |
 | `failIfMajorPerformanceCaveat` | **`false`** (SwiftShader CI) | `?gpu=strict` |
 | `premultipliedAlpha` | **`true`** | — (matches CSS cabinet) |
@@ -113,6 +113,13 @@ explicitly.)
 
 `attachGpuContextLogging()` subscribes to `engine.onContextLostObservable` /
 `onContextRestoredObservable` and does three things: logs, drives a toast, and records the event.
+
+On WebGPU the log also carries *why*: Babylon's own handler prints `"WebGPU context lost. " + info`,
+which is `[object GPUDeviceLostInfo]`, so the handler reads the lost device's `lost` promise
+(`engine._device.lost`, the same one Babylon got) and writes `[Bootstrap][gpu-degrade] WebGPU device
+lost: reason=… message=… featureLevel=…` through `bootWarn` (so it is in the 50-line ring the error
+reporter attaches). `reason=destroyed` is our own `dispose()`; `reason=unknown` is the driver or OS
+taking the device (TDR, GPU process crash, adapter removal).
 
 With `doNotHandleContextLost: false` Babylon rebuilds the GPU resources itself. We still do **not**
 call `engine.resize()` on restore — it re-uploads nothing and would only look like recovery. We
@@ -436,4 +443,8 @@ Use `?renderer=webgl2` for automation-friendly WebGL2 canvas capture.
 
 - Screenshots use `page.screenshot()` (compositor capture) — **do not** require `preserveDrawingBuffer`.
 - Force WebGL2: `http://localhost:5173/?renderer=webgl2`
-- Verify bootstrap options: `window.bootstrapEngineOptions` exposed after load.
+- Verify bootstrap options: `window.bootstrapEngineOptions` is exposed after load. It is what
+  `createEngine` *applied* (`AppliedEngineOptions`): the running `backend` (`webgpu` / `webgl2`, after
+  any fallback), the `featureLevel` and `setMaximumLimits` of the attempt that succeeded (the
+  compatibility retry drops `setMaximumLimits`), and the negotiated `requiredFeatures`; not a fresh
+  `resolveEngineOptions()`.

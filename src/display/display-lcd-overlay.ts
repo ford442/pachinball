@@ -1,5 +1,5 @@
 /**
- * PLAN.md §1 Layer 3 — Transparent LCD overlay.
+ * docs/archive/PLAN.md §1 Layer 3 — Transparent LCD overlay.
  * Alpha canvas texture for Reach text, idle walk-bys, fever sparks, and jackpot cracks.
  * Renders over the main video layer (Layer 2).
  */

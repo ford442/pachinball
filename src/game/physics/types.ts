@@ -149,7 +149,8 @@ export interface PhysicsHost {
   readonly display: DisplaySystem | null
   /** The backbox state gameplay gates on (`SimDisplayState`, #528) — never `display.getDisplayState()`. */
   readonly displayState: { get(): import('../../display/display-types').DisplayState }
-  readonly ballAnimator: BallAnimator | null
+  /** Impact squash-and-stretch by body: what contact handlers may ask of the presentation (#528). */
+  readonly ballAnimator: Pick<BallAnimator, 'impactOnBody' | 'simpleImpactOnBody'> | null
   readonly hapticManager: HapticManager | null
   readonly soundSystem: Pick<SoundSystem, 'playImpact' | 'playGoldBallCollect'>
   readonly mapManager: import('../game-maps').TableMapManager | null

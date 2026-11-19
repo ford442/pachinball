@@ -23,7 +23,8 @@ describe('resolveEngineOptions', () => {
     expect(opts.preserveDrawingBuffer).toBe(false)
     // The canvas is not multisampled: MSAA lives on the scene's HDR target (#488 §3).
     expect(opts.antialias).toBe(false)
-    expect(opts.stencil).toBe(true)
+    // Nothing draws with stencil state (engine-options.ts), so no stencil buffer is requested.
+    expect(opts.stencil).toBe(false)
     expect(opts.setMaximumLimits).toBe(true)
     expect(opts.adaptToDeviceRatio).toBe(false)
     expect(opts.powerPreference).toBe('high-performance')

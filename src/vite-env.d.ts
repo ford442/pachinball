@@ -27,7 +27,16 @@ interface Window {
   /** Last physics degrade reason; absent when the selected engine booted. */
   physicsDegradeReason?: string
   /** Engine options the bootstrap resolved (`main.ts`). */
-  bootstrapEngineOptions?: import('./engine/engine-options').ResolvedEngineOptions
+  bootstrapEngineOptions?: import('./engine/create-engine').AppliedEngineOptions | import('./engine/engine-options').ResolvedEngineOptions
+  /** Uncaught errors / rejections (`installErrorReporter`, #503 A5). */
+  pachinballErrors?: import('./engine/error-reporter').ErrorReporter
+  /** GPU degrade ring buffer (`gpu-degrade-telemetry.ts`). */
+  bootstrapGpuDegrades?: import('./engine/gpu-degrade-telemetry').GpuDegradeEntry[]
+  /** What this session's render path is (`gpu-degrade-telemetry.ts`). */
+  bootstrapGpuProbe?: import('./engine/gpu-degrade-telemetry').GpuProbeSnapshot
+  /** Dev / Playwright only: drive the GPU context-loss UX (`attachGpuContextLogging`). */
+  __DEBUG_LOSE_CONTEXT?: () => void
+  __DEBUG_RESTORE_CONTEXT?: () => void
   /** Console flag: create the engine with `preserveDrawingBuffer` (screenshots). */
   DEBUG_PRESERVE_DRAWING_BUFFER?: boolean
   /** Shared material library, exposed for console debugging. */

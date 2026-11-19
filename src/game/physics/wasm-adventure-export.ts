@@ -97,9 +97,26 @@ function volumeDebug(volume: { kind: VolumeKind; half: DescVec3 }, pose: Pose, s
  * A sensor on a moving body has no C++ equivalent — C++ sensors are static —
  * and is returned in `movingSensors` for WasmOwner to test analytically.
  */
+/** The part of `WasmSimEngine` the export writes to; the support probe supplies just these. */
+export type AdventureExportTarget = Pick<
+  WasmSimEngine,
+  | 'addStaticBox'
+  | 'addStaticCapsule'
+  | 'addStaticCylinder'
+  | 'addStaticCone'
+  | 'addStaticSphere'
+  | 'addStaticTriangleMesh'
+  | 'addSensorVolume'
+  | 'addKinematicMover'
+  | 'addPinField'
+  | 'addForceField'
+  | 'setForceFieldEnabled'
+  | 'setCollisionGroups'
+>
+
 export function exportAdventureCollidersToWasm(
   descriptors: readonly AdventureColliderDesc[],
-  engine: WasmSimEngine
+  engine: AdventureExportTarget
 ): AdventureExportResult {
   const handles = new Map<number, number>()
   const movers: ExportedMover[] = []
@@ -277,7 +294,7 @@ export function collectUnsupported(descriptors: readonly AdventureColliderDesc[]
   // -1 is the "created nothing" sentinel, so the probe's handles start below it.
   let next = -2
   const handle = (): number => next--
-  const probe = {
+  const probe: AdventureExportTarget = {
     addStaticBox: handle,
     addStaticCapsule: handle,
     addStaticCylinder: handle,
@@ -288,7 +305,8 @@ export function collectUnsupported(descriptors: readonly AdventureColliderDesc[]
     addKinematicMover: handle,
     addPinField: handle,
     addForceField: handle,
+    setForceFieldEnabled: () => {},
     setCollisionGroups: () => {},
-  } as unknown as WasmSimEngine
+  }
   return exportAdventureCollidersToWasm(descriptors, probe).unsupported
 }

@@ -2,7 +2,7 @@ import './style.css'
 import { Game } from './game'
 import { exposeRenderer } from './renderers/renderer-selector'
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
-import { createEngine, isWebGPUEngine } from './engine/create-engine'
+import { createEngine, getAppliedEngineOptions, isWebGPUEngine } from './engine/create-engine'
 import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
@@ -62,7 +62,8 @@ async function bootstrap(): Promise<void> {
   // The WebGL2 fallback swaps in a fresh canvas (#451); tag the one the engine renders to.
   exposeRenderer(engine.getRenderingCanvas() ?? canvas, isWebGPUEngine(engine))
 
-  window.bootstrapEngineOptions = resolveEngineOptions()
+  // What createEngine built the engine with (compat retry, negotiated features, fallback backend).
+  window.bootstrapEngineOptions = getAppliedEngineOptions() ?? resolveEngineOptions()
 
   const game = new Game(engine, physics, { machine })
   bootGame = game

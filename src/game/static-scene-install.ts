@@ -19,7 +19,6 @@ import {
   FrozenActiveMeshes,
   RenderStateWatcher,
   isActiveMeshFreezeEnabled,
-  type ActiveMeshesScene,
 } from './frozen-active-meshes'
 import { FrozenMaterialSet, type FreezableMaterial } from './frozen-material-set'
 import { SkyboxAutoClear } from './skybox-auto-clear'
@@ -73,7 +72,7 @@ export function installStaticScene(inputs: StaticSceneInstallInputs): StaticScen
   // internals the freeze uses (it then simply stays thawed).
   let activeMeshes: FrozenActiveMeshes | null = null
   if (isActiveMeshFreezeEnabled(inputs.search)) {
-    const target = new FrozenActiveMeshes(scene as unknown as ActiveMeshesScene)
+    const target = new FrozenActiveMeshes(scene)
     if (target.isSupported) {
       activeMeshes = target
       unregister.push(gate.registerTarget(target))

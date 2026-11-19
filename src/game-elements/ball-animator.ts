@@ -4,6 +4,7 @@ import { ElasticEase, EasingFunction } from '@babylonjs/core/Animations/easing'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { Scene } from '@babylonjs/core/scene'
+import type { PhysicsBody } from '../core/physics-api'
 /**
  * BallAnimator - Handles squash-and-stretch animations for ball impacts
  * 
@@ -15,7 +16,30 @@ export class BallAnimator {
   /** Track active animations to prevent overlaps and memory leaks */
   private activeAnimations: Map<Mesh, Animation> = new Map()
 
+  /** Body → ball mesh, supplied by the ball view (`BallPresentation.meshForBody`); null until wired. */
+  private meshForBody: ((body: PhysicsBody) => Mesh | null) | null = null
+
   constructor(private scene: Scene) {}
+
+  /**
+   * Let contact handlers name a ball by its body (#528: gameplay never holds a mesh). The resolver is
+   * an O(1) lookup in the view, so a contact does not scan every table binding.
+   */
+  setMeshResolver(resolver: ((body: PhysicsBody) => Mesh | null) | null): void {
+    this.meshForBody = resolver
+  }
+
+  /** `animateBallImpact` on the mesh drawing `body`; nothing when the body has no mesh (or none is wired). */
+  impactOnBody(body: PhysicsBody, normal: Vec3Like, intensity: number): void {
+    const mesh = this.meshForBody?.(body)
+    if (mesh) this.animateBallImpact(mesh, normal, intensity)
+  }
+
+  /** `animateSimpleImpact` on the mesh drawing `body`. */
+  simpleImpactOnBody(body: PhysicsBody, intensity: number): void {
+    const mesh = this.meshForBody?.(body)
+    if (mesh) this.animateSimpleImpact(mesh, intensity)
+  }
 
   /**
    * Animate a ball impact with squash-and-stretch deformation
