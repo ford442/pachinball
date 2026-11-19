@@ -64,7 +64,12 @@ export function buildJsonSchemas(): Record<string, JsonObject> {
       MachineDescriptorSchema,
       machineDefs,
     ),
-    'rules.json': document('Pachinball machine rules', 'MachineDescriptor.rules (v1).', MachineRulesSchema, { WeeklyMachine: WeeklyMachineSchema }),
+    'rules.json': document(
+      'Pachinball machine rules',
+      'MachineDescriptor.rules: rules v1 (ball economy, fever, cascade) plus the v2 scoring program (#556; docs/RULES.md).',
+      MachineRulesSchema,
+      { WeeklyMachine: WeeklyMachineSchema },
+    ),
     'weekly.json': document('Pachinball weekly machine', 'A weekly machine descriptor (rules.cascade.weekly; docs/DAILY_CASCADE.md).', WeeklyMachineSchema),
     'profile.json': document(
       'Pachinball player profile',

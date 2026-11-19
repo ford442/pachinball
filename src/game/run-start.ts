@@ -1,5 +1,6 @@
 /**
- * The start of a run, as gameplay sees it: which table it plays on and the state it starts from.
+ * The start of a run, as gameplay sees it: which table it plays on, the rules it plays under and the
+ * state it starts from.
  * Shared by the game (`GameLifecycle.startGame` / `GameDelegates.applyDailyCascadeOnStart`) and the
  * headless replay runner (#528, `src/sim/headless-host.ts`), so a replay starts on the same table,
  * seed and numbers in Node as in the browser. No Babylon, no DOM.
@@ -10,6 +11,8 @@ import type { FeederKey, TableLayout } from '../cascade/daily-cascade-layout'
 import { resolveStartMachine, type StartMachine } from '../cascade/start-machine'
 import { initSessionRng, randomU32Seed } from '../core/seeded-rng'
 import type { BallType } from '../config'
+import { LEGACY_RULES_HASH, VANILLA_RULES_HASH, runRulesOf, vanillaRunRules, type RunRules } from '../rules'
+import type { MachineRules } from '../schemas/rules'
 import { freshNudgeState, type NudgeState } from './physics/types'
 
 /** What `resolveRunStart` needs to know about the run being started. */
@@ -143,4 +146,63 @@ export function resetPlayBall(
   inputActions?.resetPlungerState()
   ballManager?.removeExtraBalls()
   ballManager?.resetBall()
+}
+
+/** The rules a run plays under, or why a replay's cannot be played. */
+export type RunRulesResolution = { ok: true; rules: RunRules; hash: string } | { ok: false; reason: string }
+
+/**
+ * The rules a run plays under (#556). A live run plays its machine's rules (the vanilla rules without
+ * a machine). A replay plays its tape's: the rules it carries inline — validated — or, when it
+ * carries none, this build's vanilla rules; either way they must hash to the `rulesHash` the tape
+ * names, or the replay is refused (`rules-mismatch`) rather than played under rules it never saw.
+ *
+ * Async only for rules that are not vanilla: the hashing and the rules schema are lazy chunks.
+ */
+export async function resolveRunRules(input: {
+  replay: { rulesHash?: string; rules?: Record<string, unknown> } | null
+  machineRules: MachineRules | null
+}): Promise<RunRulesResolution> {
+  const { replay, machineRules } = input
+  if (!replay) {
+    if (!machineRules) return { ok: true, rules: vanillaRunRules(), hash: VANILLA_RULES_HASH }
+    const rules = runRulesOf(machineRules)
+    const { rulesHash } = await import('../rules/rules-digest')
+    return { ok: true, rules, hash: rulesHash(rules) }
+  }
+  const named = replay.rulesHash ?? LEGACY_RULES_HASH
+  if (replay.rules === undefined) {
+    if (named === VANILLA_RULES_HASH) return { ok: true, rules: vanillaRunRules(), hash: named }
+    return {
+      ok: false,
+      reason: `the tape was played under rules ${named.slice(0, 12) || '(none named)'} and does not carry them; this build's vanilla rules are ${VANILLA_RULES_HASH.slice(0, 12)}`,
+    }
+  }
+  const [{ RunRulesSchema }, { formatSchemaIssues, parseWith }, { rulesHash }] = await Promise.all([
+    import('../schemas/rules'),
+    import('../schemas/schema-kit'),
+    import('../rules/rules-digest'),
+  ])
+  const parsed = parseWith(RunRulesSchema, replay.rules)
+  if (!parsed.ok) return { ok: false, reason: `the tape's rules are invalid: ${formatSchemaIssues(parsed.errors)}` }
+  const hash = rulesHash(parsed.value)
+  if (hash !== named) {
+    return { ok: false, reason: `the tape's rules hash to ${hash.slice(0, 12)}, but it names ${named.slice(0, 12) || '(none)'}` }
+  }
+  return { ok: true, rules: parsed.value, hash }
+}
+
+/** What the run's rules are handed to. */
+export interface RunRulesTarget {
+  scoringBridge: { setRules(rules: RunRules, hash: string): void } | null
+  ballManager: { setEconomy(economy: { weights: RunRules['balls']['weights']; points: RunRules['balls']['points'] }): void } | null
+}
+
+/**
+ * Hand a run its rules: the scoring program (a fresh `RulesEngine`) and the ball economy. Runs before
+ * the first ball of the run is spawned.
+ */
+export function applyRunRules(target: RunRulesTarget, rules: RunRules, hash: string): void {
+  target.scoringBridge?.setRules(rules, hash)
+  target.ballManager?.setEconomy({ weights: rules.balls.weights, points: rules.balls.points })
 }

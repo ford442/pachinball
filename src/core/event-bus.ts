@@ -28,6 +28,7 @@ import { bootError } from '../boot-log'
 import type { DisplayState } from '../display/display-types'
 import { createFaultWindow, faultMessage, recordFault, type FaultWindow } from './fault-window'
 import type { GameState, UnlockedReward } from '../game-elements/types'
+import type { RulesCue } from '../schemas/rules-program'
 import type { WasmContactBatch, WasmContactEvent } from '../wasm/wasm-types'
 
 /**
@@ -243,6 +244,11 @@ export interface PachinballEventMap {
     position?: { x: number; y: number; z: number }
     multiplier?: number
   }
+  /**
+   * A rules program's presentation cue (#556): lights, sound, haptics, a message, or a lamp turning
+   * on / off. The rendered game's physics controller draws them; the sim never reads them.
+   */
+  'rules:cue': RulesCue | { lamp: string; on: boolean }
   'lane:rollover': {
     laneId: string
     kind: 'launch' | 'inlane' | 'outlane' | 'drainApproach'

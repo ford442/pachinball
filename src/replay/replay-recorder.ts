@@ -10,10 +10,18 @@ import type { ReplayCascade } from '../cascade/daily-cascade-state'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
 import * as v from 'valibot'
 import { StoredReplaySchema, type StoredReplay } from '../schemas/replay'
+import { LEGACY_RULES_HASH, RULES_HASH_PATTERN } from '../rules/rules-hash'
 
 /** `{ wasmSha256 }` for a well-formed binary hash (64 lowercase hex), else nothing. */
 function wasmSha256Of(value: unknown): { wasmSha256?: string } {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value) ? { wasmSha256: value } : {}
+}
+
+/** The rules hash a stored tape names (see `ReplayMetadata.rulesHash`). */
+function tapeRulesHash(data: StoredReplay): string {
+  const named = data.rulesHash ?? data.rules_hash
+  if (typeof named === 'string' && RULES_HASH_PATTERN.test(named)) return named
+  return (data.version ?? 1) < REPLAY_RULES_SCHEMA ? LEGACY_RULES_HASH : ''
 }
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */
@@ -39,8 +47,14 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
  *   substep loop. A flipper field may be `-` ("no change"): only the first
  *   step of a render frame carries the frame's input. Playback advances one
  *   row per fixed step whatever the viewer's refresh rate (#444).
+ * - 4: rows as 3; the tape names the rules it was played under (#556):
+ *   `rulesHash`, and the rules themselves (`rules`) when they are not this
+ *   build's vanilla rules. An older tape reads as `LEGACY_RULES_HASH`.
  */
-export const REPLAY_SCHEMA_VERSION = 3
+export const REPLAY_SCHEMA_VERSION = 4
+
+/** First schema whose tapes name their rules. */
+const REPLAY_RULES_SCHEMA = 4
 
 /** First schema whose rows are fixed steps rather than render frames. */
 export const REPLAY_FIXED_STEP_SCHEMA = 3
@@ -72,6 +86,18 @@ export interface ReplayMetadata extends ReplayWorldFingerprint {
    * on every other table (and on tapes older than the weekly machine).
    */
   machine?: 'weekly'
+  /**
+   * `rulesHash` of the rules the run was played under (#556). Every tape read
+   * by `fromJSON` has one: a schema < 4 tape reads as `LEGACY_RULES_HASH`, a
+   * schema 4 tape without a well-formed one as `''` (which matches no rules,
+   * so it is refused rather than replayed under guessed rules).
+   */
+  rulesHash?: string
+  /**
+   * The rules themselves (`RunRules`, unvalidated until replayed), when they
+   * are not the vanilla rules of the build that recorded the tape.
+   */
+  rules?: Record<string, unknown>
 }
 
 export interface ReplayPayload extends ReplayMetadata {
@@ -338,6 +364,8 @@ export class ReplayRecorder {
       feederTunablesHash: data.feederTunablesHash ?? data.feeder_tunables_hash,
       initialSnapshot: data.initialSnapshot ?? data.initial_snapshot,
       cascade: data.cascade ? { ...data.cascade, seed: data.cascade.seed >>> 0 } : undefined,
+      rulesHash: tapeRulesHash(data),
+      ...(data.rules ? { rules: data.rules } : {}),
     }
   }
 

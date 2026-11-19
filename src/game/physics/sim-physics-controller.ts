@@ -95,7 +95,8 @@ export class SimPhysicsController {
     }
   }
 
-  private eventBusUnsubscribers: Array<() => void>
+  /** Unsubscribed by `dispose()`; the rendered subclass adds its own. */
+  protected eventBusUnsubscribers: Array<() => void>
 
   constructor(host: PhysicsHost) {
     this.host = host

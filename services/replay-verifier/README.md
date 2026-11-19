@@ -44,6 +44,10 @@ A run is rejected when:
 | `unverifiable engine …` | Recorded on `wasm-worker` / Rapier: only the in-process `wasm-owner` (the default) replays step-exactly. |
 | `no frame-0 snapshot on the tape` | The recorder could not snapshot the world. |
 | `submitted to X, but the tape was played on Y` | The tape's table (map, or cascade seed) belongs to another board. |
+| `rules mismatch: submitted under rules X, but the tape was played under Y` | The score names other rules than its tape (#556; a board is (map, rules)). |
+| `not played under the challenge's rules …` | A challenge run under other rules than the challenge's. |
+| `the tape names no rules hash` | A schema 4+ tape without a well-formed `rulesHash`. |
+| `replay rejected: the tape's rules hash to …` / `… and does not carry them` | The tape's rules are not the ones it names (`rules-mismatch`): refused, never replayed under other rules. |
 | `table not recognised …` | The tape's table descriptor hash is not a table this build builds. |
 | `replay rejected …` / `played N of M tape frames` | The tape does not run to its end on this table. |
 | `score mismatch: the tape replays to A, B was submitted` | The forged-score case. |

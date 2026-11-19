@@ -6,7 +6,8 @@
  *   the meshes from it to the live pose (`mesh-interpolation.ts`);
  * - `sim-phase.ts` — `updateSim`, the frame scheduler's `sim` phase;
  * - `visual-phase.ts` — `updateVisuals`, the `visuals` phase;
- * - the replay ghost, placed where the primary ball is drawn.
+ * - the replay ghost, placed where the primary ball is drawn;
+ * - the rules program's presentation cues (`rules-cues.ts`).
  */
 
 import type { PhysicsHost } from './types'
@@ -14,6 +15,7 @@ import { MeshInterpolationSystem } from './mesh-interpolation'
 import { updateSimPhase } from './sim-phase'
 import { VisualPhase } from './visual-phase'
 import { SimPhysicsController } from './sim-physics-controller'
+import { presentRulesCue } from './rules-cues'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
@@ -32,6 +34,7 @@ export class GamePhysicsController extends SimPhysicsController {
   constructor(host: PhysicsHost) {
     super(host)
     this.visualPhase = new VisualPhase(host, this.meshInterpolation, this.frame)
+    this.eventBusUnsubscribers.push(host.eventBus.on('rules:cue', (cue) => presentRulesCue(host, cue)))
   }
 
   protected override capturePreStep(): void {

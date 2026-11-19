@@ -44,8 +44,8 @@ player's access token in `Authorization: Bearer …`.
 
 | Request | Answer |
 |---------|--------|
-| `GET /rest/v1/leaderboard?select=…&map_id=eq.<map>&adventure_level=is.null\|eq.<level>&order=rank.asc&limit=<n>` | `LeaderboardEntry[]`, best first: verified runs, and runs still pending for less than 24 hours (rejected runs never). `rank` is per (map, adventure level) over those rows; ties go to the earlier score. `verified` / `verification` say whether the verifier has confirmed the run. |
-| `POST /rest/v1/rpc/player_rank` `{ p_map_id, p_score, p_adventure_level }` | Where that score would place on that board (1 = top). |
+| `GET /rest/v1/leaderboard?select=…&map_id=eq.<map>&rules_hash=eq.<hash>&adventure_level=is.null\|eq.<level>&order=rank.asc&limit=<n>` | `LeaderboardEntry[]`, best first: verified runs, and runs still pending for less than 24 hours (rejected runs never). `rank` is per (map, rules, adventure level) over those rows; ties go to the earlier score. `verified` / `verification` say whether the verifier has confirmed the run. The game always sends `rules_hash` (#556): the same table under another machine's rules is another board. |
+| `POST /rest/v1/rpc/player_rank` `{ p_map_id, p_score, p_adventure_level, p_rules_hash? }` | Where that score would place on that board (1 = top). Without `p_rules_hash`, the legacy vanilla board. |
 | `GET /rest/v1/replays?select=payload&id=eq.<uuid>` | `[{ payload }]` — what `ReplayRecorder.fromJSON` reads. |
 
 Scores, replays, challenges, profiles and ghost tracks are public. Saves
@@ -62,8 +62,8 @@ REST call. Errors are `{ success: false, message }` with the HTTP status:
 
 | Function | Body | Answer |
 |----------|------|--------|
-| `POST /functions/v1/submit-replay` | `ReplayRecorder.toJSON(payload)`, ≤ 512 KB | `201 { success, replay_id, frame_count }` |
-| `POST /functions/v1/submit-score` | `{ name, score, map_id, adventure_level?, balls, combo_max, replay_id?, challenge_id?, ranked? }` | `201 { success, score_id, rank, verified: false }` |
+| `POST /functions/v1/submit-replay` | `ReplayRecorder.toJSON(payload)`, ≤ 512 KB; from schema 4 it must carry a well-formed `rulesHash` | `201 { success, replay_id, frame_count, rules_hash }` |
+| `POST /functions/v1/submit-score` | `{ name, score, map_id, adventure_level?, balls, combo_max, replay_id?, challenge_id?, ranked?, rules_hash? }` | `201 { success, score_id, rank, verified: false }` |
 | `POST /functions/v1/create-challenge` | `{ seed, targetScore, mapId, challengerName?, replayId?, cascadeSeed? }` | `201 { success, challenge_id }` |
 | `POST /functions/v1/put-save` | `{ slot?, schema_version, data }` (data ≤ 64 KB) | `200 { success, slot, schema_version, updated_at }` |
 
@@ -112,16 +112,33 @@ These hold for any client, through the functions or straight at PostgREST:
 - **Replays.** `seed`, `map_id`, `physics_engine`, `snapshot_version`,
   `static_hash` (the table descriptor hash), `feeder_tunables_hash`,
   `wasm_sha256` (the physics binary, #490 Slice B; a malformed stamp is
-  dropped), `final_score` and `frame_count` are derived from the payload by a
-  trigger.
+  dropped), `final_score`, `frame_count` and `rules_hash` are derived from the
+  payload by a trigger. `rules_hash` is the tape's `rulesHash`; a tape older
+  than schema 4 gets the legacy vanilla hash, a schema 4 tape without one is
+  refused (#556).
   Payload ≤ 512 KB; at most 216 000 frames (one hour of fixed steps).
 - **Scores.** `name` is three letters A–Z; a score may only cite the
-  submitter's own replay.
+  submitter's own replay. Its `rules_hash` (default: the legacy vanilla
+  rules) must be the cited replay's and, in a challenge, the challenge's
+  (HTTP 400 otherwise). A challenge takes its replay's `rules_hash` (the
+  table of the week: the legacy vanilla rules).
 - **Rate limits.** Per player: 5 scores and 5 replays a minute, 200 of each a
   day, 20 challenges an hour (HTTP 429).
 - **Verification.** `verified`, `verifier_version`, `verifier_score`,
   `verify_reason`, `verified_at` and the claim columns are written only by
   the verifier with a secret key (below).
+
+## Rules (#556)
+
+Every run names the rules it was played under: `rules_hash`, the SHA-256 of
+its rules as canonical JSON (docs/RULES.md). A tape of replay schema 4 carries
+it as `rulesHash` (and the rules themselves when they are not the vanilla
+ones); an older tape was played under the legacy vanilla rules,
+`a46a08bbeb7d6b2db2e5bf5c43f16347343b10a89e82a50e60c8958b3edb8528`. A board is
+`(map_id, rules_hash)` — `scores_board` indexes `(map_id, rules_hash,
+adventure_level, score desc)` — so a machine with its own rules has its own
+board even on the vanilla table. `claim_score_verifications` hands the
+verifier the score's `rules_hash` and its challenge's `challenge_rules_hash`.
 
 ## Verification (Slice C)
 
@@ -138,7 +155,9 @@ step per tape frame — and records the verdict with
   the replayed score, `verify_state_hash` the C++ `getStateHash()` at the end,
   `verifier_version` the build that replayed it. The board shows ✓.
 - **rejected** — `verify_reason` says why (no replay, an engine that does not
-  replay step-exactly, a tape from another board, an unrecognised table
+  replay step-exactly, a tape from another board, a score, challenge and tape
+  that do not name the same rules, a tape whose rules do not hash to its
+  `rulesHash` (#556), an unrecognised table
   descriptor hash, a tape that does not run to its end, a score the tape
   does not reproduce, or a playback whose physics / sim phase threw — the
   verifier plays tapes with a strict runner (`ReplayRunner.setStrict(true)`),

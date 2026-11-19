@@ -3,7 +3,7 @@
  * The end-to-end run (real build, Chromium, fake backend) is `npm run test:verifier`.
  */
 import { describe, expect, it } from 'vitest'
-import { boardFor, judge, MAX_ATTEMPTS, precheck } from '../services/replay-verifier/judge.mjs'
+import { boardFor, judge, LEGACY_RULES_HASH, MAX_ATTEMPTS, precheck, tapeRulesHash } from '../services/replay-verifier/judge.mjs'
 
 const payload = {
   version: 3, buildId: 'abc123', mapId: 'neon-helix', seed: 7, physicsEngine: 'wasm-owner',
@@ -31,6 +31,34 @@ describe('replay verifier verdicts (#444 Slice C)', () => {
     expect(precheck(claim({ physics_engine: 'wasm-worker' }))?.reason).toMatch(/unverifiable engine wasm-worker/)
     expect(precheck(claim({ payload: { ...payload, initialSnapshot: undefined } }))?.reason).toMatch(/no frame-0 snapshot/)
     expect(precheck(claim({ map_id: 'storm-board' }))?.reason).toBe('submitted to storm-board, but the tape was played on neon-helix')
+  })
+
+  it('rejects a run whose score, challenge and tape do not name the same rules (#556)', () => {
+    const fire = 'f'.repeat(64)
+    const machineTape = { ...payload, version: 4, rulesHash: fire }
+    expect(tapeRulesHash(machineTape)).toBe(fire)
+    expect(precheck(claim({ payload: machineTape, rules_hash: fire }))).toBeNull()
+    expect(precheck(claim({ payload: machineTape, rules_hash: LEGACY_RULES_HASH }))?.reason).toBe(
+      'rules mismatch: submitted under rules a46a08bbeb7d, but the tape was played under ffffffffffff',
+    )
+    // A claim from before the column reads as the legacy vanilla rules.
+    expect(precheck(claim({ payload: machineTape }))?.reason).toMatch(/^rules mismatch/)
+    // A tape older than schema 4 was played under the legacy vanilla rules.
+    expect(tapeRulesHash(payload)).toBe(LEGACY_RULES_HASH)
+    expect(precheck(claim({ rules_hash: LEGACY_RULES_HASH }))).toBeNull()
+    expect(precheck(claim({ rules_hash: fire }))?.reason).toMatch(/^rules mismatch/)
+    // From schema 4 a tape must name its rules.
+    expect(precheck(claim({ payload: { ...payload, version: 4 } }))?.reason).toBe('the tape names no rules hash')
+    expect(precheck(claim({ payload: { ...payload, version: 4, rulesHash: 'F'.repeat(64) } }))?.reason).toBe('the tape names no rules hash')
+    // A challenge run is played under the challenge's rules.
+    const challenge = { challenge_id: 'c1', challenge_kind: 'player', challenge_seed: 7, challenge_cascade_seed: null }
+    expect(precheck(claim({ ...challenge, payload: machineTape, rules_hash: fire, challenge_rules_hash: LEGACY_RULES_HASH }))?.reason).toBe(
+      "not played under the challenge's rules: ffffffffffff, the challenge's are a46a08bbeb7d",
+    )
+    expect(precheck(claim({ ...challenge, payload: machineTape, rules_hash: fire, challenge_rules_hash: fire }))).toBeNull()
+    // A tape whose inline rules do not hash to what it names is refused by the replay itself.
+    const mismatch = { ok: false, code: 'rejected', outcome: 'rules-mismatch', reason: "replay rejected: the tape's rules hash to 0123456789ab, but it names ffffffffffff" }
+    expect(judge(claim({ payload: machineTape, rules_hash: fire }), mismatch)).toMatchObject({ verdict: 'rejected', reason: mismatch.reason })
   })
 
   it('names the board a cascade tape belongs to', () => {

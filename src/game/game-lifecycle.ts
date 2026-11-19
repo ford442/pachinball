@@ -17,7 +17,9 @@ import {
 } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import type { StartMachine } from '../cascade/start-machine'
-import { resetRunState, resolveRunStart, startSeed, type RunStartInput } from './run-start'
+import { applyRunRules, resetRunState, resolveRunRules, resolveRunStart, startSeed, type RunRulesTarget, type RunStartInput } from './run-start'
+import { VANILLA_RULES_HASH, vanillaRunRules } from '../rules'
+import type { MachineDescriptor } from '../schemas/machine'
 import { DisplayState } from '../display/display-types'
 import { initSessionRng, getSessionSeed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
@@ -71,6 +73,10 @@ export interface LifecycleHost {
   readonly replayRecorder?: import('../game-elements').ReplayRecorder
   readonly replayRunner?: import('../game-elements').ReplayRunner
   readonly currentMapId?: string | null
+  /** The machine the page booted on (`?machine=`): a live run plays its rules (#556). */
+  readonly machine: MachineDescriptor | null
+  /** Where a run's rules program goes (`ScoringBridge.setRules`). */
+  readonly physicsController: { readonly scoringBridge: NonNullable<RunRulesTarget['scoringBridge']> } | null
   qualityTier: QualityTier
   accessibility: import('../game-elements').AccessibilityConfig
 
@@ -214,6 +220,11 @@ export class GameLifecycle {
     const dailyState = getDailyCascadeState()
     const isReplaying = this.host.replayRunner?.isPlaying() ?? false
     const replayPayload = isReplaying ? this.host.replayRunner?.getPayload() ?? null : null
+    // The rules this run plays under (#556): the tape's on a replay, the machine's on a live run.
+    const runRules = await resolveRunRules({ replay: replayPayload, machineRules: this.host.machine?.rules ?? null })
+    if (this.host.signal.aborted) return
+    if (!runRules.ok) this.host.replayRunner?.reject('rules-mismatch', runRules.reason)
+    const { rules, hash: rulesHash } = runRules.ok ? runRules : { rules: vanillaRunRules(), hash: VANILLA_RULES_HASH }
     // Machine, seed and table are shared with the headless replay runner (`run-start.ts`, #528).
     const runStart: RunStartInput = {
       replay: replayPayload ? { seed: replayPayload.seed, machine: replayPayload.machine, cascade: replayPayload.cascade ?? null } : null,
@@ -249,8 +260,12 @@ export class GameLifecycle {
         cascade: dailyState.describeForReplay() ?? undefined,
         // A spectator rebuilds the same machine from `seed` alone.
         ...(machine.kind === 'weekly' ? { machine: 'weekly' as const } : {}),
+        // The rules it was played under; carried inline unless they are this build's vanilla ones.
+        rulesHash,
+        ...(rulesHash === VANILLA_RULES_HASH ? {} : { rules }),
       })
     }
+    applyRunRules({ scoringBridge: this.host.physicsController?.scoringBridge ?? null, ballManager: this.host.ballManager }, rules, rulesHash)
 
     this.scoringBreakdown.reset()
     this.host.uiManager?.hideScoringBreakdown()

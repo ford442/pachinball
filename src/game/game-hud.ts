@@ -16,6 +16,7 @@ import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import { getChallengeSystem } from '../replay/challenge-system'
 import type { ReplayPayload } from '../replay/replay-recorder'
+import { VANILLA_RULES_HASH } from '../rules/rules-hash'
 import { BallType } from '../config'
 
 export interface HUDHost {
@@ -51,8 +52,9 @@ export interface HUDHost {
 export interface FinishedRun {
   payload: ReplayPayload | null
   score: number
-  /** The leaderboard it goes to. */
+  /** The leaderboard it goes to: `board` under the rules the run was played under (#556). */
   board: string
+  rulesHash: string
   tableMapId: string
   name?: string
   replayId?: string
@@ -191,7 +193,9 @@ export class GameHUD {
       ? challenge.board
       : getDailyCascadeState().getLeaderboardMapId(tableMapId)
     const ranked = !this.host.runUnranked
-    const run: FinishedRun = { payload: recorder?.getLastPayload() ?? null, score: this.host.score, board, tableMapId, ranked }
+    const payload = recorder?.getLastPayload() ?? null
+    const rulesHash = payload?.rulesHash ?? VANILLA_RULES_HASH
+    const run: FinishedRun = { payload, score: this.host.score, board, rulesHash, tableMapId, ranked }
     this.lastRun = run
     // Once, at game over — never from the frame path (#503 A3).
     if (!ranked) this.host.uiManager?.showMessage('An internal error interrupted this run: it is not ranked', 5000)
@@ -204,7 +208,7 @@ export class GameHUD {
     if (this.host.signal.aborted) return
     const leaderboard = this.host.overlays.leaderboard
     void leaderboard.flushQueue()
-    leaderboard.setContext(board)
+    leaderboard.setContext(board, undefined, rulesHash)
     const rank = await leaderboard.checkRank(this.host.score)
     // Offline the rank is unknown: take the name anyway, the run waits for the network.
     const offline = rank === null && typeof navigator !== 'undefined' && navigator.onLine === false
@@ -231,6 +235,7 @@ export class GameHUD {
       // Only a v2 challenge (a row on the service) has an id the service knows.
       ...(challengeId && UUID.test(challengeId) ? { challenge_id: challengeId } : {}),
       ...(run.ranked ? {} : { ranked: false }),
+      rules_hash: run.rulesHash,
     }, replayJson)
     if (submitResult.success) {
       run.replayId = submitResult.replay_id

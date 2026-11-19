@@ -1,7 +1,12 @@
 /**
- * Collision obstacle handlers — individual scoring/effects reactions for each
- * obstacle type. Pulled out of CollisionDispatcher so the dispatch logic stays
- * focused on handle-space conversion and routing.
+ * Collision obstacle handlers — each obstacle type's reaction to a ball. Pulled
+ * out of CollisionDispatcher so the dispatch logic stays focused on handle-space
+ * conversion and routing.
+ *
+ * What a hit is worth is the run's rules program (#556): a handler runs the
+ * machinery (combo registration, the toy's own state), raises the event into
+ * `scoringBridge.dispatchRules`, then draws the hit. The vanilla program
+ * (`src/rules/vanilla.ts`) awards exactly what these handlers used to.
  */
 
 import type { PhysicsBody } from '../../core/physics-api'
@@ -9,7 +14,7 @@ import type { PhysicsBody } from '../../core/physics-api'
 import type { BumperRef } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { DisplayState } from '../../display/display-types'
-import { getLaneRolloverPoints, GAME_TUNING, PhysicsConfig } from '../../config'
+import { PhysicsConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import { TABLE_MAPS } from '../../config/table-maps'
 import { PALETTE } from '../../game-elements/visual-palette'
@@ -80,24 +85,15 @@ export function handleBumperCollision(
   ctx.scoringBridge.emitComboProgressEvent(comboResult.event)
   ctx.scoringBridge.emitComboChainEvent(comboResult.chain)
 
-  const bumperBasePoints = GAME_TUNING.scoring.bumperHitBase * (Math.floor(comboResult.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1)
-  const chainAdjustedBase = Math.round(bumperBasePoints * comboResult.chain.chainMultiplier)
-  ctx.scoringBridge.awardScore(
-    chainAdjustedBase,
-    'bumper-hit',
-    { x: ballPos.x, y: ballPos.y, z: ballPos.z }
-  )
-  if (comboResult.chain.bonusPoints > 0) {
-    ctx.scoringBridge.awardScore(comboResult.chain.bonusPoints, 'combo-chain-bonus', { x: ballPos.x, y: ballPos.y, z: ballPos.z })
-    ctx.scoringBridge.recordChainBonus(comboResult.chain.bonusPoints)
-  }
-  ctx.scoringBridge.registerComboMultiplierHit()
-
-  if (comboResult.comboCount >= GAME_TUNING.combo.feverThreshold && ctx.host.displayState.get() === DisplayState.IDLE) {
-    ctx.host.eventBus.emit('fever:start')
-    ctx.host.eventBus.emit('display:set', DisplayState.FEVER)
-    ctx.host.effects?.setLightingMode('fever', 0)
-  }
+  ctx.scoringBridge.dispatchRules('bumper', {
+    values: {
+      combo: comboResult.comboCount,
+      chainMultiplier: comboResult.chain.chainMultiplier,
+      chainBonus: comboResult.chain.bonusPoints,
+    },
+    ball: ballBody,
+    position: { x: ballPos.x, y: ballPos.y, z: ballPos.z },
+  })
 
   const impactTier = ctx.scoringBridge.getComboImpactTier()
   const effectPos = vis.mesh?.position ?? bumperPos
@@ -206,20 +202,8 @@ export function handleTargetCollision(
 
   if (ctx.host.gameObjects?.deactivateTarget(tgt)) {
     const ballPos = ballBody.translation()
-    ctx.scoringBridge.awardScore(
-      GAME_TUNING.scoring.targetHitBase,
-      'target-hit',
-      { x: ballPos.x, y: ballPos.y, z: ballPos.z }
-    )
-    ctx.scoringBridge.registerComboMultiplierHit()
-    ctx.host.effects?.playBeep(1200)
-    ctx.host.ballManager?.spawnExtraBalls(1)
+    ctx.scoringBridge.dispatchRules('target', { ball: ballBody, position: { x: ballPos.x, y: ballPos.y, z: ballPos.z } })
     ctx.host.updateHUD()
-    ctx.host.eventBus.emit('reach:start')
-    ctx.host.eventBus.emit('display:set', DisplayState.REACH)
-    ctx.host.effects?.setLightingMode('reach', 3.0)
-    ctx.host.effects?.setAtmosphereState('REACH')
-    ctx.host.rebuildHandleCaches()
   }
 }
 
@@ -231,23 +215,21 @@ export function handleSpinnerCollision(
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
 
+  const visual = ctx.host.spinnerVisuals.find(v => v.body === obstacleBody)
+  if (!visual) return
   ctx.scoringBridge.registerComboObstacleHit('spinner')
-  ctx.scoringBridge.registerComboMultiplierHit()
 
   const vel = ballBody.linvel()
   const impactForce = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
-  const visual = ctx.host.spinnerVisuals.find(v => v.body === obstacleBody)
-  if (visual) {
-    const ballPos = ballBody.translation()
-    const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
-    ctx.host.spinnerBuilder?.triggerSpin(visual, impactForce, pos)
-    ctx.scoringBridge.awardScore(GAME_TUNING.obstacle.spinnerHitBase, 'spinner-hit', pos)
-    ctx.host.effects?.spawnEnhancedBumperImpact(pos, impactForce > 14 ? 'medium' : 'light')
-    ctx.host.hapticManager?.bumper(impactForce)
-    if (impactForce > 10) {
-      const impactStrength = Math.min((impactForce - 10) / 16, 1)
-      ctx.host.cameraController?.notifyImpact(pos, impactStrength)
-    }
+  const ballPos = ballBody.translation()
+  const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
+  ctx.scoringBridge.dispatchRules('spinner', { ball: ballBody, position: pos })
+  ctx.host.spinnerBuilder?.triggerSpin(visual, impactForce, pos)
+  ctx.host.effects?.spawnEnhancedBumperImpact(pos, impactForce > 14 ? 'medium' : 'light')
+  ctx.host.hapticManager?.bumper(impactForce)
+  if (impactForce > 10) {
+    const impactStrength = Math.min((impactForce - 10) / 16, 1)
+    ctx.host.cameraController?.notifyImpact(pos, impactStrength)
   }
 }
 
@@ -262,9 +244,9 @@ export function handleBallTrapCollision(
   const state = ctx.host.trapStates.find(s => s.body === obstacleBody)
   if (state && state.isOpen && !state.caughtBall && state.rearmTimer <= 0) {
     ctx.scoringBridge.registerComboObstacleHit('trap')
-    ctx.scoringBridge.registerComboMultiplierHit()
     const ballPos = ballBody.translation()
     const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
+    ctx.scoringBridge.dispatchRules('saucer', { ball: ballBody, position: pos })
     ctx.host.ballTrapBuilder?.catchBall(state, ballBody, pos)
     ctx.host.effects?.spawnImpactRing(pos, UP, state.trapColor || PALETTE.MAGENTA)
     ctx.host.hapticManager?.bumper(8)
@@ -282,7 +264,7 @@ export function handleLauncherCollision(
   const state = ctx.host.launcherStates.find(s => s.body === obstacleBody)
   if (state && state.cooldownTimer <= 0) {
     ctx.scoringBridge.registerComboObstacleHit('launcher')
-    ctx.scoringBridge.registerComboMultiplierHit()
+    ctx.scoringBridge.dispatchRules('launcher', { ball: ballBody })
     const forceVec = ctx.host.launcherBuilder?.triggerLauncher(state, 1.0)
     if (forceVec) {
       ballBody.applyImpulse({ x: forceVec.x, y: forceVec.y, z: forceVec.z }, true)
@@ -300,7 +282,7 @@ export function handleGateCollision(
   const state = ctx.host.gateStates.find(s => s.body === obstacleBody)
   if (state && !state.isOpen) {
     ctx.scoringBridge.registerComboObstacleHit('gate')
-    ctx.scoringBridge.registerComboMultiplierHit()
+    ctx.scoringBridge.dispatchRules('gate')
     ctx.host.movingGateBuilder?.openGate(state)
   }
 }
@@ -317,11 +299,10 @@ export function handleLaneRolloverCollision(
   if (ctx.laneRolloverAwardedKeys.has(awardKey)) return
   ctx.laneRolloverAwardedKeys.add(awardKey)
 
-  const points = getLaneRolloverPoints(sensor.kind)
   const ballPos = ballBody.translation()
   const pos = { x: ballPos.x, y: ballPos.y, z: ballPos.z }
 
-  ctx.scoringBridge.awardScore(points, `lane-rollover:${sensor.id}`, pos)
+  const points = ctx.scoringBridge.dispatchRules('lane', { id: sensor.id, kind: sensor.kind, ball: ballBody, position: pos })
   ctx.host.eventBus.emit('lane:rollover', {
     laneId: sensor.id,
     kind: sensor.kind,

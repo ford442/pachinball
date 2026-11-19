@@ -289,6 +289,1021 @@
         {
           "type": "object",
           "properties": {
+            "eq": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "eq"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ne": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "ne"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gt": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "gt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gte": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "gte"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lt": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "lt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lte": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "lte"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "in": {
+              "type": "array",
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 32
+                }
+              ],
+              "minItems": 2
+            }
+          },
+          "required": [
+            "in"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flag": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "flag"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "notFlag": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "notFlag"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lit": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "lit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "unlit": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "unlit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "notMode": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "notMode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "display": {
+              "enum": [
+                "idle",
+                "reach",
+                "fever",
+                "jackpot"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "display"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "notDisplay": {
+              "enum": [
+                "idle",
+                "reach",
+                "fever",
+                "jackpot"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "notDisplay"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "1": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "award": {
+              "type": "object",
+              "properties": {
+                "points": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                },
+                "scale": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": -1000000,
+                            "maximum": 1000000
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "tier": {
+                            "type": "object",
+                            "properties": {
+                              "of": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": -1000000,
+                                    "maximum": 1000000
+                                  },
+                                  {
+                                    "type": "string",
+                                    "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                                  }
+                                ]
+                              },
+                              "per": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 1000
+                              }
+                            },
+                            "required": [
+                              "of",
+                              "per"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "tier"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "maxItems": 8
+                },
+                "source": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9:{}_-]{0,63}$"
+                },
+                "tally": {
+                  "enum": [
+                    "chain-bonus",
+                    "gold-ball"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "points",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "award"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "comboHit": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "comboHit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "add": {
+              "type": "object",
+              "properties": {
+                "counter": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "counter",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "add"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "set": {
+              "type": "object",
+              "properties": {
+                "counter": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "counter",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "set"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "setFlag": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "setFlag"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "clearFlag": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "clearFlag"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "light": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "light"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "unlight": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "unlight"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "startMode": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "startMode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "endMode": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "endMode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "startTimer": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "startTimer"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stopTimer": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "stopTimer"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "multiplier": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": -1000000,
+                  "maximum": 1000000
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(?:event|counter|timer|rules)\\.[a-zA-Z][a-zA-Z0-9_-]{0,31}$"
+                }
+              ]
+            }
+          },
+          "required": [
+            "multiplier"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "multiball": {
+              "type": "object",
+              "properties": {
+                "balls": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                },
+                "reason": {
+                  "enum": [
+                    "jackpot",
+                    "gold-threshold"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "balls",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "multiball"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "addBalls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            }
+          },
+          "required": [
+            "addBalls"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ballSave": {
+              "type": "object",
+              "properties": {
+                "ticks": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 216000
+                }
+              },
+              "required": [
+                "ticks"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ballSave"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kickback": {
+              "type": "object",
+              "properties": {
+                "impulse": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "number",
+                      "minimum": -50,
+                      "maximum": 50
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -50,
+                      "maximum": 50
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -50,
+                      "maximum": 50
+                    }
+                  ],
+                  "minItems": 3
+                }
+              },
+              "required": [
+                "impulse"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "kickback"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "display": {
+              "enum": [
+                "idle",
+                "reach",
+                "fever",
+                "jackpot"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "display"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "emit": {
+              "enum": [
+                "fever:start",
+                "fever:end",
+                "reach:start",
+                "jackpot:start"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "emit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cue": {
+              "$ref": "#/$defs/2"
+            }
+          },
+          "required": [
+            "cue"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "2": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "lighting": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "normal",
+                    "hit",
+                    "fever",
+                    "reach"
+                  ],
+                  "type": "string"
+                },
+                "seconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 60
+                }
+              },
+              "required": [
+                "mode",
+                "seconds"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "lighting"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atmosphere": {
+              "enum": [
+                "IDLE",
+                "REACH",
+                "FEVER",
+                "JACKPOT"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "atmosphere"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "beep": {
+              "type": "number",
+              "minimum": 20,
+              "maximum": 20000
+            }
+          },
+          "required": [
+            "beep"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bloom": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            }
+          },
+          "required": [
+            "bloom"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "goldPulse": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "goldPulse"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "haptic": {
+              "enum": [
+                "jackpot",
+                "bumper",
+                "ballLost"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "haptic"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "maxLength": 48
+                },
+                "ms": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 10000
+                }
+              },
+              "required": [
+                "text",
+                "ms"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "3": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
             "id": {
               "enum": [
                 "NEON_HELIX",
@@ -612,6 +1627,142 @@
               },
               "required": [],
               "additionalProperties": false
+            },
+            "program": {
+              "type": "object",
+              "properties": {
+                "counters": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "initial": {
+                        "type": "number",
+                        "minimum": -1000000,
+                        "maximum": 1000000
+                      }
+                    },
+                    "required": [
+                      "initial"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxProperties": 64
+                },
+                "timers": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "ticks": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 216000
+                      },
+                      "repeat": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "ticks"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxProperties": 64
+                },
+                "modes": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9_-]{0,31}$"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "ticks": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 216000
+                      },
+                      "multiplier": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      }
+                    },
+                    "required": [],
+                    "additionalProperties": false
+                  },
+                  "maxProperties": 64
+                },
+                "handlers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "on": {
+                        "enum": [
+                          "bumper",
+                          "target",
+                          "spinner",
+                          "lane",
+                          "drain",
+                          "saucer",
+                          "gate",
+                          "launcher",
+                          "goldCollect",
+                          "jackpot",
+                          "comboExpire",
+                          "timer",
+                          "modeEnd"
+                        ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_:-]{0,47}$"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_:-]{0,47}$"
+                      },
+                      "if": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/0"
+                        },
+                        "maxItems": 16
+                      },
+                      "do": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/1"
+                        },
+                        "minItems": 1,
+                        "maxItems": 32
+                      }
+                    },
+                    "required": [
+                      "on",
+                      "do"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 256
+                }
+              },
+              "required": [
+                "handlers"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -645,7 +1796,7 @@
       "additionalProperties": false
     },
     "TrackRef": {
-      "$ref": "#/$defs/0"
+      "$ref": "#/$defs/3"
     },
     "TrackDefinition": {
       "type": "object",

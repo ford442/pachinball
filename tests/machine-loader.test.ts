@@ -73,12 +73,21 @@ describe('bootMachine', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
-  it('warns that custom rules are not applied yet', async () => {
+  it('boots a machine with its own rules and scoring program, without a warning (#556)', async () => {
     const machine = shipped('neo')
     machine.rules.fever.threshold = 30
+    machine.rules.program = { handlers: [{ on: 'bumper', do: [{ award: { points: 250, source: 'bumper-hit' } }] }] }
     const warn = vi.fn()
     expect(await bootMachine({ search: '?machine=neo', hash: '' }, warn, fakeFetch(machine))).toEqual(machine)
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/custom rules/))
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('refuses a machine whose program does not validate', async () => {
+    const machine = shipped('neo')
+    machine.rules.program = { handlers: [{ on: 'bumper', do: [{ startMode: 'missing' }] }] }
+    const warn = vi.fn()
+    expect(await bootMachine({ search: '?machine=neo', hash: '' }, warn, fakeFetch(machine))).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/rules\.program\.handlers\[0\]\.do\[0\]\.startMode: undeclared mode missing/))
   })
 })
 

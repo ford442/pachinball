@@ -38,6 +38,14 @@ components:
     MapId:
       type: string
       pattern: '^[A-Za-z0-9._:-]{1,64}$'
+    RulesHash:
+      description: >-
+        SHA-256 (hex) of the rules a run was played under, as canonical JSON (#556,
+        src/rules/rules-hash.ts). A board is (map_id, rules_hash); a tape older than
+        schema 4 was played under the legacy vanilla rules,
+        a46a08bbeb7d6b2db2e5bf5c43f16347343b10a89e82a50e60c8958b3edb8528.
+      type: string
+      pattern: '^[0-9a-f]{64}$'
     Uuid:
       type: string
       pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -71,6 +79,7 @@ components:
         challenge_id: { type: [string, 'null'] }
         verified: { type: boolean }
         verification: { enum: [verified, pending] }
+        rules_hash: { $ref: '#/components/schemas/RulesHash' }
     ScoreSubmission:
       type: object
       additionalProperties: false
@@ -89,6 +98,11 @@ components:
           description: >-
             false for a run that hit a physics / sim fault (#503 A3): stored, but never verified
             and never on a board. Absent means ranked.
+        rules_hash:
+          $ref: '#/components/schemas/RulesHash'
+          description: >-
+            The rules the run was played under (#556); must be the cited replay's (and the
+            challenge's). Absent: the legacy vanilla rules.
     IdempotencyKey:
       description: >-
         One per write of a finished run (#503 A4): `<submission uuid>:replay` / `<submission uuid>:score`,
@@ -120,6 +134,14 @@ components:
         pinFieldOccupancy: { type: [string, 'null'] }
         feederTunablesHash: { type: string }
         initialSnapshot: { type: string }
+        rulesHash:
+          $ref: '#/components/schemas/RulesHash'
+          description: Required from schema 4 (#556); a submit without it is refused.
+        rules:
+          type: object
+          description: >-
+            The rules themselves (balls, fever, program), when they are not the recording build's
+            vanilla rules; the verifier replays under them and checks they hash to rulesHash.
         cascade:
           type: object
           required: [mode, seed, seedId]
@@ -296,6 +318,7 @@ paths:
       parameters:
         - { name: select, in: query, required: true, schema: { type: string } }
         - { name: map_id, in: query, required: true, schema: { type: string, pattern: '^eq\.[A-Za-z0-9._:-]{1,64}$' } }
+        - { name: rules_hash, in: query, required: false, description: 'The board under these rules (#556); the game always sends it.', schema: { type: string, pattern: '^eq\.[0-9a-f]{64}$' } }
         - { name: adventure_level, in: query, required: true, schema: { type: string, pattern: '^(is\.null|eq\.[A-Za-z0-9._:-]{1,64})$' } }
         - { name: order, in: query, required: true, schema: { const: rank.asc } }
         - { name: limit, in: query, required: true, schema: { type: string, pattern: '^([1-9]|[1-9][0-9]|100)$' } }
@@ -323,6 +346,9 @@ paths:
                 p_map_id: { $ref: '#/components/schemas/MapId' }
                 p_score: { type: integer, minimum: 0 }
                 p_adventure_level: { type: [string, 'null'] }
+                p_rules_hash:
+                  $ref: '#/components/schemas/RulesHash'
+                  description: The board's rules (#556); absent ranks on the legacy vanilla board.
       responses:
         '200':
           description: The rank.
@@ -681,6 +707,9 @@ paths:
                   success: { const: true }
                   replay_id: { $ref: '#/components/schemas/Uuid' }
                   frame_count: { type: integer, minimum: 0 }
+                  rules_hash:
+                    $ref: '#/components/schemas/RulesHash'
+                    description: The rules the stored tape names — the hash its score must carry (#556).
         default: { $ref: '#/components/responses/Failure' }
   /functions/v1/create-challenge:
     post:

@@ -209,9 +209,6 @@ export function formatMachineErrors(errors: readonly MachineIssue[]): string {
 }
 
 export type { WeeklyMachineDescriptor }
-export {
-  rulesAreDefault,
-} from './rules'
 
 // ---------------------------------------------------------------------------
 // Defaults and derived views

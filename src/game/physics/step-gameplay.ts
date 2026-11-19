@@ -89,6 +89,8 @@ export class StepGameplay {
     ballManager?.updateSmallGoldBallLifetimes(dt)
 
     this.scoringBridge.updateCombo(dt)
+    // The rules program's timers and modes count fixed steps (#556).
+    this.scoringBridge.tickRules()
     this.nudgeTilt.tickTilt(dt)
 
     if (this.host.powerupActive) {

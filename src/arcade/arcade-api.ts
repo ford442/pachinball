@@ -209,11 +209,15 @@ export function arcadeSession(): Promise<ArcadeSession> {
 
 const LEADERBOARD_COLUMNS = 'rank,name,score,map_id,adventure_level,balls,combo_max,date,replay_id,challenge_id,verified'
 
-/** Top `limit` rows of a board (map, optional adventure level), best first. */
-export async function fetchLeaderboard(mapId: string, adventureLevel?: string, limit = 10): Promise<LeaderboardEntry[]> {
+/**
+ * Top `limit` rows of a board, best first. A board is (map, rules, optional adventure level): the
+ * same table under another machine's rules is another board (#556).
+ */
+export async function fetchLeaderboard(mapId: string, adventureLevel: string | undefined, limit: number, rulesHash: string): Promise<LeaderboardEntry[]> {
   const params = new URLSearchParams({
     select: LEADERBOARD_COLUMNS,
     map_id: `eq.${mapId}`,
+    rules_hash: `eq.${rulesHash}`,
     adventure_level: adventureLevel ? `eq.${adventureLevel}` : 'is.null',
     order: 'rank.asc',
     limit: String(limit),
@@ -222,10 +226,10 @@ export async function fetchLeaderboard(mapId: string, adventureLevel?: string, l
 }
 
 /** Where `score` would place on the board (1 = top). */
-export async function fetchPlayerRank(mapId: string, score: number, adventureLevel?: string): Promise<number> {
+export async function fetchPlayerRank(mapId: string, score: number, adventureLevel: string | undefined, rulesHash: string): Promise<number> {
   return request('/rest/v1/rpc/player_rank', v.number(), {
     method: 'POST',
-    body: JSON.stringify({ p_map_id: mapId, p_score: score, p_adventure_level: adventureLevel ?? null }),
+    body: JSON.stringify({ p_map_id: mapId, p_score: score, p_adventure_level: adventureLevel ?? null, p_rules_hash: rulesHash }),
   })
 }
 

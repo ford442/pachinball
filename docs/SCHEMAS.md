@@ -12,7 +12,8 @@ there is no second hand-written description, and nothing is cast
 | `schema-kit.ts` | Shared helpers: `strict` / `loose` objects, `num` / `intInRange` / `u32`, `lenient`, `withCrossCheck`, `parseWith` / `parseJsonWith`, `canonicalJson` | wherever a schema loads |
 | `track.ts` | `TrackDefinition` and every segment type; `validateTrackDefinition` | the adventure track loader |
 | `weekly.ts` | `WeeklyMachineDescriptor` shape and envelope (`validateWeeklyMachine` adds the layout checks) | the cascade / machine loaders |
-| `rules.ts` | Machine rules v1 (ball weights / points / fever multipliers, fever threshold, `cascade.weekly`) | the machine loader |
+| `rules.ts` | Machine rules: v1 (ball weights / points / fever multipliers, fever threshold, `cascade.weekly`) plus the v2 `program`; `RunRulesSchema`, the rules a tape carries inline | the machine loader; a replay with inline rules (`resolveRunRules`) |
+| `rules-program.ts` | Rules v2: the scoring program — events, values, conditions, actions, counters / timers / modes; a cross-check resolves every reference (docs/RULES.md) | with `rules.ts` |
 | `machine.ts` | `MachineDescriptor`; `validateMachine` | the machine loader (`?machine=`, share links) |
 | `profile.ts` | The versioned player `Profile` (export / import); `parseProfile` | not yet used at runtime (slice 5) |
 | `arcade.ts` | Every arcade response body; the stored arcade session and offline queue | `arcade-api.ts` (lazy) |

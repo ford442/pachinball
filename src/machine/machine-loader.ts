@@ -10,10 +10,11 @@
  * Anything that fails to load or validate boots the vanilla table with a
  * `bootWarn`, never a broken one.
  *
- * Rules (ball weights, points, fever) and tracks are validated and carried on
- * `game.machine`, but the runtime applies them only once the replay contract
- * covers them (a tape must record the rules its run played under); until then
- * a machine with non-default rules boots with a warning and today's rules.
+ * Rules (ball economy, fever threshold, the scoring program) are validated
+ * here and played by every run on the machine (#556): `GameLifecycle.startGame`
+ * hands them to the physics controller's `RulesEngine`, and the tape records
+ * them (`rulesHash`, plus the rules inline when they are not vanilla). Tracks
+ * are validated and carried on `game.machine`.
  *
  * The backbox mapping is `machine-backbox.ts` (the entry chunk needs it; this module stays lazy).
  *
@@ -22,7 +23,7 @@
  */
 
 import { assetUrl } from '../core/asset-urls'
-import { formatMachineErrors, MACHINE_LIMITS, rulesAreDefault, validateMachine, type MachineDescriptor } from '../schemas/machine'
+import { formatMachineErrors, MACHINE_LIMITS, validateMachine, type MachineDescriptor } from '../schemas/machine'
 import { decodeMachineShare, readShareHash } from './machine-share'
 
 export type MachineSource =
@@ -89,9 +90,6 @@ export async function bootMachine(
   if (!result.ok) {
     warn(`[machine] not loaded, booting the vanilla table: ${result.error}`)
     return null
-  }
-  if (!rulesAreDefault(result.descriptor.rules)) {
-    warn(`[machine] ${result.descriptor.id}: custom rules are not applied yet; playing the default rules`)
   }
   return result.descriptor
 }

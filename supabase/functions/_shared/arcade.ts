@@ -81,6 +81,8 @@ export function optionalText(o: Record<string, unknown>, key: string, pattern: R
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const TAG = /^[A-Z]{3}$/
 export const MAP_ID = /^[A-Za-z0-9._:-]{1,64}$/
+/** A rules hash (#556): SHA-256 hex of a run's rules (src/rules/rules-hash.ts). */
+export const RULES_HASH = /^[0-9a-f]{64}$/
 
 /** PostgREST, as the caller. Returns the parsed body, or throws with PostgREST's status and message. */
 export async function rest<T>(req: Request, path: string, init: { method: string; body?: unknown; prefer?: string }): Promise<T> {
