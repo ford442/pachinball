@@ -32,7 +32,7 @@ async function bootAndCollect(page: Page, url: string): Promise<{
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 15_000 })
 
   await expect.poll(async () => {
-    return page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager)
+    return page.evaluate(() => !!window.game?.stateManager)
   }, { timeout: 20_000 }).toBe(true)
 
   const boot = await page.evaluate(() => ({
@@ -51,12 +51,7 @@ function expectMarker(boot: { degradeLogs: string[]; degradeReason: string | nul
 
 async function expectGameplayStarts(page: Page): Promise<void> {
   const started = await page.evaluate(async () => {
-    const g = (window as unknown as {
-      game?: {
-        startGame?: () => Promise<void>
-        stateManager?: { isPlaying?: () => boolean }
-      }
-    }).game
+    const g = window.game
     try {
       await g?.startGame?.()
       return g?.stateManager?.isPlaying?.() === true

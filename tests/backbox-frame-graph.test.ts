@@ -145,6 +145,7 @@ vi.mock('@babylonjs/core', () => ({
 import { BackboxFrameGraph, BACKBOX_LAYER_MASK, type BackboxEffectPass } from '../src/display/backbox-frame-graph'
 import { planBackboxGraph, type BackboxGraphFlags } from '../src/display/backbox-graph-plan'
 import { QualityTier } from '../src/game-elements/visual-language'
+import type { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage'
 
 type FakeMesh = ReturnType<typeof hoisted.mkMesh>
 
@@ -178,6 +179,8 @@ function setup() {
   const active = { crt: false, jackpot: false }
   const pass = (name: string, key: 'crt' | 'jackpot'): BackboxEffectPass => ({
     fragmentShader: name,
+    // ShaderLanguage.GLSL (the module is mocked here, so the enum is a type-only import).
+    shaderLanguage: 0 as ShaderLanguage,
     uniforms: ['uTime'],
     samplers: [],
     isActive: () => active[key],

@@ -54,6 +54,7 @@ describe('wasm debug geometry', () => {
         normal: { x: 0, y: 1, z: 0 },
         point: { x: 1, y: 2, z: 3 },
         impulse: 1,
+        isSensor: false,
         phase: ContactPhase.Enter,
       },
     ])

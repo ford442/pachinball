@@ -198,8 +198,9 @@ export const Color4 = vi.fn().mockImplementation(function (this: Record<string, 
 })
 
 export const StandardMaterial = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-  this.emissiveColor = new MockColor3(0, 0, 0)
-  this.emissiveColor.copyFrom = vi.fn(function (this: MockColor3, c: MockColor3) {
+  const emissiveColor = new MockColor3(0, 0, 0)
+  this.emissiveColor = emissiveColor
+  emissiveColor.copyFrom = vi.fn(function (this: MockColor3, c: MockColor3) {
     this.r = c.r
     this.g = c.g
     this.b = c.b

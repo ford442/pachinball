@@ -33,7 +33,7 @@ async function bootGame(page: Page): Promise<void> {
   await expect(startBtn).toBeVisible({ timeout: 30_000 })
 
   await expect.poll(async () => {
-    return page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager)
+    return page.evaluate(() => !!window.game?.stateManager)
   }, { intervals: [200], timeout: 15_000 }).toBe(true)
 
   await page.evaluate(() => {
@@ -42,7 +42,7 @@ async function bootGame(page: Page): Promise<void> {
 
   await expect.poll(async () => {
     const gs = await page.evaluate(() => {
-      const g = (window as unknown as { game?: { stateManager?: { getState?: () => number; isPlaying?: () => boolean } } }).game
+      const g = window.game
       return {
         state: g?.stateManager?.getState?.() ?? -1,
         isPlaying: g?.stateManager?.isPlaying?.() ?? false,

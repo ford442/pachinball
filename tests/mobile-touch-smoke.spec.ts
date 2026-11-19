@@ -69,7 +69,7 @@ test.describe('Mobile touch smoke', () => {
     expect(ll.x + ll.width).toBeLessThan(rr.x)
 
     // Game object should exist after start (reduced-motion path)
-    const hasGame = await page.evaluate(() => Boolean((window as unknown as { game?: unknown }).game))
+    const hasGame = await page.evaluate(() => Boolean(window.game))
     expect(hasGame).toBe(true)
   })
 })

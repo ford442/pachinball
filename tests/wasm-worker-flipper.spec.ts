@@ -15,19 +15,11 @@ test.describe('wasm-worker physics mode', () => {
     await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 })
 
     await expect.poll(async () => {
-      return page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager)
+      return page.evaluate(() => !!window.game?.stateManager)
     }, { timeout: 60_000 }).toBe(true)
 
     const wasmReady = await page.evaluate(() => {
-      const g = (window as unknown as {
-        game?: {
-          physics?: {
-            isWasmOwnerMode?: () => boolean
-            getWasmMode?: () => string
-            getWasmEngine?: () => { isReady?: boolean }
-          }
-        }
-      }).game
+      const g = window.game
       return !!(
         g?.physics?.isWasmOwnerMode?.() &&
         g?.physics?.getWasmMode?.() === 'wasm-worker' &&
@@ -41,7 +33,7 @@ test.describe('wasm-worker physics mode', () => {
     await page.evaluate(() => document.getElementById('start-btn')?.click())
     await expect.poll(async () => {
       return page.evaluate(() => {
-        const g = (window as unknown as { game?: { stateManager?: { isPlaying?: () => boolean } } }).game
+        const g = window.game
         return g?.stateManager?.isPlaying?.() === true
       })
     }, { timeout: 30_000 }).toBe(true)

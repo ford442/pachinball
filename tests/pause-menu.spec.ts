@@ -10,7 +10,7 @@ test.describe('Pause menu', () => {
     await page.locator('#start-btn').click()
 
     await expect.poll(async () => {
-      return page.evaluate(() => (window as unknown as { game?: { stateManager?: { getState?: () => number } } }).game?.stateManager?.getState?.() ?? -1)
+      return page.evaluate(() => window.game?.stateManager?.getState?.() ?? -1)
     }, {
       intervals: [200],
       timeout: 30_000,
@@ -19,7 +19,7 @@ test.describe('Pause menu', () => {
     await page.keyboard.press('Escape')
     await expect(page.locator('[data-testid="pause-menu-panel"]')).toBeVisible()
     await expect.poll(async () => {
-      return page.evaluate(() => (window as unknown as { game?: { stateManager?: { getState?: () => number } } }).game?.stateManager?.getState?.() ?? -1)
+      return page.evaluate(() => window.game?.stateManager?.getState?.() ?? -1)
     }).toBe(1)
 
     const reduceMotion = page.locator('[data-testid="pause-reduced-motion"]')
@@ -30,7 +30,7 @@ test.describe('Pause menu', () => {
     await page.locator('[data-testid="pause-resume-btn"]').click()
     await expect(page.locator('[data-testid="pause-menu-panel"]')).toBeHidden()
     await expect.poll(async () => {
-      return page.evaluate(() => (window as unknown as { game?: { stateManager?: { getState?: () => number } } }).game?.stateManager?.getState?.() ?? -1)
+      return page.evaluate(() => window.game?.stateManager?.getState?.() ?? -1)
     }).toBe(2)
   })
 })

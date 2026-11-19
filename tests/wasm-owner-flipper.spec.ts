@@ -123,7 +123,7 @@ test.describe('wasm-owner native flipper hinge', () => {
     const scored = await page.evaluate(() => {
       const g = (window as unknown as GameHooks).game
       const ball = g?.ballManager?.getBallBody?.()
-      const bumper = g.gameObjects?.getBumperBodies?.()?.[0]
+      const bumper = g?.gameObjects?.getBumperBodies?.()?.[0]
       if (!g?.physicsController || !g.engine || !ball || !bumper) {
         return {
           ok: false,

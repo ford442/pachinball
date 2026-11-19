@@ -3,7 +3,7 @@
  * on the gameplay sim clock (fixed steps the engine took), never wall time:
  * no `performance.now()` read decides a nudge, and no timer ends the penalty.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { GAME_TUNING, GameConfig } from '../src/config'
 import { FIXED_TIMESTEP, MAX_FRAME_DT } from '../src/core/sim-clock'
@@ -54,7 +54,7 @@ const cooldownSteps = Math.ceil(GAME_TUNING.timing.nudgeCooldownMs / STEP_MS)
 const penaltySteps = Math.round(GameConfig.nudge.tiltPenaltyTime / STEP_MS)
 
 describe('nudge / tilt on the sim clock (#441)', () => {
-  let setTimeoutSpy: ReturnType<typeof vi.spyOn>
+  let setTimeoutSpy: MockInstance<typeof setTimeout>
   beforeEach(() => {
     setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     vi.spyOn(performance, 'now').mockImplementation(() => {

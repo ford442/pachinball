@@ -59,6 +59,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.57.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.0",
     "@valibot/to-json-schema": "^1.8.0",
     "ajv": "^6.12.6",

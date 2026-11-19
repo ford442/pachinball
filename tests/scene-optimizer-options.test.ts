@@ -6,30 +6,30 @@ vi.mock('@babylonjs/core/Misc/sceneOptimizer', () => {
     getDescription() { return '' }
   }
   class ShadowsOptimization extends SceneOptimization {
-    getDescription() { return 'Turning shadows on/off' }
+    override getDescription() { return 'Turning shadows on/off' }
   }
   class LensFlaresOptimization extends SceneOptimization {
-    getDescription() { return 'Turning lens flares on/off' }
+    override getDescription() { return 'Turning lens flares on/off' }
   }
   class PostProcessesOptimization extends SceneOptimization {
-    getDescription() { return 'Turning post-processes on/off' }
+    override getDescription() { return 'Turning post-processes on/off' }
   }
   class ParticlesOptimization extends SceneOptimization {
-    getDescription() { return 'Turning particles on/off' }
+    override getDescription() { return 'Turning particles on/off' }
   }
   class TextureOptimization extends SceneOptimization {
     constructor(priority = 0, public maximumSize = 1024) { super(priority) }
-    getDescription() { return `Reducing render target texture size to ${this.maximumSize}` }
+    override getDescription() { return `Reducing render target texture size to ${this.maximumSize}` }
   }
   class RenderTargetsOptimization extends SceneOptimization {
-    getDescription() { return 'Turning render targets off' }
+    override getDescription() { return 'Turning render targets off' }
   }
   class HardwareScalingOptimization extends SceneOptimization {
     constructor(priority = 0, public maximumScale = 2) { super(priority) }
-    getDescription() { return `Setting hardware scaling level to ${this.maximumScale}` }
+    override getDescription() { return `Setting hardware scaling level to ${this.maximumScale}` }
   }
   class MergeMeshesOptimization extends SceneOptimization {
-    getDescription() { return 'Merging similar meshes together' }
+    override getDescription() { return 'Merging similar meshes together' }
   }
   class SceneOptimizerOptions {
     optimizations: SceneOptimization[] = []

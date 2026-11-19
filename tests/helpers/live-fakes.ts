@@ -53,7 +53,7 @@ export function frameAt(s: number): InputFrame {
 }
 
 interface StoredRun extends LiveRun {
-  header: object
+  header: Record<string, unknown>
   stored: LiveChunk[]
 }
 
@@ -72,7 +72,7 @@ export class FakeLiveCloud {
       const id = `00000000-0000-4000-8000-${String(++this.next).padStart(12, '0')}`
       for (const r of this.runs.values()) if (r.status === 'live') r.status = 'left'
       this.runs.set(id, {
-        id, header: run.header, map_id: run.mapId, player_tag: run.tag, chunk_steps: run.chunkSteps, track_stride: run.trackStride,
+        id, header: run.header as Record<string, unknown>, map_id: run.mapId, player_tag: run.tag, chunk_steps: run.chunkSteps, track_stride: run.trackStride,
         chunks: 0, frames: 0, score: 0, status: 'live', created_at: '', updated_at: '', stored: [],
       })
       return id

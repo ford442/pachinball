@@ -3,7 +3,7 @@
  * share the same teardown instrumentation (TrackTeardownStats).
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import {
   loadPlayfield,
   campaignPlayfieldSpec,
@@ -21,11 +21,11 @@ function makeTeardownStats(overrides: Partial<TrackTeardownStats> = {}): TrackTe
 }
 
 describe('loadPlayfield', () => {
-  let switchToTrack: ReturnType<typeof vi.fn>
-  let rebuildHandleCaches: ReturnType<typeof vi.fn>
-  let resetBall: ReturnType<typeof vi.fn>
-  let setGameMode: ReturnType<typeof vi.fn>
-  let switchTableMap: ReturnType<typeof vi.fn>
+  let switchToTrack: Mock
+  let rebuildHandleCaches: Mock
+  let resetBall: Mock
+  let setGameMode: Mock
+  let switchTableMap: Mock
   let deps: PlayfieldLoaderDeps
 
   beforeEach(() => {
@@ -78,7 +78,7 @@ describe('loadPlayfield', () => {
     const portalStats = makeTeardownStats({ exitPortalsRemoved: 1 })
     const freeMapStats = makeTeardownStats({ exitPortalsRemoved: 1, meshesDisposed: 5 })
 
-    ;(deps.adventureMode as { getLastTeardownStats: ReturnType<typeof vi.fn> })
+    ;(deps.adventureMode as unknown as { getLastTeardownStats: Mock })
       .getLastTeardownStats
       .mockReturnValueOnce(portalStats)
       .mockReturnValueOnce(freeMapStats)
@@ -93,7 +93,7 @@ describe('loadPlayfield', () => {
 
   it('calls ensureAdventureActive when adventure is not yet running', async () => {
     const ensureAdventureActive = vi.fn()
-    ;(deps.adventureMode as { isActive: ReturnType<typeof vi.fn> }).isActive.mockReturnValue(false)
+    ;(deps.adventureMode as unknown as { isActive: Mock }).isActive.mockReturnValue(false)
 
     await loadPlayfield(freeMapPlayfieldSpec('NEON_HELIX'), { ...deps, ensureAdventureActive })
 

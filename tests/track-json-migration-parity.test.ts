@@ -125,6 +125,9 @@ function makeRecorder(startPos: Vector3) {
     createPinLattice: (spec, material) => calls.push({ fn: 'pinLattice', args: [spec.rows, spec.cols, material] }),
     createForceField: (center, _half, _rotation, _accel, space, _visible, material) =>
       calls.push({ fn: 'forceField', args: [center.x, center.y, center.z, space, material] }),
+    createStaticCone: (base, radius, halfHeight, _rotation, _restitution, _friction, material) =>
+      calls.push({ fn: 'staticCone', args: [base.x, base.y, base.z, radius, halfHeight, material] }),
+    createAxisPullWell: (center, radius) => calls.push({ fn: 'axisPullWell', args: [center.x, center.y, center.z, radius] }),
   }
 
   return { api, calls }

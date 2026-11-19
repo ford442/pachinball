@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tests.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    // Tests import the dependency-free .mjs helpers in scripts/ and services/replay-verifier/
+    // directly; their JSDoc types are read, the JS itself is not checked (checkJs stays off).
+    "allowJs": true
+  },
+  // src/**/*.d.ts: vite-env.d.ts (`window.game` and the other test hooks) and worklet-globals.d.ts
+  // (tests import the voice worklet's processor module).
+  "include": ["tests/**/*.ts", "src/**/*.d.ts"]
+}

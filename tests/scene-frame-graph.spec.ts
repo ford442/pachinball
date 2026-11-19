@@ -1,4 +1,6 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
+import type { QualityTier } from '../src/game-elements/visual-palette'
+import type { BootedGame, BootedGameWindow } from './game-test-handle'
 
 /**
  * #461 Slice B: scene post-processing is a Frame Graph, not a DefaultRenderingPipeline.
@@ -13,53 +15,15 @@ import { chromium, expect, test, type Page } from '@playwright/test'
  * opt-in like tests/backbox-frame-graph.spec.ts: `WEBGPU_CI=1 npx playwright test tests/scene-frame-graph.spec.ts`.
  */
 
-interface SceneGraphReport {
-  plan: { nodes: string[]; omitted: Array<{ node: string; reason: string }> } | null
-  pending: boolean
-  error: string | null
-  graph: {
-    backend: 'webgpu' | 'webgl2'
-    nodes: string[]
-    planned: string[]
-    width: number
-    height: number
-    hdr: boolean
-    format: string
-    samples: number
-    executedFrames: number
-    generation: number
-    active: boolean
-    building: boolean
-  } | null
-}
+type SceneGraphReport = ReturnType<BootedGame['renderer']['getSceneGraphInfo']>
 
-interface GraphProbe {
-  ready?: boolean
-  qualityTier: string
-  postProcessDegraded: boolean
-  accessibility: unknown
-  engine: { _gl?: WebGL2RenderingContext; getCaps: () => { maxDrawBuffers?: number }; getRenderWidth: (screen: boolean) => number; getRenderHeight: (screen: boolean) => number }
-  scene: {
-    onAfterRenderObservable: { addOnce: (cb: () => void) => void }
-    imageProcessingConfiguration: { applyByPostProcess: boolean }
-    postProcessRenderPipelineManager?: unknown
-    prePassRenderer: unknown
-    geometryBufferRenderer: unknown
-  }
-  tableCam: { outputRenderTarget: { name: string; renderPassId: number } | null }
-  bloomPipeline: { bloomScale: number } | null
-  renderer: {
-    getSceneGraphInfo: () => SceneGraphReport
-    applyQualityTier: (tier: string) => void
-    postProcess: { _isSwiftShader: boolean }
-  }
-  applyAccessibilitySettings: (reducedMotion: boolean, photosensitiveMode: boolean) => void
-  performanceMonitor: { setOnSustainedJank: (cb: (() => void) | null) => void }
-  stateManager: { isPlaying: () => boolean }
-}
+/**
+ * The spec lifts the SwiftShader guard on purpose: `GameRenderer.postProcess` and its
+ * `_isSwiftShader` flag are private, plain properties at runtime.
+ */
+type SwiftShaderProbe = { postProcess: { _isSwiftShader: boolean } }
 
-type ProbeWindow = Window & {
-  game?: GraphProbe
+type ProbeWindow = BootedGameWindow & {
   bootstrapGpuProbe?: { backend: string | null; postProcessTier: string | null; maxUniformBuffersPerShaderStage: number | null }
   bootstrapGpuDegrades?: Array<{ path: string; detail?: string }>
 }
@@ -129,7 +93,8 @@ function canvasMean(page: Page): Promise<number> {
       new Promise<number>((resolve) => {
         const game = (window as ProbeWindow).game!
         game.scene.onAfterRenderObservable.addOnce(() => {
-          const gl = game.engine._gl!
+          // WebGL2 runs only: `_gl` is the engine's internal context, read for a pixel probe.
+          const gl = (game.engine as unknown as { _gl: WebGL2RenderingContext })._gl
           const w = game.engine.getRenderWidth(true)
           const h = game.engine.getRenderHeight(true)
           const pixels = new Uint8Array(w * h * 4)
@@ -169,7 +134,8 @@ test.describe('Scene Frame Graph', () => {
       // The old pipeline is gone: nothing is attached to the camera through the pipeline manager.
       pipelines: Object.keys(
         (
-          (window as ProbeWindow).game!.scene.postProcessRenderPipelineManager as
+          // `_renderPipelines` is the manager's private registry.
+          (window as ProbeWindow).game!.scene.postProcessRenderPipelineManager as unknown as
             | { _renderPipelines?: Record<string, unknown> }
             | undefined
         )?._renderPipelines ?? {},
@@ -239,19 +205,19 @@ test.describe('Scene Frame Graph', () => {
   test('quality tiers change the node set: LOW leaves sharpen out, HIGH has no HIGH-only node on a software rasteriser', async ({ page }) => {
     await boot(page, 'renderer=webgl2&noopt=1')
 
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('low'))
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('low' as QualityTier))
     await waitForNodes(page, LOW_NODES)
     expect((await report(page)).plan?.omitted).toContainEqual({ node: 'sharpen', reason: 'quality-tier' })
     // LOW: no MSAA (FXAA instead); same target object, so its sample count changed in place.
     expect((await report(page)).graph?.samples).toBe(1)
     expect(await canvasMean(page)).toBeGreaterThan(DRAWN)
 
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high' as QualityTier))
     await waitForNodes(page, FULL_NODES)
     // SwiftShader (and every CI runner) is a software rasteriser: the HIGH-only nodes cost more than it can pay.
     expect((await report(page)).plan?.omitted).toContainEqual({ node: 'ssao', reason: 'heavy-unavailable' })
 
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium'))
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium' as QualityTier))
     await waitForNodes(page, FULL_NODES)
     expect(await canvasMean(page)).toBeGreaterThan(DRAWN)
   })
@@ -279,8 +245,8 @@ test.describe('Scene Frame Graph', () => {
     // context is real, so this is the graph the first GPU that qualifies builds.
     await page.evaluate(() => {
       const game = (window as ProbeWindow).game!
-      game.renderer.postProcess._isSwiftShader = false
-      game.renderer.applyQualityTier('high')
+      ;(game.renderer as unknown as SwiftShaderProbe).postProcess._isSwiftShader = false
+      game.renderer.applyQualityTier('high' as QualityTier)
     })
     await waitForNodes(page, [
       'scene:render',
@@ -303,7 +269,7 @@ test.describe('Scene Frame Graph', () => {
     expect(engineState).toEqual({ prepass: false, geometryBuffer: false })
 
     // And back: the chain is gone and the scene keeps rendering.
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium'))
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium' as QualityTier))
     await waitForNodes(page, FULL_NODES)
     expect(await canvasMean(page)).toBeGreaterThan(DRAWN)
     expect(compileErrors, 'no shader compile errors building and tearing down the HIGH-only nodes').toEqual([])
@@ -314,9 +280,9 @@ test.describe('Scene Frame Graph', () => {
     await boot(page, 'renderer=webgl2&noopt=1')
     await page.evaluate(() => {
       const game = (window as ProbeWindow).game!
-      game.renderer.postProcess._isSwiftShader = false
+      ;(game.renderer as unknown as SwiftShaderProbe).postProcess._isSwiftShader = false
       game.engine.getCaps().maxDrawBuffers = 2
-      game.renderer.applyQualityTier('high')
+      game.renderer.applyQualityTier('high' as QualityTier)
     })
     await waitForNodes(page, FULL_NODES)
     const r = await report(page)

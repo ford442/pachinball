@@ -13,6 +13,9 @@ import { FRAMES_BEFORE_REFREEZE, StaticSceneGate, type StaticSceneGateHost } fro
 
 interface FakeMesh extends ActiveListMesh {
   name: string
+  /** Read-only to the code under test; the cases flip them. */
+  isVisible: boolean
+  visibility: number
   enabled: boolean
   ready: boolean
   material: { uniqueId: number } | null

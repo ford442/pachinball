@@ -267,6 +267,18 @@ describe('compileTrackDefinition', () => {
       createResetBasin: () => {
         calls.push('resetBasin')
       },
+      createPinLattice: () => {
+        calls.push('pinLattice')
+      },
+      createForceField: () => {
+        calls.push('forceField')
+      },
+      createStaticCone: () => {
+        calls.push('staticCone')
+      },
+      createAxisPullWell: () => {
+        calls.push('axisPullWell')
+      },
     })
 
     expect(calls.some((c) => c.startsWith('straight:'))).toBe(true)

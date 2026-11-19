@@ -13,8 +13,6 @@ import { test, expect, type Request } from '@playwright/test'
 const ORIGIN = 'http://localhost:4175'
 const WORKLET_PATH = '/pachinball/audio/pachinko-voice-processor.js'
 
-type WorkletStatus = { url: string | null; ready: boolean; error: string | null }
-
 test('under /pachinball/ every same-origin request stays in the subdirectory and the voice worklet runs', async ({ page }) => {
   test.setTimeout(120_000)
 
@@ -28,7 +26,7 @@ test('under /pachinball/ every same-origin request stays in the subdirectory and
   // says where it loaded from, and whether the processor registered.
   await expect.poll(
     () => page.evaluate(() => {
-      const g = (window as { game?: { effects?: { getVoiceWorkletStatus?: () => WorkletStatus | null } } }).game
+      const g = window.game
       return g?.effects?.getVoiceWorkletStatus?.() ?? null
     }),
     { timeout: 30_000 },
@@ -46,7 +44,7 @@ test('under /pachinball/ every same-origin request stays in the subdirectory and
   // Start a game too: the sample bank, maps and textures load from here on.
   await page.locator('#start-btn').click()
   await expect.poll(
-    () => page.evaluate(() => (window as { game?: { stateManager?: { isPlaying?: () => boolean } } }).game?.stateManager?.isPlaying?.() ?? false),
+    () => page.evaluate(() => window.game?.stateManager?.isPlaying?.() ?? false),
     { timeout: 30_000 },
   ).toBe(true)
   await expect.poll(() => requests.some((r) => /\/pachinball\/audio\/.+\.ogg$/.test(new URL(r.url()).pathname)), { timeout: 30_000 }).toBe(true)

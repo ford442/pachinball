@@ -15,7 +15,7 @@
  * enums, covering the activation-failure guard added alongside `portal:activation-failed`.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, type Mock } from 'vitest'
 import { EventBus, type PachinballEventMap } from '../src/core/event-bus'
 import { DisplayState } from '../src/display/display-types'
 import { AdventureTrackType } from '../src/adventure/adventure-types'
@@ -37,9 +37,9 @@ interface HostStub {
   eventBus: EventBus
   adventureMode: AdventureModeStub
   gameMode: 'fixed' | 'dynamic'
-  uiManager: { showMessage: ReturnType<typeof vi.fn>; showPortalOverlay: ReturnType<typeof vi.fn>; hideCountdownTimer: ReturnType<typeof vi.fn> }
-  display: { setStoryText: ReturnType<typeof vi.fn>; triggerCRTFlash: ReturnType<typeof vi.fn> }
-  physicsController: { registerPortalSensor: ReturnType<typeof vi.fn> }
+  uiManager: { showMessage: Mock; showPortalOverlay: Mock; hideCountdownTimer: Mock }
+  display: { setStoryText: Mock; triggerCRTFlash: Mock }
+  physicsController: { registerPortalSensor: Mock }
 }
 
 function buildHost(opts: { activateOk: boolean; sensorHandle?: number; currentZone?: string | null; gameMode?: HostStub['gameMode'] }): HostStub {

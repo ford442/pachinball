@@ -5,10 +5,10 @@
  * scale) asks the graph for a rebuild.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, type Mock } from 'vitest'
 import { ScenePostController, type ScenePostOwner } from '../src/game/scene-post-controller'
 
-function owner(): ScenePostOwner & { requestRebuild: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> } {
+function owner(): ScenePostOwner & { requestRebuild: Mock; dispose: Mock } {
   return { requestRebuild: vi.fn(), dispose: vi.fn() }
 }
 

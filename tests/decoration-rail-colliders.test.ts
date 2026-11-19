@@ -55,7 +55,7 @@ Object.assign(MeshBuilder, {
   CreateTube: vi.fn(decorationMesh),
 })
 Object.assign(Scalar, { RandomRange: (min: number) => min })
-vi.mocked(Animation).mockImplementation(function (this: Record<string, unknown>) {
+vi.mocked(Animation).mockImplementation(function (this: Animation) {
   this.setKeys = vi.fn()
 })
 

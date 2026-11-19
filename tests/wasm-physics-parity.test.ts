@@ -15,6 +15,7 @@ import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { EventBus } from '../src/core/event-bus'
 import type { BumperVisual } from '../src/game-elements/types'
 import type { WasmContactEvent } from '../src/wasm/wasm-types'
+import type { PhysicsHost } from '../src/game/physics/types'
 import { CONTACT_STRIDE, encodeContactBuffer } from '../src/wasm/contact-buffer'
 import {
   makeBallManagerStub,
@@ -116,6 +117,7 @@ function makeWasmEngineStub() {
         normal: { x: 0, y: 1, z: 0 },
         point: { x: 0, y: 0.5, z: 0 },
         impulse: 1,
+        isSensor: false,
         phase,
         started,
         isEntering: started,
@@ -253,7 +255,7 @@ describe('WASM physics parity harness (unit layer)', () => {
 
     wasmEngine.emitContact(ballId, bumperId)
 
-    expect(host.gameObjects.activateBumperHit).toHaveBeenCalled()
+    expect(host.gameObjects!.activateBumperHit).toHaveBeenCalled()
     expect(controller.getBumperMatches()).toBe(1)
     expect(controller.getAwardScoreCalls()).toBe(1)
     expect(host.score).toBeGreaterThan(0)

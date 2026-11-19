@@ -15,25 +15,9 @@ import { assertWasmOwnerReady, bootWasmOwner } from './helpers/wasm-owner-boot'
 
 type Hashes = { ok: boolean; staticHash: string | null; seed: number | null; machine: string | null; pinFields: number }
 
-/** The slice of `window.game` this spec drives (`GameHooks` does not type the engine's hash). */
-type Game = {
-  engine: { getDeltaTime: () => number; stopRenderLoop: () => void }
-  startGame?: () => Promise<void>
-  stateManager?: { isPlaying?: () => boolean }
-  physicsController?: {
-    rebuildHandleCaches?: () => void
-    stepPhysics: (input: unknown, actions: null, runner: null, recorder: null) => void
-  }
-  replayRecorder?: { getMetadata?: () => { seed: number; machine?: string } | null }
-  physics?: {
-    getWasmEngine?: () => { getStaticContentHash?: () => string | null } | null
-    getWasmTableWorld?: () => { allBodies(): Array<{ colliders: Array<{ desc: { shape: { kind: string } } }> }> } | null
-  }
-}
-
 async function hashesAfterStart(page: Page): Promise<Hashes> {
   return page.evaluate(async () => {
-    const g = (window as unknown as { game?: Game }).game
+    const g = window.game
     const empty: Hashes = { ok: false, staticHash: null, seed: null, machine: null, pinFields: 0 }
     if (!g?.physicsController || !g.engine || !g.startGame) return empty
 

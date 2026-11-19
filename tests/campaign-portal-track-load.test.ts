@@ -7,7 +7,7 @@
  *   → LevelLoader.loadCampaignTrack() → AdventureMode.switchToTrack() + map/mode sync
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
 import { AdventureTrackProgression } from '../src/adventure/adventure-track-progression'
 import { AdventureProgressionSupervisor } from '../src/adventure/adventure-progression-supervisor'
@@ -40,11 +40,11 @@ describe('map-registry A/B helpers', () => {
 })
 
 describe('LevelLoader.loadCampaignTrack', () => {
-  let switchToTrack: ReturnType<typeof vi.fn>
-  let rebuildHandleCaches: ReturnType<typeof vi.fn>
-  let resetBall: ReturnType<typeof vi.fn>
-  let switchTableMap: ReturnType<typeof vi.fn>
-  let setGameMode: ReturnType<typeof vi.fn>
+  let switchToTrack: Mock
+  let rebuildHandleCaches: Mock
+  let resetBall: Mock
+  let switchTableMap: Mock
+  let setGameMode: Mock
   let loader: LevelLoader
 
   beforeEach(() => {
@@ -156,7 +156,7 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
     })
 
     const slot = new GameSlotAdventure({
-      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
+      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() } as unknown as import('../src/display/display-core').DisplaySystem,
       effects: null,
       eventBus: bus,
       ballManager: null,
@@ -183,6 +183,8 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
       triggerJackpot: vi.fn(),
       setGameState: vi.fn(),
       resetBall: vi.fn(),
+      performanceMonitor: null,
+      uiManager: null,
     })
 
     const pendingLoads: Promise<void>[] = []
@@ -231,7 +233,7 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
     })
 
     const slot = new GameSlotAdventure({
-      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
+      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() } as unknown as import('../src/display/display-core').DisplaySystem,
       effects: null,
       eventBus: bus,
       ballManager: null,
@@ -255,6 +257,8 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
       triggerJackpot: vi.fn(),
       setGameState: vi.fn(),
       resetBall: vi.fn(),
+      performanceMonitor: null,
+      uiManager: null,
     })
 
     const pendingLoads: Promise<void>[] = []

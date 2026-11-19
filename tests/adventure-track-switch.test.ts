@@ -8,7 +8,7 @@
  *  (d) leaves no orphaned bodies in the mock physics world.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 
 // ─── Mock BabylonJS before importing adventure-mode ───────────────────────────
 
@@ -86,22 +86,20 @@ vi.mock('@babylonjs/core', () => ({
   },
   Quaternion: hoisted.MockQuaternion,
   Scalar: { Clamp: vi.fn((v: number, min: number, max: number) => Math.max(min, Math.min(max, v))) },
-  StandardMaterial: vi.fn().mockImplementation(function () {
-    const self = this as Record<string, unknown>
-    self.dispose = hoisted.mockMatDispose
-    self.emissiveColor = { scaleToRef: vi.fn() }
-    self.diffuseColor = null
-    self.alpha = 1
-    return self
+  StandardMaterial: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.dispose = hoisted.mockMatDispose
+    this.emissiveColor = { scaleToRef: vi.fn() }
+    this.diffuseColor = null
+    this.alpha = 1
+    return this
   }),
-  PBRMaterial: vi.fn().mockImplementation(function () {
-    const self = this as Record<string, unknown>
-    self.dispose = hoisted.mockMatDispose
-    self.emissiveColor = { scaleToRef: vi.fn() }
-    self.albedoColor = null
-    self.alpha = 1
-    self.clearCoat = { isEnabled: false, intensity: 0, roughness: 0 }
-    return self
+  PBRMaterial: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.dispose = hoisted.mockMatDispose
+    this.emissiveColor = { scaleToRef: vi.fn() }
+    this.albedoColor = null
+    this.alpha = 1
+    this.clearCoat = { isEnabled: false, intensity: 0, roughness: 0 }
+    return this
   }),
   Color3: Object.assign(vi.fn(function (this: Record<string, number>, r = 0, g = 0, b = 0) {
     const self = this as unknown as Record<string, unknown>
@@ -156,11 +154,11 @@ function mockColliderDesc() {
 describe('AdventureMode.switchToTrack', () => {
   let mockScene: unknown
   let mockWorld: {
-    getRigidBody: ReturnType<typeof vi.fn>
-    removeRigidBody: ReturnType<typeof vi.fn>
-    createRigidBody: ReturnType<typeof vi.fn>
-    createCollider: ReturnType<typeof vi.fn>
-    intersectionPair: ReturnType<typeof vi.fn>
+    getRigidBody: Mock
+    removeRigidBody: Mock
+    createRigidBody: Mock
+    createCollider: Mock
+    intersectionPair: Mock
   }
   let mockRapier: unknown
   let nextHandle: number
@@ -434,7 +432,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
     const loadCampaignTrack = vi.fn().mockReturnValue({ success: true })
 
     const host = {
-      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
+      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() } as unknown as import('../src/display/display-core').DisplaySystem,
       effects: null,
       eventBus: { emit: vi.fn(), on: vi.fn() } as unknown as import('../src/core/event-bus').EventBus,
       ballManager: null,
@@ -458,6 +456,11 @@ describe('GameSlotAdventure.switchToTrack', () => {
       triggerJackpot: vi.fn(),
       setGameState: vi.fn(),
       resetBall: vi.fn(),
+      adventureTrackProgression: null,
+      accessibility: { reducedMotion: false },
+      adventureCinematicSystem: null,
+      performanceMonitor: null,
+      uiManager: null,
     }
 
     const slot = new GameSlotAdventure(host)
@@ -489,7 +492,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
   it('no-ops when adventure mode is inactive', () => {
     const adventureSwitch = vi.fn().mockReturnValue(true)
     const host = {
-      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
+      display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() } as unknown as import('../src/display/display-core').DisplaySystem,
       effects: null,
       eventBus: { emit: vi.fn(), on: vi.fn() } as unknown as import('../src/core/event-bus').EventBus,
       ballManager: null,
@@ -513,6 +516,11 @@ describe('GameSlotAdventure.switchToTrack', () => {
       triggerJackpot: vi.fn(),
       setGameState: vi.fn(),
       resetBall: vi.fn(),
+      adventureTrackProgression: null,
+      accessibility: { reducedMotion: false },
+      adventureCinematicSystem: null,
+      performanceMonitor: null,
+      uiManager: null,
     }
 
     const slot = new GameSlotAdventure(host)

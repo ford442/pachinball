@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { QualityTier } from '../src/game-elements/visual-palette'
+import type { BootedGame, BootedGameWindow } from './game-test-handle'
 
 /**
  * Real-engine checks for the render-hygiene sprint (#443). The Vitest suite mocks Babylon, so
@@ -6,79 +9,13 @@ import { expect, test, type Page } from '@playwright/test'
  * render-list contents) is asserted here, on the WebGL2 path under SwiftShader.
  */
 
-interface ShadowGeneratorProbe {
-  filter: number
-  filteringQuality: number
-  mapSize: number
-  getShadowMap: () => {
-    renderList: Array<{ name: string }>
-    onAfterRenderObservable: { add: (cb: () => void) => unknown; remove: (observer: unknown) => void }
-  } | null
-  constructor: { FILTER_PCF: number; FILTER_BLUREXPONENTIALSHADOWMAP: number; QUALITY_MEDIUM: number }
-}
+type ProbeWindow = BootedGameWindow
 
-interface GameProbe {
-  ready?: boolean
-  qualityTier: string
-  scene: {
-    onAfterRenderObservable: {
-      add: (cb: () => void) => unknown
-      addOnce: (cb: () => void) => void
-      remove: (observer: unknown) => void
-    }
-    prePassRenderer: { renderTargets: unknown[] } | null
-    geometryBufferRenderer: unknown
-    materials: Array<{ name: string; isFrozen: boolean; maxSimultaneousLights?: number }>
-    textures: Array<{ getClassName: () => string }>
-    lights: Array<{ name: string; intensity: number; includedOnlyMeshes: Array<{ name: string }> }>
-    autoClear: boolean
-    _activeMeshesFrozen: boolean
-    getMeshByName: (name: string) => { setEnabled: (v: boolean) => void } | null
-    activeCamera: { position: { x: number; y: number; z: number } } | null
-  }
-  shadowGenerator: ShadowGeneratorProbe | null
-  dynamicShadowGenerator: ShadowGeneratorProbe | null
-  shadowRig: { isStaticLive: () => boolean; getReceivers: () => Array<{ name: string; receiveShadows: boolean }> }
-  keyLight: { intensity: number; excludedMeshes: Array<{ name: string }> }
-  renderer: {
-    applyQualityTier: (tier: string) => void
-    dropQualityTierOnce: () => string
-    postProcess: {
-      _isSwiftShader: boolean
-    }
-    getSceneGraphInfo: () => {
-      plan: { nodes: string[]; omitted: Array<{ node: string; reason: string }> } | null
-      pending: boolean
-      graph: { nodes: string[] } | null
-    }
-  }
-  postProcessDegraded: boolean
-  staticScene: { materials: { describe: () => Array<[string, string]> } } | null
-  staticSceneGate: {
-    getStats: () => {
-      state: string
-      refreezeCount: number
-      invalidationCount: number
-      lastReason: string | null
-      holds: number
-      reasons: Array<[string, number]>
-    }
-  } | null
-  eventBus: { emit: (event: string) => void }
-  startGame: () => Promise<void>
-  debugHelper: { buildDebugSnapshot: (dt: number, lives: number) => { renderStats?: { meshes: number; activeMeshes: number; materials: number; frozenMaterials: number; staticScene: { refreezeCount: number } | null } } } | null
-  ballManager: {
-    spawnExtraBalls: (count: number) => void
-    getBallBodies: () => unknown[]
-    removeBall: (body: unknown) => void
-    resetBall: () => void
-  }
-  cabinetManager: { loadCabinetPreset: (type: string) => Promise<void> }
-  engine: { getCaps: () => { maxDrawBuffers?: number } }
-  performanceMonitor: { setOnSustainedJank: (cb: (() => void) | null) => void }
-}
-
-type ProbeWindow = Window & { game?: GameProbe }
+/**
+ * The spec lifts the SwiftShader guard on purpose: `GameRenderer.postProcess` and its
+ * `_isSwiftShader` flag are private, plain properties at runtime.
+ */
+type SwiftShaderProbe = { postProcess: { _isSwiftShader: boolean } }
 
 /** Console messages that mean a shader failed to build — the #427 failure signature. */
 const COMPILE_ERROR = /Error compiling effect|Unable to compile effect|Shader compilation/i
@@ -132,7 +69,7 @@ async function shadowState(page: Page) {
   return page.evaluate(() => {
     const game = (window as ProbeWindow).game!
     const sg = game.shadowGenerator!
-    const ctor = sg.constructor
+    const ctor = sg.constructor as typeof ShadowGenerator
     return {
       tier: game.qualityTier,
       filter: sg.filter,
@@ -140,7 +77,7 @@ async function shadowState(page: Page) {
       isBlurEsm: sg.filter === ctor.FILTER_BLUREXPONENTIALSHADOWMAP,
       pcfQualityIsMedium: sg.filteringQuality === ctor.QUALITY_MEDIUM,
       mapSize: sg.mapSize,
-      casters: sg.getShadowMap()!.renderList.map((m) => m.name),
+      casters: sg.getShadowMap()!.renderList!.map((m) => m.name),
     }
   })
 }
@@ -168,7 +105,7 @@ test.describe('render hygiene (#443)', () => {
       ['low', false],
       ['high', true],
     ] as const) {
-      await page.evaluate((t) => (window as ProbeWindow).game!.renderer.applyQualityTier(t), tier)
+      await page.evaluate((t) => (window as ProbeWindow).game!.renderer.applyQualityTier(t as QualityTier), tier)
       await renderFrames(page, 3)
       const s = await shadowState(page)
       expect(s.tier).toBe(tier)
@@ -180,7 +117,7 @@ test.describe('render hygiene (#443)', () => {
 
     // The automatic one-step drop (PerformanceMonitor -> renderer.dropQualityTierOnce) is a
     // separate path from applyQualityTier and must move the filter too.
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high' as QualityTier))
     for (const expected of ['medium', 'low'] as const) {
       await page.evaluate(() => (window as ProbeWindow).game!.renderer.dropQualityTierOnce())
       await renderFrames(page, 3)
@@ -202,9 +139,9 @@ test.describe('render hygiene (#443)', () => {
     // stands between this context and the geometry pass's four colour attachments.
     const state = await page.evaluate(() => {
       const game = (window as ProbeWindow).game!
-      game.renderer.postProcess._isSwiftShader = false
+      ;(game.renderer as unknown as SwiftShaderProbe).postProcess._isSwiftShader = false
       game.engine.getCaps().maxDrawBuffers = 2
-      game.renderer.applyQualityTier('high')
+      game.renderer.applyQualityTier('high' as QualityTier)
       const plan = game.renderer.getSceneGraphInfo().plan
       return {
         omitted: plan?.omitted.filter((o) => o.reason === 'heavy-unavailable').map((o) => o.node) ?? [],
@@ -232,7 +169,7 @@ test.describe('render hygiene (#443)', () => {
     // SwiftShader forces the heavy chain off by name; lift that. The context has what the geometry
     // pass needs (four draw buffers, float render targets).
     await page.evaluate(() => {
-      ;(window as ProbeWindow).game!.renderer.postProcess._isSwiftShader = false
+      ;((window as ProbeWindow).game!.renderer as unknown as SwiftShaderProbe).postProcess._isSwiftShader = false
     })
 
     const settle = () =>
@@ -248,7 +185,7 @@ test.describe('render hygiene (#443)', () => {
       })
 
     for (let round = 0; round < 2; round++) {
-      await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+      await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high' as QualityTier))
       await settle()
       await renderFrames(page, 3)
       const on = await snap()
@@ -260,7 +197,7 @@ test.describe('render hygiene (#443)', () => {
       expect(on.prepass).toBe(false)
       expect(on.geometryBuffer).toBe(false)
 
-      await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium'))
+      await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium' as QualityTier))
       await settle()
       // Frames must keep rendering after the chain is gone (this call would never resolve if the
       // render loop had stopped).
@@ -293,10 +230,10 @@ test.describe('render hygiene (#443)', () => {
       const game = (window as ProbeWindow).game!
       for (let i = 0; i < 10; i++) {
         game.ballManager.spawnExtraBalls(1)
-        game.ballManager.removeBall(game.ballManager.getBallBodies().at(-1))
+        game.ballManager.removeBall(game.ballManager.getBallBodies().at(-1)!)
       }
     })
-    for (const preset of ['neo', 'vertical', 'wide']) {
+    for (const preset of ['neo', 'vertical', 'wide'] as const) {
       await page.evaluate((p) => (window as ProbeWindow).game!.cabinetManager.loadCabinetPreset(p), preset)
       await renderFrames(page, 3)
     }
@@ -317,7 +254,7 @@ test.describe('render hygiene (#443)', () => {
 
     const design = await page.evaluate(() => {
       const game = (window as ProbeWindow).game!
-      const names = (g: ShadowGeneratorProbe) => g.getShadowMap()!.renderList.map((m) => m.name)
+      const names = (g: ShadowGenerator) => g.getShadowMap()!.renderList!.map((m) => m.name)
       const receivers = game.shadowRig.getReceivers()
       const twins = game.scene.lights.filter((l) => l.name === 'keyLightStatic' || l.name === 'keyLightDynamic')
       return {
@@ -401,19 +338,19 @@ test.describe('render hygiene (#443)', () => {
       await action()
       return ((await stats()).reasons[reason] ?? 0) - before
     }
-    const run = <T>(fn: (game: GameProbe) => T) => page.evaluate((src) => new Function('game', `return (${src})(game)`)((window as ProbeWindow).game), fn.toString())
+    const run = <T>(fn: (game: BootedGame) => T) => page.evaluate((src) => new Function('game', `return (${src})(game)`)((window as ProbeWindow).game), fn.toString())
 
     // createMainBall ran during boot, before any spawn made by this test.
     expect((await stats()).reasons['ball:spawn']).toBeGreaterThanOrEqual(1)
 
     expect(await delta(() => run((g) => g.ballManager.spawnExtraBalls(1)), 'ball:spawn')).toBeGreaterThanOrEqual(1)
-    expect(await delta(() => run((g) => g.ballManager.removeBall(g.ballManager.getBallBodies().at(-1))), 'ball:collect')).toBe(1)
+    expect(await delta(() => run((g) => g.ballManager.removeBall(g.ballManager.getBallBodies().at(-1)!)), 'ball:collect')).toBe(1)
     expect(await delta(() => run((g) => g.ballManager.resetBall()), 'ball:spawn')).toBeGreaterThanOrEqual(1)
 
     // Tier: a real change invalidates, re-applying the current tier does not.
-    await run((g) => g.renderer.applyQualityTier('high'))
-    expect(await delta(() => run((g) => g.renderer.applyQualityTier('medium')), 'quality-tier')).toBe(1)
-    expect(await delta(() => run((g) => g.renderer.applyQualityTier('medium')), 'quality-tier')).toBe(0)
+    await run((g) => g.renderer.applyQualityTier('high' as QualityTier))
+    expect(await delta(() => run((g) => g.renderer.applyQualityTier('medium' as QualityTier)), 'quality-tier')).toBe(1)
+    expect(await delta(() => run((g) => g.renderer.applyQualityTier('medium' as QualityTier)), 'quality-tier')).toBe(0)
 
     // Cabinet load: held for the whole async load, released afterwards.
     const duringLoad = await page.evaluate(async () => {
@@ -490,19 +427,19 @@ test.describe('render hygiene (#443)', () => {
     // (c) a tier switch: thawed before the change lands, refrozen afterwards.
     const thawedAtOnce = await page.evaluate(() => {
       const game = (window as ProbeWindow).game!
-      game.renderer.applyQualityTier('low')
+      game.renderer.applyQualityTier('low' as QualityTier)
       return game.scene.materials.filter((m) => m.isFrozen).length
     })
     expect(thawedAtOnce).toBe(0)
     await renderFrames(page, 3)
     await waitFrozen()
     expect(await frozenNames()).toEqual(allowed)
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high' as QualityTier))
     await renderFrames(page, 3)
     await waitFrozen()
 
     // (d) cabinet preset swaps that load glTF: thawed for the whole load, refrozen after, lights still clamped.
-    for (const preset of ['neo', 'wide']) {
+    for (const preset of ['neo', 'wide'] as const) {
       const during = await page.evaluate(async (p) => {
         const game = (window as ProbeWindow).game!
         const loading = game.cabinetManager.loadCabinetPreset(p)
@@ -525,7 +462,8 @@ test.describe('render hygiene (#443)', () => {
         gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_BLOCKS) as number,
       )
       const budget = Math.max(4, blocks - 4)
-      return game.scene.materials.filter((m) => (m.maxSimultaneousLights ?? 0) > budget).map((m) => m.name)
+      // maxSimultaneousLights lives on the Standard / PBR subclasses, not on Material.
+      return game.scene.materials.filter((m) => ((m as { maxSimultaneousLights?: number }).maxSimultaneousLights ?? 0) > budget).map((m) => m.name)
     })
     expect(overBudget).toEqual([])
 
@@ -640,7 +578,7 @@ test.describe('render hygiene (#443)', () => {
       await verify('menu')
       await verify('start', () => game.startGame())
       await verify('spawn a ball', () => game.ballManager.spawnExtraBalls(1))
-      await verify('collect a ball', () => game.ballManager.removeBall(game.ballManager.getBallBodies().at(-1)))
+      await verify('collect a ball', () => game.ballManager.removeBall(game.ballManager.getBallBodies().at(-1)!))
       const cap = named('bump_cap')
       await verify('disable a mesh', () => cap.setEnabled(false))
       await verify('enable a mesh', () => cap.setEnabled(true))
@@ -664,8 +602,8 @@ test.describe('render hygiene (#443)', () => {
         await frames(3)
         game.eventBus.emit('fever:end')
       })
-      await verify('quality tier changes', () => game.renderer.applyQualityTier('low'))
-      await verify('quality tier changes back', () => game.renderer.applyQualityTier('high'))
+      await verify('quality tier changes', () => game.renderer.applyQualityTier('low' as QualityTier))
+      await verify('quality tier changes back', () => game.renderer.applyQualityTier('high' as QualityTier))
       return results
     })
 

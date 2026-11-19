@@ -76,8 +76,9 @@ export default defineConfig([
     },
   },
   // Type-aware rules (#441): no-floating-promises, no-misused-promises, the no-unsafe-*
-  // family, etc. Scoped to src/, which tsconfig.app.json / tsconfig.worker.json cover;
-  // tests, scripts and tool configs are in no tsconfig and keep the untyped preset above.
+  // family, etc. Scoped to src/, which tsconfig.app.json / tsconfig.worker.json cover. Tests are
+  // type-checked by tsconfig.tests.json (`tsc -b`) but keep the untyped lint preset above, as do
+  // scripts and tool configs (which are in no tsconfig).
   {
     files: ['src/**/*.ts'],
     extends: [tseslint.configs.recommendedTypeChecked],

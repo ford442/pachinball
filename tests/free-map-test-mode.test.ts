@@ -2,7 +2,7 @@
  * Tests for Free Map Test Mode — map-registry, level-loader, free-map-test-mode.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import {
   getMapRegistry,
   getMapConfigById,
@@ -63,14 +63,14 @@ describe('MapRegistry', () => {
 
 describe('LevelLoader', () => {
   let mockAdventureMode: {
-    isActive: ReturnType<typeof vi.fn>
-    switchToTrack: ReturnType<typeof vi.fn>
-    getLastTeardownStats?: ReturnType<typeof vi.fn>
-    getLastTrackLoadError?: ReturnType<typeof vi.fn>
+    isActive: Mock
+    switchToTrack: Mock
+    getLastTeardownStats?: Mock
+    getLastTrackLoadError?: Mock
   }
-  let ensureAdventureActive: ReturnType<typeof vi.fn>
-  let resetBall: ReturnType<typeof vi.fn>
-  let rebuildHandleCaches: ReturnType<typeof vi.fn>
+  let ensureAdventureActive: Mock
+  let resetBall: Mock
+  let rebuildHandleCaches: Mock
   let loader: LevelLoader
 
   beforeEach(() => {
@@ -164,10 +164,10 @@ describe('LevelLoader', () => {
 // ─── Free Map Test Mode Tests ─────────────────────────────────────────────────
 
 describe('FreeMapTestMode', () => {
-  let mockAdventureMode: { isActive: ReturnType<typeof vi.fn>; switchToTrack: ReturnType<typeof vi.fn> }
+  let mockAdventureMode: { isActive: Mock; switchToTrack: Mock; getLastTeardownStats: Mock }
   let testMode: FreeMapTestMode
-  let onMessage: ReturnType<typeof vi.fn>
-  let onStatusChange: ReturnType<typeof vi.fn>
+  let onMessage: Mock
+  let onStatusChange: Mock
 
   beforeEach(() => {
     resetMapRegistry()

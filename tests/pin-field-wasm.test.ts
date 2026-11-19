@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import { WasmPhysicsEngine } from '../src/wasm/PhysicsModule'
 import { decodeContactBuffer } from '../src/wasm/contact-buffer'
+import type { WasmPhysicsModule } from '../src/wasm/wasm-types'
 import { resolvePinField } from '../src/core/pin-field'
 import { pachinkoPinFieldSpec } from '../src/objects/pachinko-pin-field'
 import { generateTableLayout } from '../src/cascade/daily-cascade-layout'

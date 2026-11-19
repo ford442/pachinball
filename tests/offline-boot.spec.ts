@@ -11,7 +11,7 @@ test('the PWA boots offline after one visit', async ({ page, context }) => {
 
   await page.goto('/')
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined))
-  await page.waitForFunction(() => Boolean((window as unknown as { game?: unknown }).game), null, { timeout: 120_000 })
+  await page.waitForFunction(() => Boolean(window.game), null, { timeout: 120_000 })
   // Rapier is the degrade path and deliberately not precached (#412): without the C++ bundle
   // (CI's wasm=false leg, or a local build without Emscripten) there is no offline boot to test.
   const engine = await page.evaluate(() => (window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine)
@@ -25,7 +25,7 @@ test('the PWA boots offline after one visit', async ({ page, context }) => {
     if (request.url().startsWith('http://localhost')) failed.push(request.url())
   })
   await page.reload()
-  await page.waitForFunction(() => Boolean((window as unknown as { game?: unknown }).game), null, { timeout: 120_000 })
+  await page.waitForFunction(() => Boolean(window.game), null, { timeout: 120_000 })
 
   const jsFailures = failed.filter((url) => /\.(js|wasm)(\?|$)/.test(url))
   expect(jsFailures, `boot assets missing from the precache: ${jsFailures.join(', ')}`).toEqual([])
