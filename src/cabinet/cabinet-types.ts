@@ -25,6 +25,8 @@ export interface CabinetPreset {
 
   // Dimensions
   width: number
+  /** Width of the playable surface inside the cabinet (the builders' `playfieldW`). Audio pan scales by half of it. */
+  playfieldWidth: number
   depth: number
   sideHeight: number
   baseY: number

@@ -25,6 +25,7 @@ import type { TableMapType } from '../config/table-maps'
 import { TABLE_MAPS } from '../config/table-maps'
 import type { CabinetType, CabinetPreset } from './cabinet-types'
 import { CLASSIC_CONFIG, NEO_CONFIG, VERTICAL_CONFIG, WIDE_CONFIG } from './cabinet-presets'
+import { setPlayfieldPanWidth } from '../audio/voice-hit'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import {
   loadCabinetGltfForPreset,
@@ -157,6 +158,7 @@ export class CabinetBuilder {
       }
 
       this.currentPreset = preset
+      setPlayfieldPanWidth(preset.playfieldWidth)
       this.disposeMeshesAndLights()
 
       if (preset.gltf) {

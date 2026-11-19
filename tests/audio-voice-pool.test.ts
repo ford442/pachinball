@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MIN_AUDIBLE_IMPACT, panFromPlayfieldX, VOICE_POOL_SIZE, type VoiceHit } from '../src/audio/voice-hit'
+import { MIN_AUDIBLE_IMPACT, panFromPlayfieldX, setPlayfieldPanWidth, VOICE_POOL_SIZE, type VoiceHit } from '../src/audio/voice-hit'
 import { VoicePool } from '../src/audio/voice-pool'
 
 const ROOT = path.resolve(__dirname, '..')
@@ -151,12 +151,21 @@ describe('VoicePool', () => {
 describe('panFromPlayfieldX', () => {
   it('maps playfield x to [-1, 1]', () => {
     expect(panFromPlayfieldX(0)).toBe(0)
-    expect(panFromPlayfieldX(6)).toBe(0.5)
-    expect(panFromPlayfieldX(-6)).toBe(-0.5)
+    expect(panFromPlayfieldX(7)).toBe(0.5)
+    expect(panFromPlayfieldX(-7)).toBe(-0.5)
     expect(panFromPlayfieldX(50)).toBe(1)
     expect(panFromPlayfieldX(-50)).toBe(-1)
     expect(panFromPlayfieldX(Number.NaN)).toBe(0)
     expect(panFromPlayfieldX(8, 16)).toBe(0.5)
+  })
+
+  it('scales by the half-width a cabinet build sets', () => {
+    try {
+      setPlayfieldPanWidth(20)
+      expect(panFromPlayfieldX(5)).toBe(0.5)
+    } finally {
+      setPlayfieldPanWidth(28)
+    }
   })
 })
 

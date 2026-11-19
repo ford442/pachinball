@@ -42,7 +42,7 @@ jobs:
     timeout-minutes: 60
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Ship only a commit both blocking workflows passed on: a red main is never deployed.
       - name: CI and Native Physics are green on this commit
@@ -59,7 +59,7 @@ jobs:
             fi
           done
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -114,7 +114,7 @@ jobs:
       - name: Archive the release for the replay verifier (replays the goldens on the copy)
         run: npm run release:archive -- --to release-archive
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -149,7 +149,7 @@ jobs:
         run: node scripts/verify-live.mjs
 
       - name: Upload the release archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ github.sha }}
           path: release-archive/
@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deploy-playwright-results
           path: test-results/
