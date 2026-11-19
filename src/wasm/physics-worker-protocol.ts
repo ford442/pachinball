@@ -48,7 +48,7 @@ export type QuatMsg = { x: number; y: number; z: number; w: number }
 export type PhysicsWorkerCommand =
   | { type: 'setGravity'; x: number; y: number; z: number }
   | { type: 'setRollingResistance'; rr: number }
-  | { type: 'addStaticPlane'; normal: Vec3Msg; d: number; friction: number }
+  | { type: 'addStaticPlane'; normal: Vec3Msg; d: number; friction: number; restitution: number }
   | { type: 'addStaticBox'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticCapsule'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticCylinder'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }

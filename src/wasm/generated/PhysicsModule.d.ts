@@ -74,7 +74,7 @@ export interface PhysicsWorld extends ClassHandle {
   createHinge(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number, _8: number): number;
   setHingeMotor(_0: number, _1: number, _2: number): void;
   getHingeAngle(_0: number): number;
-  addStaticPlane(_0: number, _1: number, _2: number, _3: number, _4: number): void;
+  addStaticPlane(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number): void;
   addStaticBox(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number, _8: number, _9: number, _10: number, _11: number): number;
   addStaticCapsule(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number, _8: number, _9: number, _10: number): number;
   addStaticCylinder(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number, _8: number, _9: number, _10: number): number;
@@ -119,10 +119,14 @@ export type Vec3 = {
 };
 
 export type WorldParams = {
+  gravity: Vec3,
   fixedTimestep: number,
   maxSubsteps: number,
   solverIterations: number,
-  rollingResistance: number
+  rollingResistance: number,
+  sleepLinearThreshold: number,
+  sleepAngularThreshold: number,
+  sleepFramesRequired: number
 };
 
 export type RigidBodyDesc = {
@@ -156,7 +160,9 @@ interface EmbindModule {
   ForceSpace: {World: ForceSpaceValue<0>, Local: ForceSpaceValue<1>};
   PhysicsWorld: {
     new(): PhysicsWorld;
+    new(_0: WorldParams): PhysicsWorld;
   };
+  defaultWorldParams(): WorldParams;
 }
 
 export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;

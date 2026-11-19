@@ -5,6 +5,7 @@
  * Cylinder.cpp so rebounds keep their exact profile.
  */
 #include "TriangleMesh.h"
+#include "ContactQueries.h"
 #include "CollisionFilter.h"
 #include "PhysicsWorld.h"
 
@@ -117,37 +118,11 @@ void PhysicsWorld::resolveSphereVsTriangle(BodyView& body, int triangleIndex) {
   if (!groupsInteract(body.getMembership(), body.getFilter(), mesh.membership, mesh.filter)) return;
 
   const Vec3 center = body.getPosition();
-  bool onFace = false;
-  const Vec3 closest = closestPointOnTriangle(center, tri.a, tri.b, tri.c, onFace);
-
-  const Vec3 delta = center - closest;
-  const float distSq = delta.lengthSq();
   const float radius = body.getRadius();
-  if (distSq >= radius * radius) return;
-
-  const float side = delta.dot(tri.normal);
-  Vec3 normal;
-  if (onFace) {
-    // Flat-face contact: use the face normal so coplanar triangles sharing an
-    // edge present one seamless surface and a rolling ball feels no seam.
-    if (side < 0.f) {
-      if (!mesh.doubleSided) return;
-      normal = tri.normal * -1.f;
-    } else {
-      normal = tri.normal;
-    }
-  } else {
-    // Edge / vertex contact: the delta direction is the true separating
-    // axis. Reject approaches from behind the face unless double-sided, which
-    // is what keeps a ball from catching on the underside of a ramp seam.
-    if (side <= 0.f && !mesh.doubleSided) return;
-    if (distSq < 1e-10f) return; // exactly on the boundary — no usable direction
-    normal = delta / std::sqrt(distSq);
-  }
-
-  const float dist = std::sqrt(distSq);
-  const float penetration = onFace ? radius - std::fabs(side) : radius - dist;
-  if (penetration <= 0.f) return;
+  SurfaceHit hit;
+  if (!queryTriangle(tri, mesh.doubleSided, center, radius, hit)) return;
+  const Vec3 normal = hit.normal;
+  const float penetration = hit.penetration;
 
   const float velN = body.getVelocity().dot(normal);
   if (velN >= 0.5f) return;

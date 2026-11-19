@@ -72,12 +72,19 @@ EMSCRIPTEN_BINDINGS(rigid_body_desc) {
     .field("y", &Vec3::y)
     .field("z", &Vec3::z);
 
-  // Expose WorldParams for advanced configuration
+  // Every WorldParams field, for `new PhysicsWorld(params)` (#520). A value
+  // object needs every field; start from defaultWorldParams() and override.
   value_object<WorldParams>("WorldParams")
-    .field("fixedTimestep",     &WorldParams::fixedTimestep)
-    .field("maxSubsteps",       &WorldParams::maxSubsteps)
-    .field("solverIterations",  &WorldParams::solverIterations)
-    .field("rollingResistance", &WorldParams::rollingResistance);
+    .field("gravity",               &WorldParams::gravity)
+    .field("fixedTimestep",         &WorldParams::fixedTimestep)
+    .field("maxSubsteps",           &WorldParams::maxSubsteps)
+    .field("solverIterations",      &WorldParams::solverIterations)
+    .field("rollingResistance",     &WorldParams::rollingResistance)
+    .field("sleepLinearThreshold",  &WorldParams::sleepLinearThreshold)
+    .field("sleepAngularThreshold", &WorldParams::sleepAngularThreshold)
+    .field("sleepFramesRequired",   &WorldParams::sleepFramesRequired);
+
+  function("defaultWorldParams", optional_override([]() { return WorldParams{}; }));
 
   // Bound descriptor so JS can pass a single object instead of 15 positionals.
   value_object<RigidBodyDesc>("RigidBodyDesc")
@@ -109,6 +116,8 @@ EMSCRIPTEN_BINDINGS(rigid_body_desc) {
 EMSCRIPTEN_BINDINGS(physics_world) {
   class_<PhysicsWorld>("PhysicsWorld")
     .constructor<>()
+    // Sanitised field by field in the constructor (sanitizedWorldParams).
+    .constructor<const WorldParams&>()
 
     // Body management
     .function("createRigidBody",  optional_override([](PhysicsWorld& self,
@@ -192,7 +201,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("removeHinge", &PhysicsWorld::removeHinge)
 
     // Static geometry
-    .function("addStaticPlane", &PhysicsWorld::addStaticPlane)
+    .function("addStaticPlane", &PhysicsWorld::addStaticPlane)  // (nx, ny, nz, d, friction, restitution)
     .function("addStaticBox",    &PhysicsWorld::addStaticBox)
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
     .function("addStaticCylinder", &PhysicsWorld::addStaticCylinder)

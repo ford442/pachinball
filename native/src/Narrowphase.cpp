@@ -5,6 +5,7 @@
  * in PhysicsWorld.h, defined here.
  */
 #include "CollisionFilter.h"
+#include "ContactQueries.h"
 #include "PhysicsWorld.h"
 #include "SolverConstants.h"
 
@@ -181,15 +182,15 @@ void PhysicsWorld::resolveSphereVsSphere(BodyView& a, BodyView& b) {
 }
 
 void PhysicsWorld::resolveSphereVsPlane(BodyView& body, const PlaneDesc& plane) {
-  float dist = body.getPosition().dot(plane.normal) - plane.distance;
-  float penetration = body.getRadius() - dist;
-  if (penetration <= 0.f) return;
+  SurfaceHit hit;
+  if (!queryPlane(plane, body.getPosition(), body.getRadius(), hit)) return;
+  const float penetration = hit.penetration;
 
   Vec3  vel    = body.getVelocity();
   float velN   = vel.dot(plane.normal);
   if (velN >= 0.5f) return;
 
-  float e = body.getRestitution();
+  float e = std::min(body.getRestitution(), plane.restitution);
   const Vec3 contactPoint = body.getPosition() - plane.normal * body.getRadius();
   const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(plane.friction, 0.f));
   float j = applyContactImpulse(body, nullptr, contactPoint, plane.normal, e, mu, penetration);
@@ -213,39 +214,11 @@ void PhysicsWorld::resolveSphereVsPlane(BodyView& body, const PlaneDesc& plane) 
 void PhysicsWorld::resolveSphereVsBox(BodyView& body, const BoxDesc& box, int boxId) {
   if (!groupsInteract(body.getMembership(), body.getFilter(), box.membership, box.filter)) return;
 
-  const Quat invRot = box.rotation.conjugate();
-  const Vec3 localCenter = invRot.rotate(body.getPosition() - box.center);
-
-  Vec3 closest{
-    std::clamp(localCenter.x, -box.halfExtents.x, box.halfExtents.x),
-    std::clamp(localCenter.y, -box.halfExtents.y, box.halfExtents.y),
-    std::clamp(localCenter.z, -box.halfExtents.z, box.halfExtents.z),
-  };
-
-  Vec3 delta = localCenter - closest;
-  float distSq = delta.lengthSq();
-  float radius = body.getRadius();
-
-  if (distSq >= radius * radius) return;
-
-  Vec3 normal;
-  float penetration = 0.f;
-  if (distSq < CONTACT_EPSILON_SQ) {
-    const float dx = box.halfExtents.x - std::fabs(localCenter.x);
-    const float dy = box.halfExtents.y - std::fabs(localCenter.y);
-    const float dz = box.halfExtents.z - std::fabs(localCenter.z);
-    Vec3 localNormal = {0.f, localCenter.y >= 0.f ? 1.f : -1.f, 0.f};
-    float shallow = dy;
-    if (dx < shallow) { shallow = dx; localNormal = {localCenter.x >= 0.f ? 1.f : -1.f, 0.f, 0.f}; }
-    if (dz < shallow) { shallow = dz; localNormal = {0.f, 0.f, localCenter.z >= 0.f ? 1.f : -1.f}; }
-    normal = box.rotation.rotate(localNormal).normalized();
-    penetration = radius + shallow;
-  } else {
-    float dist = std::sqrt(distSq);
-    Vec3 localNormal = delta / dist;
-    normal = box.rotation.rotate(localNormal);
-    penetration = radius - dist;
-  }
+  const float radius = body.getRadius();
+  SurfaceHit hit;
+  if (!queryBox(box, body.getPosition(), radius, hit)) return;
+  const Vec3 normal = hit.normal;
+  const float penetration = hit.penetration;
 
   Vec3 vel = body.getVelocity();
   float velN = vel.dot(normal);
@@ -272,33 +245,16 @@ void PhysicsWorld::resolveSphereVsBox(BodyView& body, const BoxDesc& box, int bo
 }
 
 Vec3 PhysicsWorld::closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB) {
-  const Vec3 ab = segB - segA;
-  float t = 0.f;
-  const float abLenSq = ab.lengthSq();
-  if (abLenSq > CONTACT_EPSILON_SQ) {
-    t = std::clamp((p - segA).dot(ab) / abLenSq, 0.f, 1.f);
-  }
-  return segA + ab * t;
+  return closestOnSegment(p, segA, segB);
 }
 
 void PhysicsWorld::resolveSphereVsCapsule(BodyView& body, const CapsuleDesc& cap, int capId) {
   if (!groupsInteract(body.getMembership(), body.getFilter(), cap.membership, cap.filter)) return;
 
-  const Vec3 axisHalf = cap.rotation.rotate(Vec3{0.f, cap.halfHeight, 0.f});
-  const Vec3 segA = cap.center - axisHalf;
-  const Vec3 segB = cap.center + axisHalf;
-  const Vec3 closest = closestPointOnSegment(body.getPosition(), segA, segB);
-
-  Vec3 delta = body.getPosition() - closest;
-  float distSq = delta.lengthSq();
-  float minDist = body.getRadius() + cap.radius;
-
-  if (distSq >= minDist * minDist) return;
-
-  float dist = std::sqrt(std::max(distSq, CONTACT_EPSILON_SQ));
-  Vec3 normal = dist > 1e-5f ? delta / dist
-                              : cap.rotation.rotate(Vec3{0.f, 1.f, 0.f}).normalized();
-  float penetration = minDist - dist;
+  SurfaceHit hit;
+  if (!queryCapsule(cap, body.getPosition(), body.getRadius(), hit)) return;
+  const Vec3 normal = hit.normal;
+  const float penetration = hit.penetration;
 
   Vec3 vel = body.getVelocity();
   float velN = vel.dot(normal);

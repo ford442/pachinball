@@ -27,7 +27,7 @@
  * (physics-worker-protocol.ts) — tests/wasm-worker-api-parity.test.ts enforces it.
  */
 
-import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance } from './wasm-types'
+import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance, type WasmWorldParams } from './wasm-types'
 import { CONTACT_STRIDE, ContactBatchEmitter, type WasmContactEventBus } from './contact-buffer'
 import {
   TRANSFORM_STRIDE,
@@ -122,8 +122,15 @@ export class WasmPhysicsEngine {
    *
    * @param moduleUrl  Override the default WASM_MODULE_URL (useful for tests).
    * @param preloadedModule  Optional module from idle warm-load cache.
+   * @param params  World parameters to construct with, over the native
+   *   defaults (`defaultWorldParams()`); the C++ constructor sanitises each.
+   *   Omitted, the world is built with the defaults, as before.
    */
-  async load(moduleUrl = WASM_MODULE_URL, preloadedModule?: WasmPhysicsModule): Promise<void> {
+  async load(
+    moduleUrl = WASM_MODULE_URL,
+    preloadedModule?: WasmPhysicsModule,
+    params?: Partial<WasmWorldParams>,
+  ): Promise<void> {
     if (this.isReady) return
 
     try {
@@ -140,7 +147,10 @@ export class WasmPhysicsEngine {
           this.module = await factory()
         }
       }
-      this.world  = new this.module.PhysicsWorld()
+      const defaults = params ? this.module.defaultWorldParams?.() : undefined
+      this.world = defaults
+        ? new this.module.PhysicsWorld({ ...defaults, ...params })
+        : new this.module.PhysicsWorld()
       this.isReady = true
     } catch (err) {
       console.warn(
@@ -174,9 +184,10 @@ export class WasmPhysicsEngine {
    * Add a static infinite half-space plane.
    * @param normal  Unit normal (outward-facing).
    * @param d       Signed plane offset from origin along the normal.
+   * @param restitution  Combined with the body's by `min`; 1 (the default) caps nothing.
    */
-  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2): void {
-    bodies.addStaticPlane(this.world, normal, d, friction)
+  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2, restitution = 1): void {
+    bodies.addStaticPlane(this.world, normal, d, friction, restitution)
   }
 
   /**

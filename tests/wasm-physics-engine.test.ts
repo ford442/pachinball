@@ -26,6 +26,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { WasmPhysicsEngine } from '../src/wasm/PhysicsModule'
 import { EventBus } from '../src/core/event-bus'
 import { encodeTransformBuffer } from '../src/wasm/transform-buffer'
+import type { WasmPhysicsModule } from '../src/wasm/wasm-types'
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -384,11 +385,40 @@ describe('WasmPhysicsEngine', () => {
     expect(engine.step(1 / 60)).toBe(0)
   })
 
+  // WorldParams (#520) ------------------------------------------------------
+  it('load() with params constructs the world from the native defaults plus the overrides', async () => {
+    const defaults = {
+      gravity: { x: 0, y: -9.81, z: -5 },
+      fixedTimestep: 1 / 60,
+      maxSubsteps: 8,
+      solverIterations: 4,
+      rollingResistance: 0.04,
+      sleepLinearThreshold: 0.05,
+      sleepAngularThreshold: 0.1,
+      sleepFramesRequired: 60,
+    }
+    const ctorArgs: unknown[][] = []
+    const PhysicsWorld = vi.fn(function (this: unknown, ...args: unknown[]) {
+      ctorArgs.push(args)
+      return worldStub
+    })
+    const module = { PhysicsWorld, defaultWorldParams: () => ({ ...defaults }) } as unknown as WasmPhysicsModule
+
+    await engine.load('unused.js', module, { solverIterations: 8, gravity: { x: 0, y: -3, z: 0 } })
+    expect(engine.isReady).toBe(true)
+    expect(ctorArgs).toEqual([[{ ...defaults, solverIterations: 8, gravity: { x: 0, y: -3, z: 0 } }]])
+
+    // No params: the default constructor, exactly as before.
+    const plain = new WasmPhysicsEngine()
+    await plain.load('unused.js', module)
+    expect(ctorArgs[1]).toEqual([])
+  })
+
   // 12 ----------------------------------------------------------------------
   it('addStaticPlane() delegates to world.addStaticPlane', async () => {
     await injectWorld(engine, worldStub)
     engine.addStaticPlane({ x: 0, y: 1, z: 0 }, -2)
-    expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2, 0.2)
+    expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2, 0.2, 1)
   })
 
   it('addStaticBox() delegates to world.addStaticBox', async () => {

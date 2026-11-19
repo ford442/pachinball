@@ -166,7 +166,7 @@ void PhysicsWorld::resolveBoxCorners(BodyView& box, int otherId,
 }
 
 void PhysicsWorld::resolveBoxBodyVsPlane(BodyView& box, const PlaneDesc& plane) {
-  resolveBoxCorners(box, STATIC_PLANE_ID, 0.4f, plane.friction,
+  resolveBoxCorners(box, STATIC_PLANE_ID, plane.restitution, plane.friction,
     [&plane](const Vec3& p, Vec3& normal, float& penetration) {
       const float dist = p.dot(plane.normal) - plane.distance;
       if (dist >= 0.f) return false;

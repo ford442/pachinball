@@ -48,7 +48,7 @@ function setupWorld(Module) {
 function setupSphereGridWorld(Module) {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, -9.81, 0)
-  world.addStaticPlane(0, 1, 0, 0, 0.2)
+  world.addStaticPlane(0, 1, 0, 0, 0.2, 1)
 
   // Deterministic 5×10 grid of dynamic spheres above the floor
   const cols = 10
@@ -69,7 +69,7 @@ function setupSphereGridWorld(Module) {
 function setupTableWorld(Module) {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, -9.81, -5)
-  world.addStaticPlane(0, 1, 0, 0, 0.18)
+  world.addStaticPlane(0, 1, 0, 0, 0.18, 1)
 
   for (let r = 0; r < PIN_ROWS; r++) {
     for (let c = 0; c < PIN_COLS; c++) {

@@ -51,15 +51,42 @@ inline uint64_t contactPairKey(int a, int b) {
 }
 
 /**
+ * Identity of one contact in the manifold: the body pair plus the pin-field
+ * lattice index (#520 row 7). A pin field is one collider, so keyed by the
+ * pair alone a ball rolling pin → pin read as one long Stay and only the
+ * first pin ever saw an Enter. Every other collider reports subIndex 0, so
+ * for them this is the pair key it always was.
+ */
+struct ContactKey {
+  uint64_t pair = 0;
+  int32_t  sub  = 0;
+
+  bool operator==(const ContactKey& o) const { return pair == o.pair && sub == o.sub; }
+  bool operator<(const ContactKey& o) const { return pair != o.pair ? pair < o.pair : sub < o.sub; }
+};
+
+inline ContactKey contactKey(const ContactEvent& e) {
+  return {contactPairKey(e.bodyId1, e.bodyId2), e.subIndex};
+}
+
+struct ContactKeyHash {
+  std::size_t operator()(const ContactKey& k) const {
+    const uint64_t h = k.pair ^ (static_cast<uint64_t>(static_cast<uint32_t>(k.sub)) * 0x9E3779B97F4A7C15ull);
+    return static_cast<std::size_t>(h ^ (h >> 32));
+  }
+};
+
+/**
  * ContactListener — persistent contact manifold + packed emit buffer.
  *
  * Resolvers call pushContact() during every substep. At the end of PhysicsWorld::step()
- * (after all substeps), flushEvents() classifies each ordered (bodyIdA, bodyIdB) pair:
+ * (after all substeps), flushEvents() classifies each contact — a (bodyIdA, bodyIdB)
+ * pair and, for a pin field, the pin's lattice index (ContactKey):
  *   - absent last step, present now → Enter
  *   - present both                  → Stay (peak impulse across substeps; one emit)
  *   - present last step, absent now → Exit
  *
- * Exactly one event is written per pair per step into a growable, 16-byte-aligned
+ * Exactly one event is written per contact per step into a growable, 16-byte-aligned
  * float buffer that JS reads as a single Float32Array view.
  */
 class ContactListener {
@@ -83,11 +110,11 @@ public:
   void setCallback(ContactCallback cb) { callback_ = std::move(cb); }
 
   /**
-   * Observe a raw resolver contact. Dedupes within the current step by pair key
-   * and keeps the sample with the largest impulse.
+   * Observe a raw resolver contact. Dedupes within the current step by
+   * ContactKey and keeps the sample with the largest impulse.
    */
   void pushContact(const ContactEvent& evt) {
-    const uint64_t key = contactPairKey(evt.bodyId1, evt.bodyId2);
+    const ContactKey key = contactKey(evt);
     auto it = current_.find(key);
     if (it == current_.end()) {
       current_.emplace(key, evt);
@@ -135,9 +162,9 @@ public:
     // order, which depends on their insertion history — a world restored
     // from a snapshot (Snapshot.cpp) must emit the same sequence as the one
     // it was taken from, and the cap below must drop the same pairs.
-    sortByPair(exits);
-    sortByPair(enters);
-    sortByPair(stays);
+    sortByKey(exits);
+    sortByKey(enters);
+    sortByKey(stays);
 
     // Prefer edges over Stay if a cap is hit — scoring depends on Enter/Exit.
     const std::size_t total = exits.size() + enters.size() + stays.size();
@@ -180,12 +207,12 @@ public:
    */
   uint64_t generation() const { return generation_; }
 
-  /** The persistent manifold (pairs touching at the last flush), in pair-key order. */
+  /** The persistent manifold (contacts touching at the last flush), in ContactKey order. */
   std::vector<ContactEvent> manifold() const {
     std::vector<ContactEvent> out;
     out.reserve(previous_.size());
     for (const auto& kv : previous_) out.push_back(kv.second);
-    sortByPair(out);
+    sortByKey(out);
     return out;
   }
 
@@ -199,13 +226,26 @@ public:
     previous_.clear();
     previous_.reserve(pairs.size());
     for (const ContactEvent& e : pairs) {
-      previous_.emplace(contactPairKey(e.bodyId1, e.bodyId2), e);
+      previous_.emplace(contactKey(e), e);
     }
     emitted_.clear();
     droppedThisStep_ = 0;
     writeCount_ = 0;
     generation_ = generation;
     droppedTotal_ = droppedTotal;
+  }
+
+  /** True when this step already observed `e`'s contact. */
+  bool observed(const ContactEvent& e) const { return current_.find(contactKey(e)) != current_.end(); }
+
+  /**
+   * Visit the persistent manifold (last flush's contacts) in hash order.
+   * `fn` may pushContact(): it inserts into the step's observations, not
+   * the manifold being visited.
+   */
+  template <typename Fn>
+  void forEachPrevious(Fn fn) const {
+    for (const auto& kv : previous_) fn(kv.second);
   }
 
   /** Discard queued observations without emitting. Does not clear the manifold. */
@@ -240,9 +280,9 @@ public:
   const std::vector<ContactEvent>& lastEvents() const { return emitted_; }
 
 private:
-  static void sortByPair(std::vector<ContactEvent>& events) {
+  static void sortByKey(std::vector<ContactEvent>& events) {
     std::sort(events.begin(), events.end(), [](const ContactEvent& a, const ContactEvent& b) {
-      return contactPairKey(a.bodyId1, a.bodyId2) < contactPairKey(b.bodyId1, b.bodyId2);
+      return contactKey(a) < contactKey(b);
     });
   }
 
@@ -308,8 +348,8 @@ private:
   }
 
   ContactCallback callback_;
-  std::unordered_map<uint64_t, ContactEvent> current_;
-  std::unordered_map<uint64_t, ContactEvent> previous_;
+  std::unordered_map<ContactKey, ContactEvent, ContactKeyHash> current_;
+  std::unordered_map<ContactKey, ContactEvent, ContactKeyHash> previous_;
   std::vector<ContactEvent> emitted_;
 
   float*      buffer_           = nullptr;

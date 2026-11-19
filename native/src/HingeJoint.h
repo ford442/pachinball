@@ -36,11 +36,35 @@ struct HingeJoint {
   float motorTargetVel = 0.f;
   float motorMaxTorque = 0.f;
   float baumgarte      = 0.2f;
+
+  /**
+   * Impulse the motor / each angle limit has applied so far in the current
+   * substep (#520 row 1). The bounds hold for the sum over the solver
+   * iterations — |motor| ≤ motorMaxTorque·dt, lower ≥ 0, upper ≤ 0 — not per
+   * iteration, so the motor's strength no longer scales with
+   * `solverIterations` and a limit can give back what an earlier iteration
+   * over-applied. Transient: zeroed by beginHingeSubstep() before every
+   * substep's iterations, so never snapshotted or hashed.
+   */
+  float motorImpulse = 0.f;
+  float lowerImpulse = 0.f;
+  float upperImpulse = 0.f;
 };
+
+/** Zero the per-substep accumulated impulses (call before the solver iterations). */
+inline void beginHingeSubstep(HingeJoint& joint) {
+  joint.motorImpulse = 0.f;
+  joint.lowerImpulse = 0.f;
+  joint.upperImpulse = 0.f;
+}
 
 float computeHingeAngle(const HingeJoint& joint, const Quat& rotation);
 
-/** Sequential-impulse solve for a world-anchored hinge. Wakes the body on impulse. */
+/**
+ * One sequential-impulse iteration for a world-anchored hinge. The motor and
+ * the limits clamp their accumulated impulse (HingeJoint::motorImpulse …),
+ * so `dt` must be the substep the accumulators were zeroed for.
+ */
 void solveWorldHinge(HingeJoint& joint, BodyView& body, float dt);
 
 } // namespace pachinball

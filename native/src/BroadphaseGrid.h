@@ -20,12 +20,23 @@ struct CylinderDesc;
 struct TriangleMeshDesc;
 struct MeshTriangle;
 
-/** Uniform XZ spatial hash for sphere/capsule broadphase on the playfield. */
+/**
+ * Uniform 3D spatial hash (cubic cells) for the broadphase (#520 row 14).
+ *
+ * It used to hash XZ only, so a ball on a ramp paired with every static
+ * stacked under it (the floor, a lower ramp, a toy's base). Cells are now
+ * cubes keyed by (x, y, z), every static and body covers its world AABB on
+ * all three axes, and the neighbour stencils are 3×3×3. Static boxes, sensors
+ * and movers cover the AABB of their *rotated* half-extents — the XZ grid
+ * used the unrotated ones, so a yawed wall was missing from the cells near
+ * its ends and a ball there met nothing.
+ */
 class BroadphaseGrid {
 public:
   struct Config {
     float minX = -14.f;
     float maxX =  14.f;
+    float minY =  -2.f; ///< origin of the Y cells only: the hash is unbounded on every axis
     float minZ =  -2.f;
     float maxZ =  16.f;
     float cellSize = 0.44f; ///< ~2× ball diameter
@@ -80,7 +91,8 @@ public:
    *
    * A sleeping Dynamic body stays in the grid as a target: an awake body
    * (a steered kinematic ball, one rolling in) pairs with it so contact can
-   * wake it, but two sleepers never pair and a sleeper never meets statics.
+   * wake it, and so does a mover (one that moves wakes it); but two sleepers
+   * never pair and a sleeper never meets other statics.
    *
    * `previous` holds each body's pose at the start of the substep, dense-indexed
    * (see SensorVolume.h). A body that travelled is also paired with every sensor
@@ -113,15 +125,24 @@ public:
    */
   static constexpr float CELL_COORD_LIMIT = 1.0e8f;
 
-  /** Cell coordinate of a world x / z (public for broadphase_test.cpp). */
+  /** Cell coordinate of a world x / y / z (public for broadphase_test.cpp). */
   int cellX(float x) const;
+  int cellY(float y) const;
   int cellZ(float z) const;
+
+  /**
+   * World-axis half-extents of a box with local `halfExtents` turned by
+   * `rotation` (Σ |R_ij| h_j per axis). Also bounds a cylinder (r, hh, r) or
+   * sphere (r, r, r) volume, which fits inside that box.
+   */
+  static Vec3 rotatedHalfExtents(const Quat& rotation, const Vec3& halfExtents);
 
 private:
   struct CellKey {
     int cx;
+    int cy;
     int cz;
-    bool operator==(const CellKey& o) const { return cx == o.cx && cz == o.cz; }
+    bool operator==(const CellKey& o) const { return cx == o.cx && cy == o.cy && cz == o.cz; }
   };
 
   struct CellKeyHash {
@@ -134,14 +155,13 @@ private:
         return static_cast<std::size_t>(
             static_cast<std::int32_t>(static_cast<std::uint32_t>(v) * prime));
       };
-      return mix(k.cx, 73856093u) ^ mix(k.cz, 19349663u);
+      return mix(k.cx, 73856093u) ^ mix(k.cy, 83492791u) ^ mix(k.cz, 19349663u);
     }
   };
 
-  void cellsForAabb(float minX, float maxX, float minZ, float maxZ,
-                    std::vector<CellKey>& out) const;
-  /** Conservative (rotation-agnostic) cell coverage via the OBB's circumscribing radius. */
-  void cellsForObb(const Vec3& center, const Vec3& halfExtents,
+  void cellsForAabb(const Vec3& lo, const Vec3& hi, std::vector<CellKey>& out) const;
+  /** Cells of the AABB of an oriented box (or of a volume inside it), plus `margin`. */
+  void cellsForObb(const Vec3& center, const Quat& rotation, const Vec3& halfExtents, float margin,
                    std::vector<CellKey>& out) const;
   /** Exact cell coverage of an oriented cylinder (local Y axis); cones use their bounding cylinder. */
   void cellsForCylinder(const Vec3& center, const Quat& rotation, float radius, float halfHeight,

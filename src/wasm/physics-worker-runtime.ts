@@ -108,7 +108,7 @@ export function applyPhysicsCommand(
       engine.setRollingResistance(cmd.rr)
       return 0
     case 'addStaticPlane':
-      engine.addStaticPlane(cmd.normal, cmd.d, cmd.friction)
+      engine.addStaticPlane(cmd.normal, cmd.d, cmd.friction, cmd.restitution)
       return 0
     case 'addStaticBox':
       return engine.addStaticBox(cmd.center, cmd.halfExtents, cmd.rotation, cmd.restitution, cmd.friction)

@@ -7,7 +7,13 @@
  * mirror sentinels embind cannot express.
  */
 
-import type { PhysicsWorld as GeneratedWorld } from './generated/PhysicsModule'
+import type { PhysicsWorld as GeneratedWorld, WorldParams as GeneratedWorldParams } from './generated/PhysicsModule'
+
+/**
+ * Every native `WorldParams` field (WorldParams.h), as `new PhysicsWorld(params)`
+ * takes them. The constructor sanitises each one (bad → its default).
+ */
+export type WasmWorldParams = GeneratedWorldParams
 
 /**
  * Mirrors native `STATIC_HANDLE_OVERFLOW` in StaticShapes.h. Every `add*`
@@ -202,7 +208,13 @@ export interface WasmPhysicsModule {
   /** Emscripten heap allocator — needed to hand triangle soup to the C++ side. */
   _malloc?: (bytes: number) => number
   _free?: (ptr: number) => void
-  PhysicsWorld: new () => WasmPhysicsWorldInstance
+  PhysicsWorld: {
+    new (): WasmPhysicsWorldInstance
+    /** Every field is required (an Embind value object): spread `defaultWorldParams()` first. */
+    new (params: WasmWorldParams): WasmPhysicsWorldInstance
+  }
+  /** The native `WorldParams{}` defaults. Optional: bundles before #520 lack it. */
+  defaultWorldParams?: () => WasmWorldParams
   BodyType: {
     Dynamic:   { value: 0 }
     Static:    { value: 1 }

@@ -72,6 +72,8 @@ set(PHYSICS_CORE_SOURCES
   src/ForceField.cpp
   src/DynamicBox.cpp
   src/Narrowphase.cpp
+  src/ContactQueries.cpp
+  src/ShapeContacts.cpp
   src/StaticShapes.cpp
   src/Cone.cpp
   src/PinField.cpp
@@ -293,6 +295,8 @@ if(NOT EMSCRIPTEN)
     tests/broadphase_test.cpp
     tests/correctness_bugs_test.cpp
     tests/correctness_520_test.cpp
+    tests/correctness_520_solver_test.cpp
+    tests/shape_contacts_test.cpp
   )
   # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_link_libraries(physics_world_test PRIVATE

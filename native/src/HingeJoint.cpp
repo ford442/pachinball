@@ -126,28 +126,41 @@ void solveWorldHinge(HingeJoint& joint, BodyView& body, float dt) {
     w = body.getAngularVelocity();
     const float wAxis = w.dot(n);
 
+    // Motor: the clamp bounds the impulse accumulated over this substep's
+    // iterations (#520 row 1). Clamping each iteration's lambda instead let
+    // every iteration add another motorMaxTorque·dt, so a saturated flipper
+    // was solverIterations× as strong as its torque said.
     if (joint.motorMaxTorque > 0.f) {
-      float lambda = (joint.motorTargetVel - wAxis) / invI;
       const float maxL = joint.motorMaxTorque * dt;
-      lambda = std::max(-maxL, std::min(maxL, lambda));
-      if (std::fabs(lambda) > kEps) {
-        body.applyTorqueImpulse(n * lambda);
+      const float lambda = (joint.motorTargetVel - wAxis) / invI;
+      const float previous = joint.motorImpulse;
+      joint.motorImpulse = std::max(-maxL, std::min(maxL, previous + lambda));
+      const float applied = joint.motorImpulse - previous;
+      if (std::fabs(applied) > kEps) {
+        body.applyTorqueImpulse(n * applied);
       }
     }
 
+    // Limits: one-sided, on the accumulated impulse. The angle is the
+    // substep's (iterations change velocities only), so the same side is
+    // active in every iteration.
     const float angle = computeHingeAngle(joint, body.getRotation());
     const float wAxis2 = body.getAngularVelocity().dot(n);
 
     if (angle < joint.minAngle) {
       const float C = angle - joint.minAngle;
-      float lambda = -(wAxis2 + beta * C * invDt) / invI;
-      if (lambda < 0.f) lambda = 0.f;
-      if (lambda > 0.f) body.applyTorqueImpulse(n * lambda);
+      const float lambda = -(wAxis2 + beta * C * invDt) / invI;
+      const float previous = joint.lowerImpulse;
+      joint.lowerImpulse = std::max(previous + lambda, 0.f);
+      const float applied = joint.lowerImpulse - previous;
+      if (applied != 0.f) body.applyTorqueImpulse(n * applied);
     } else if (angle > joint.maxAngle) {
       const float C = angle - joint.maxAngle;
-      float lambda = -(wAxis2 + beta * C * invDt) / invI;
-      if (lambda > 0.f) lambda = 0.f;
-      if (lambda < 0.f) body.applyTorqueImpulse(n * lambda);
+      const float lambda = -(wAxis2 + beta * C * invDt) / invI;
+      const float previous = joint.upperImpulse;
+      joint.upperImpulse = std::min(previous + lambda, 0.f);
+      const float applied = joint.upperImpulse - previous;
+      if (applied != 0.f) body.applyTorqueImpulse(n * applied);
     }
   }
 }

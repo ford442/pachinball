@@ -42,17 +42,43 @@ struct KinematicMover {
   float    friction        = 0.2f;
   uint32_t membership      = COLLISION_GROUPS_ALL;
   uint32_t filter          = COLLISION_GROUPS_ALL;
+
+  /**
+   * The pose this tick's sweep starts from (beginKinematicMoverSweep) while
+   * `sweeping`. Transient: set at the top of a step() and consumed by its
+   * last substep, so never snapshotted.
+   */
+  Vec3     sweepFromPos    = Vec3::zero();
+  Quat     sweepFromRot    = Quat::identity();
+  bool     sweeping        = false;
 };
 
 /** Negative-id base for kinematic movers in contact events / setCollisionGroups. */
 static constexpr int KINEMATIC_MOVER_ID_BASE = -3000;
 
 /**
- * Commit any pending `setNextKinematicTransform` pose and derive linear +
- * angular velocity from the pose delta over `dt`. No-op (zero velocity) when
- * no new pose was pushed this tick. Called once per `PhysicsWorld::step()`.
+ * Start this tick's sweep to the pending `setNextKinematicTransform` pose:
+ * velocity is the pose delta over `tickDt` — every substep the step() runs,
+ * not one fixed step (#520 row 6) — and the pose itself moves substep by
+ * substep (placeKinematicMover). Zero velocity and no sweep when no pose
+ * was pushed. Called once per step() that runs at least one substep.
  */
-void advanceKinematicMoverPose(KinematicMover& mover, float dt);
+void beginKinematicMoverSweep(KinematicMover& mover, float tickDt);
+
+/**
+ * Put a sweeping mover at its pose for the end of substep `substep` of
+ * `substepCount` (contacts are solved at end-of-substep positions). The
+ * last substep lands exactly on the pushed pose.
+ */
+void placeKinematicMover(KinematicMover& mover, int substep, int substepCount);
+
+/**
+ * Pose a fraction `t` ∈ (0, 1) of the way from (`fromPos`, `fromRot`) to
+ * (`toPos`, `toRot`): lerp, and normalised lerp along the shortest arc.
+ * Shared by movers and kinematic rigid bodies.
+ */
+void interpolatePose(const Vec3& fromPos, const Quat& fromRot, const Vec3& toPos, const Quat& toRot,
+                     float t, Vec3& outPos, Quat& outRot);
 
 /**
  * Linear + angular velocity that carries pose (`fromPos`, `fromRot`) to

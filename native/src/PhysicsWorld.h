@@ -7,6 +7,7 @@
 #include "CollisionFilter.h"
 #include "HandleTable.h"
 #include "BroadphaseGrid.h"
+#include "ContactQueries.h"
 #include "HingeJoint.h"
 #include "KinematicMover.h"
 #include "SensorVolume.h"
@@ -45,7 +46,8 @@ public:
   void setBodyPosition(int id, float px, float py, float pz);
   void setBodyRotation(int id, float qx, float qy, float qz, float qw);
 
-  void addStaticPlane(float nx, float ny, float nz, float distance, float friction = 0.2f);
+  void addStaticPlane(float nx, float ny, float nz, float distance, float friction = 0.2f,
+                      float restitution = PLANE_DEFAULT_RESTITUTION);
 
   int addStaticBox(float px, float py, float pz,
                    float hx, float hy, float hz,
@@ -352,9 +354,23 @@ private:
     Vec3 position;
     Quat rotation;
   };
+  /** A kinematic body's sweep for the current step() (placeKinematicPoses). Transient. */
+  struct KinematicBodySweep {
+    int  id;
+    Vec3 fromPos;
+    Quat fromRot;
+    Vec3 toPos;
+    Quat toRot;
+  };
   void pushKinematicBodyTarget(int id, const Vec3& position, const Quat& rotation);
-  /** Commit this tick's body targets (once per `step()`, before the substeps). */
-  void advanceKinematicBodies(float dt);
+  /**
+   * Commit this tick's body targets (once per `step()` that substeps, before
+   * the substeps): velocity is the pose delta over `tickDt`, the whole tick;
+   * the pose moves per substep (placeKinematicPoses).
+   */
+  void advanceKinematicBodies(float tickDt);
+  /** Every mover and kinematic-body sweep at its end-of-substep pose (#520 row 6). */
+  void placeKinematicPoses(int substep, int substepCount);
 
   // ---- Dynamic boxes (DynamicBox.cpp) -----------------------------------
   /**
@@ -371,7 +387,26 @@ private:
   void resolveBoxBodyVsBox(BodyView& box, const BoxDesc& other, int otherId);
   void resolveBoxBodyVsTriangle(BodyView& box, int triangleIndex);
 
+  // ---- Capsule / box bodies vs statics (ShapeContacts.cpp, #520 row 4) --
+  /** A capsule or box body against the static of a solid broadphase pair (not plane, mover, pin field, sensor). */
+  void resolveShapeVsStatic(BodyView& body, const BroadphaseGrid::Pair& pair);
+  void resolveCapsuleVsPlane(BodyView& body, const PlaneDesc& plane);
+  void resolveShapeVsPinField(BodyView& body, int fieldIndex);
+  void resolveBoxBodyVsMover(BodyView& box, int moverIndex);
+  /**
+   * Impulse at every probe (against `mover`'s surface velocity when given),
+   * one positional correction along the deepest, one contact event.
+   */
+  void applyProbeHits(BodyView& body, const ProbeHit* hits, int count, float restitution, float friction,
+                      int otherId, int subIndex, const KinematicMover* mover);
+
+  /** Wake a sleeper touched by something moving; unite dynamic pairs' sleep islands. */
   void wakeOnContact(BodyView& a, BodyView* b);
+  /** Union of two dense indices in `sleepIsland_` (BodyStore::updateSleep). */
+  void uniteSleepIslands(int a, int b);
+  void wakeAllBodies();
+  /** Keep a sleeper's contacts in the manifold (carried as Stay) while nothing it touches moved. */
+  void carrySleepingContacts();
 
   static Vec3 closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB);
 
@@ -422,6 +457,8 @@ private:
   std::vector<KinematicBodyTarget> bodyTargets_;
   /** Bodies a target moved during the previous `step()`. */
   std::vector<int>               drivenBodies_;
+  /** This step()'s kinematic-body sweeps (transient, see KinematicBodySweep). */
+  std::vector<KinematicBodySweep> bodySweeps_;
   /**
    * Dense-indexed start pose of the current substep (see capturePreviousPositions).
    * Transient: re-taken at the top of every `step()`, so it is not snapshotted.
@@ -430,6 +467,8 @@ private:
   /** Dense-indexed rotation at the start of the current substep (quarantine restore). Transient. */
   std::vector<Quat>              substepStartRotations_;
   std::vector<NaNQuarantine>     quarantines_;
+  /** Per-substep union-find of dynamic bodies in contact (sleep islands). Transient. */
+  std::vector<int>               sleepIsland_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 

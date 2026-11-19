@@ -265,7 +265,9 @@ uint64_t fastTrace() {
 /**
  * Sleep: zero-gravity balls coast to rest and sleep, then a rolling ball
  * wakes them; plus a world where a small stack rests on the floor under
- * gravity (which never sleeps before the #442 slice C sleep fix).
+ * gravity. Before the #520 row 3 fix nothing in contact slept; this stack
+ * still does not, as 4 PGS iterations leave its top two balls sinking at
+ * ~0.1 m/s (the warm-started solver of #520 slice 3 should settle it).
  */
 uint64_t sleepTrace() {
   WorldParams params;
@@ -326,15 +328,15 @@ void checkGolden(const char* name, uint64_t actual, uint64_t expected) {
 } // namespace
 
 TEST_CASE("golden trace: table", "[golden]") {
-  checkGolden("table", tableTrace(), 0xac59d5b873e96d1dull);
+  checkGolden("table", tableTrace(), 0x366f95c8e45577e4ull);
 }
 
 TEST_CASE("golden trace: fast balls", "[golden]") {
-  checkGolden("fast", fastTrace(), 0x98a089c8d8b2efe6ull);
+  checkGolden("fast", fastTrace(), 0x9920fa8af666632full);
 }
 
 TEST_CASE("golden trace: sleep", "[golden]") {
-  checkGolden("sleep", sleepTrace(), 0x4a3b9679f08aba0bull);
+  checkGolden("sleep", sleepTrace(), 0x6a6c28ba67eddba5ull);
 }
 
 TEST_CASE("golden traces are reproducible within one build", "[golden]") {

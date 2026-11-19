@@ -67,6 +67,27 @@ inline float maxAccumulator(const WorldParams& p) {
 /** Upper bound on `solverIterations` a snapshot may carry (CPU DoS guard). */
 constexpr int MAX_SOLVER_ITERATIONS = 64;
 
+/**
+ * `p` with every parameter `worldParamsValid` would refuse replaced by its
+ * default (WorldParams{}), and `solverIterations` clamped to
+ * [1, MAX_SOLVER_ITERATIONS], `maxSubsteps` by sanitizedMaxSubsteps. The
+ * identity on valid params. The constructor applies it: since the Embind
+ * binding takes a whole WorldParams (#520), JS can hand it any numbers.
+ */
+inline WorldParams sanitizedWorldParams(const WorldParams& p) {
+  const WorldParams d;
+  WorldParams s = p;
+  if (!(std::isfinite(p.gravity.x) && std::isfinite(p.gravity.y) && std::isfinite(p.gravity.z))) s.gravity = d.gravity;
+  if (!(std::isfinite(p.fixedTimestep) && p.fixedTimestep > 0.f && p.fixedTimestep <= 1.f)) s.fixedTimestep = d.fixedTimestep;
+  s.maxSubsteps = sanitizedMaxSubsteps(p.maxSubsteps);
+  s.solverIterations = std::min(std::max(p.solverIterations, 1), MAX_SOLVER_ITERATIONS);
+  if (!(std::isfinite(p.rollingResistance) && p.rollingResistance >= 0.f)) s.rollingResistance = d.rollingResistance;
+  if (!(std::isfinite(p.sleepLinearThreshold) && p.sleepLinearThreshold >= 0.f)) s.sleepLinearThreshold = d.sleepLinearThreshold;
+  if (!(std::isfinite(p.sleepAngularThreshold) && p.sleepAngularThreshold >= 0.f)) s.sleepAngularThreshold = d.sleepAngularThreshold;
+  if (p.sleepFramesRequired < 0) s.sleepFramesRequired = d.sleepFramesRequired;
+  return s;
+}
+
 /** True when every parameter is finite and in a range `step()` can run. */
 inline bool worldParamsValid(const WorldParams& p) {
   const bool finiteG = std::isfinite(p.gravity.x) && std::isfinite(p.gravity.y) && std::isfinite(p.gravity.z);

@@ -52,7 +52,7 @@ void PhysicsWorld::pushKinematicBodyTarget(int id, const Vec3& position, const Q
   bodyTargets_.push_back({id, position, rotation});
 }
 
-void PhysicsWorld::advanceKinematicBodies(float dt) {
+void PhysicsWorld::advanceKinematicBodies(float tickDt) {
   auto hasTarget = [this](int id) {
     return std::any_of(bodyTargets_.begin(), bodyTargets_.end(),
                        [id](const KinematicBodyTarget& t) { return t.id == id; });
@@ -66,8 +66,9 @@ void PhysicsWorld::advanceKinematicBodies(float dt) {
     body.setAngularVelocity(Vec3::zero());
   }
   drivenBodies_.clear();
+  bodySweeps_.clear();
 
-  if (dt > 1e-8f) {
+  if (tickDt > 1e-8f) {
     for (const KinematicBodyTarget& target : bodyTargets_) {
       BodyView body = findViewMut(target.id);
       if (!body.valid() || body.getType() != BodyType::Kinematic) continue;
@@ -75,16 +76,37 @@ void PhysicsWorld::advanceKinematicBodies(float dt) {
       const Quat rotation = target.rotation.normalized();
       Vec3 linear;
       Vec3 angular;
-      poseDeltaVelocity(body.getPosition(), body.getRotation(), target.position, rotation, dt,
+      poseDeltaVelocity(body.getPosition(), body.getRotation(), target.position, rotation, tickDt,
                         linear, angular);
-      body.setPosition(target.position);
-      body.setRotation(rotation);
       body.setVelocity(linear);
       body.setAngularVelocity(angular);
+      bodySweeps_.push_back({target.id, body.getPosition(), body.getRotation(), target.position, rotation});
       drivenBodies_.push_back(target.id);
     }
   }
   bodyTargets_.clear();
+}
+
+void PhysicsWorld::placeKinematicPoses(int substep, int substepCount) {
+  for (KinematicMover& mover : movers_) placeKinematicMover(mover, substep, substepCount);
+
+  const bool last = substep + 1 >= substepCount;
+  const float t = static_cast<float>(substep + 1) / static_cast<float>(substepCount);
+  for (const KinematicBodySweep& sweep : bodySweeps_) {
+    BodyView body = findViewMut(sweep.id);
+    if (!body.valid() || body.getType() != BodyType::Kinematic) continue;
+    if (last) {
+      body.setPosition(sweep.toPos);
+      body.setRotation(sweep.toRot);
+      continue;
+    }
+    Vec3 position;
+    Quat rotation;
+    interpolatePose(sweep.fromPos, sweep.fromRot, sweep.toPos, sweep.toRot, t, position, rotation);
+    body.setPosition(position);
+    body.setRotation(rotation);
+  }
+  if (last) bodySweeps_.clear();
 }
 
 } // namespace pachinball
