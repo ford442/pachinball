@@ -55,7 +55,8 @@ export class BallManager implements BallManagerHost {
   world: PhysicsWorldSink
   rapier: PhysicsApi
   readonly view: BallView | null
-  private readonly presentation: BallPresentation | null
+  /** What draws the balls (meshes, trails, the trail material pool); null when headless. */
+  readonly presentation: BallPresentation | null
   private readonly capture: CapturedBall
   ballBody: PhysicsBody | null = null
   ballBodies: PhysicsBody[] = []

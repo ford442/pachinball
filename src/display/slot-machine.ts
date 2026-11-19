@@ -14,6 +14,7 @@ import { DisplayState } from './display-types'
 import { parseJsonWith } from '../schemas/schema-kit'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { SLOT_MACHINE_CONFIG } from '../config'
+import { simClockLiveSeconds } from '../core/sim-clock'
 import type { EventBus } from '../core/event-bus'
 import { DisplayReelsLayer, type SpinOptions } from './display-reels'
 import {
@@ -146,7 +147,7 @@ export class SlotMachine {
     if (this.spinState !== SlotSpinState.IDLE) return false
 
     const score = currentScore ?? this.scoreProvider()
-    const now = performance.now() / 1000
+    const now = simClockLiveSeconds()
 
     if (!shouldActivate(() => getSessionRngFork(RNG_FORK.SLOT).next(), score, now, this.state, this.config)) {
       return false
@@ -170,7 +171,7 @@ export class SlotMachine {
   }
 
   private startSpin(currentScore: number): void {
-    recordActivation(this.state, performance.now() / 1000, currentScore)
+    recordActivation(this.state, simClockLiveSeconds(), currentScore)
 
     this.spinState = SlotSpinState.STARTING
     this.spinPlan = generateSpin(() => getSessionRngFork(RNG_FORK.SLOT).next(), this.config)

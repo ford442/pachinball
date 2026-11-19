@@ -14,7 +14,7 @@ test.describe('DisplayState transitions', () => {
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000);
     page = await browser.newPage();
-    await page.goto('http://localhost:5173');
+    await page.goto('/');
 
     const startBtn = page.locator('#start-btn');
     await expect(startBtn).toBeVisible({ timeout: 30000 });

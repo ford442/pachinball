@@ -2,9 +2,10 @@ import { expect, test } from '@playwright/test'
 
 test.describe('Pause menu', () => {
   test('opens via Escape, toggles reduced motion, then resumes', async ({ page }) => {
-    test.setTimeout(60_000)
+    // SwiftShader frames hold the main thread for seconds on a loaded runner; every action waits on it.
+    test.setTimeout(120_000)
 
-    await page.goto('http://localhost:5173')
+    await page.goto('/')
     await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 })
     await page.locator('#start-btn').click()
 
@@ -12,7 +13,7 @@ test.describe('Pause menu', () => {
       return page.evaluate(() => (window as unknown as { game?: { stateManager?: { getState?: () => number } } }).game?.stateManager?.getState?.() ?? -1)
     }, {
       intervals: [200],
-      timeout: 12_000,
+      timeout: 30_000,
     }).toBe(2)
 
     await page.keyboard.press('Escape')

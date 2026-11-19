@@ -28,5 +28,9 @@ export function updateSimPhase(host: PhysicsHost, meshInterpolation: MeshInterpo
 
   host.mapManager?.update(dt)
 
+  // The race ghost reads the sim clock's committed step count, so it lands where the player's
+  // ball is after the same number of steps whatever the render rate (#444 Slice D).
+  host.ghostRace?.update()
+
   finishJackpotIfDone(host)
 }

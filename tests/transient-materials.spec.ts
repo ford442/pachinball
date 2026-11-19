@@ -43,7 +43,7 @@ interface GameProbe {
     spawnExtraBalls: (n: number) => void
     removeExtraBalls: () => void
     getBallBodies: () => Array<{ translation: () => { x: number; y: number; z: number } }>
-    trailMaterialPool: { size: number }
+    presentation: { trailMaterialPool: { size: number } } | null
   }
   renderer: { applyQualityTier: (tier: string) => void }
   performanceMonitor: { setOnSustainedJank: (cb: (() => void) | null) => void }
@@ -87,6 +87,9 @@ async function renderFrames(page: Page, n: number): Promise<void> {
 }
 
 test.describe('transient effects build no materials after boot (#524)', () => {
+  // bootTable alone waits up to 90 s for the game and 2 × 30 s for the scene to settle on SwiftShader.
+  test.describe.configure({ timeout: 240_000 })
+
   test('a fever trail, shard burst, impact ring and ripples build no material, and no mesh after the first burst', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
@@ -182,7 +185,7 @@ test.describe('transient effects build no materials after boot (#524)', () => {
     await waitForSceneSettle(page)
     const first = await page.evaluate(() => {
       const g = (window as ProbeWindow).game!
-      return { materials: g.scene.materials.length, pool: g.ballManager.trailMaterialPool.size }
+      return { materials: g.scene.materials.length, pool: g.ballManager.presentation!.trailMaterialPool.size }
     })
 
     await page.evaluate(() => (window as ProbeWindow).game!.ballManager.removeExtraBalls())
@@ -190,7 +193,7 @@ test.describe('transient effects build no materials after boot (#524)', () => {
     await waitForSceneSettle(page)
     const second = await page.evaluate(() => {
       const g = (window as ProbeWindow).game!
-      return { materials: g.scene.materials.length, pool: g.ballManager.trailMaterialPool.size }
+      return { materials: g.scene.materials.length, pool: g.ballManager.presentation!.trailMaterialPool.size }
     })
 
     expect(second.pool).toBe(first.pool)

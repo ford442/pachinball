@@ -46,7 +46,7 @@ interface TestGame {
 }
 
 async function bootGame(page: Page): Promise<void> {
-  await page.goto('http://localhost:5173')
+  await page.goto('/')
   const startBtn = page.locator('#start-btn')
   await expect(startBtn).toBeVisible({ timeout: 30_000 })
   await startBtn.click()
@@ -143,6 +143,8 @@ test.describe('Campaign progression E2E', () => {
       }
 
       const limit = progression.getTrackInfo?.('NEON_HELIX')?.timeLimitSeconds ?? 120
+      // The page is shared across this describe: earlier tests already earned rewards.
+      const rewardsBefore = progression.getStats?.().totalRewardsEarned ?? 0
       g.score = 1_000
       supervisor.startTrack('NEON_HELIX', 1_000)
       supervisor.update(limit + 1, 1_000)
@@ -163,7 +165,7 @@ test.describe('Campaign progression E2E', () => {
         storyText,
         overlayText,
         completed: progression.isTrackCompleted('NEON_HELIX'),
-        totalRewardsEarned: progression.getStats?.().totalRewardsEarned ?? 0,
+        rewardsEarned: (progression.getStats?.().totalRewardsEarned ?? 0) - rewardsBefore,
       }
     })
 
@@ -171,7 +173,7 @@ test.describe('Campaign progression E2E', () => {
     expect(result.overlayText).toContain('TIME OUT')
     expect(result.storyText).toContain('REWARD PENALTY ACTIVE')
     expect(result.completed).toBe(true)
-    expect(result.totalRewardsEarned).toBe(0)
+    expect(result.rewardsEarned).toBe(0)
   })
 
   test('countdown HUD shows urgency colors and respects reduced-motion pulse suppression', async () => {

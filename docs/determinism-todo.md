@@ -121,6 +121,7 @@ On the gameplay clock (#441):
 | Combo chain / bumper combo / gold-streak windows | `scoring-bridge.ts` `nowSeconds()` |
 | Gold swarm quick-collect bonus | `ball-manager-gold.ts` `collectBall` |
 | Plunger charge (steps held) | `input-plunger.ts` |
+| Slot-machine activation cooldown (decides whether fork `slot` is consumed and a slot jackpot can fire) | `slot-machine.ts` `tryActivate` / `startSpin`, via `simClockLiveSeconds()` (the step of the contact that moved the display to REACH / FEVER) |
 | Flipper hold-time stiffness ramp (Rapier path) | `game-input-actions.ts` |
 | Gameplay timers stepped per fixed step: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepFixed()` passes the sim seconds advanced (`simDt`), not render `dt` |
 | Jackpot sequence (ends the display's JACKPOT state), display state machine (gates fever scoring), spinner / trap / launcher / gate timers, adventure goal and time-limit clocks | `updateGameplay()` / `Game.stepAdventureProgression`, once per fixed step at `FIXED_TIMESTEP` (#444) |

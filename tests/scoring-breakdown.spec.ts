@@ -4,7 +4,7 @@ test.describe('Scoring breakdown', () => {
   test('shows breakdown panel after a drain-triggered game over', async ({ page }) => {
     test.setTimeout(60_000)
 
-    await page.goto('http://localhost:5173')
+    await page.goto('/')
     await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 })
     await page.locator('#start-btn').click()
 
@@ -19,15 +19,19 @@ test.describe('Scoring breakdown', () => {
       const game = (window as unknown as {
         game?: {
           lives: number
-          ballManager?: { getBallBody?: () => unknown }
-          physicsController?: { handleBallLoss?: (body: unknown) => void }
+          ballManager?: { getBallBody?: () => unknown; ballSaveSystem?: { expire: () => void } }
+          physicsController?: { scoringBridge?: { handleBallLoss?: (body: unknown) => void } }
         }
       }).game
-      if (!game?.ballManager?.getBallBody || !game.physicsController?.handleBallLoss) return
+      // Fail loudly on a stale hook rather than silently skipping the drain.
+      const drain = game?.physicsController?.scoringBridge
+      if (!game?.ballManager?.getBallBody || !drain?.handleBallLoss) throw new Error('drain hook missing: physicsController.scoringBridge.handleBallLoss')
       const ballBody = game.ballManager.getBallBody()
-      if (!ballBody) return
+      if (!ballBody) throw new Error('no ball body to drain')
       game.lives = 1
-      game.physicsController.handleBallLoss(ballBody)
+      // The launch grace window would save this drain (BALL SAVED, no game over).
+      game.ballManager.ballSaveSystem?.expire()
+      drain.handleBallLoss(ballBody)
     })
 
     const panel = page.locator('[data-testid="scoring-breakdown-panel"]')

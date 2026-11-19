@@ -1,10 +1,11 @@
 /**
- * Lane rollover sensors — thin Rapier-only sensor cuboids on launch lane,
- * inlanes/outlanes, and drain approach. Scoring is handled by CollisionDispatcher
- * via body-handle lookup (see collision-dispatch.ts).
+ * Lane rollover sensors — thin sensor cuboids on the launch lane, inlanes/outlanes
+ * and drain approach. Scoring is handled by CollisionDispatcher via body-handle lookup
+ * (see collision-dispatch.ts).
  *
- * WASM note: sensors are not mirrored to the WASM physics engine until Phase 2
- * geometry lands; lane points accrue on the Rapier collision path only.
+ * Authored through `PhysicsWorldSink`, so the C++ owner exports them as sensor volumes
+ * (`wasm-static-export.ts`) and lane points accrue on every engine;
+ * `tests/scoring-collision-dispatch.spec.ts` checks the default (wasm-owner) path.
  */
 
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'

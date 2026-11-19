@@ -47,7 +47,8 @@ export function wireCampaignLoop(
     eventBus.on('track:goal-reached', ({ trackId, scoreDelta, recommendedScore, timeRemaining }) => {
       if (!host.adventureMode?.isActive()) return
       const trackName = TRACK_CATALOG[trackId]?.name ?? trackId.replace(/_/g, ' ')
-      host.display?.setStoryText(`GOAL REACHED — ${trackName.toUpperCase()}`)
+      // `portal:open` (emitted just before this) wrote "PORTAL OPEN"; keep the instruction.
+      host.display?.setStoryText(`GOAL REACHED — ${trackName.toUpperCase()}\nPORTAL OPEN · SHOOT TO ADVANCE`)
       host.uiManager?.showMessage(
         `Portal online! ${scoreDelta.toLocaleString()} / ${recommendedScore.toLocaleString()} pts · ${Math.ceil(timeRemaining)}s left`,
         3200,

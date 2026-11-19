@@ -111,6 +111,11 @@ export class DisplayLcdOverlayLayer {
     this.displayOverlay = overlay
   }
 
+  /** The story line the LCD shows (adventure portals, zone entry); read by `DisplaySystem.storyText`. */
+  getStoryText(): string {
+    return this.storyText
+  }
+
   setStoryText(text: string): void {
     this.storyText = text
     this.redraw()
