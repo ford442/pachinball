@@ -353,9 +353,23 @@ private:
     Vec3 position;
     Quat rotation;
   };
+  /** A kinematic body's sweep for the current step() (placeKinematicPoses). Transient. */
+  struct KinematicBodySweep {
+    int  id;
+    Vec3 fromPos;
+    Quat fromRot;
+    Vec3 toPos;
+    Quat toRot;
+  };
   void pushKinematicBodyTarget(int id, const Vec3& position, const Quat& rotation);
-  /** Commit this tick's body targets (once per `step()`, before the substeps). */
-  void advanceKinematicBodies(float dt);
+  /**
+   * Commit this tick's body targets (once per `step()` that substeps, before
+   * the substeps): velocity is the pose delta over `tickDt`, the whole tick;
+   * the pose moves per substep (placeKinematicPoses).
+   */
+  void advanceKinematicBodies(float tickDt);
+  /** Every mover and kinematic-body sweep at its end-of-substep pose (#520 row 6). */
+  void placeKinematicPoses(int substep, int substepCount);
 
   // ---- Dynamic boxes (DynamicBox.cpp) -----------------------------------
   /**
@@ -423,6 +437,8 @@ private:
   std::vector<KinematicBodyTarget> bodyTargets_;
   /** Bodies a target moved during the previous `step()`. */
   std::vector<int>               drivenBodies_;
+  /** This step()'s kinematic-body sweeps (transient, see KinematicBodySweep). */
+  std::vector<KinematicBodySweep> bodySweeps_;
   /**
    * Dense-indexed start pose of the current substep (see capturePreviousPositions).
    * Transient: re-taken at the top of every `step()`, so it is not snapshotted.

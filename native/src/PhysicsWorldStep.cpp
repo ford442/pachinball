@@ -78,18 +78,31 @@ float PhysicsWorld::step(float rawDt) {
 
   capturePreviousPositions();
 
-  // Movers receive one pose push per world tick (see setNextKinematicTransform);
-  // derive their velocity for this tick's substeps up front, once.
-  for (KinematicMover& mover : movers_) {
-    advanceKinematicMoverPose(mover, params_.fixedTimestep);
-  }
-  // Kinematic rigid bodies (a captured ball) follow the same one-push-per-tick contract.
-  advanceKinematicBodies(params_.fixedTimestep);
-
   // Sanitised again here: restore() keeps a snapshot's params bit for bit.
   const int maxSubsteps = static_cast<int>(sanitizedMaxSubsteps(params_.maxSubsteps));
+
+  // The loop below, dry-run on a copy: the same float subtraction, so the
+  // same count.
+  int substepCount = 0;
+  for (float a = accumulator_; a >= params_.fixedTimestep && substepCount < maxSubsteps; ++substepCount) {
+    a -= params_.fixedTimestep;
+  }
+
+  // Movers and kinematic bodies (a captured ball) get one pose push per
+  // world tick (setNextKinematicTransform). The push spans every substep
+  // this tick runs (#520 row 6): velocity is the delta over all of them and
+  // the pose advances substep by substep — it used to jump to the target
+  // before the first one, at the speed of one fixed step. A tick that runs
+  // no substep leaves its targets pending for the next one that does.
+  if (substepCount > 0) {
+    const float tickDt = static_cast<float>(substepCount) * params_.fixedTimestep;
+    for (KinematicMover& mover : movers_) beginKinematicMoverSweep(mover, tickDt);
+    advanceKinematicBodies(tickDt);
+  }
+
   int substepsDone = 0;
   while (accumulator_ >= params_.fixedTimestep && substepsDone < maxSubsteps) {
+    placeKinematicPoses(substepsDone, substepCount);
     substep(params_.fixedTimestep, substepsDone);
     capturePreviousPositions();
     accumulator_ -= params_.fixedTimestep;

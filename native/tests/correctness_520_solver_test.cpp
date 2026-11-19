@@ -251,3 +251,74 @@ TEST_CASE("a non-finite or negative plane restitution falls back to the default"
   CHECK(reboundSpeed(Shape::Sphere, std::nanf("")) > 0.75f * impact);
   CHECK(reboundSpeed(Shape::Sphere, -1.f) > 0.75f * impact);
 }
+
+// ---- Row 6: a pose push spans every substep of its tick --------------------
+
+namespace {
+
+/** Peak upward speed of a ball resting on a piston that rises 0.3 m in one tick of `substeps` fixed steps. */
+float pistonLaunchSpeed(int substeps) {
+  WorldParams params;
+  params.gravity = {0.f, 0.f, 0.f};
+  PhysicsWorld w(params);
+  KinematicMoverDesc piston;
+  piston.position = {0.f, 0.f, 0.f};
+  piston.halfExtents = {0.5f, 0.1f, 0.5f};
+  piston.restitution = 0.f;
+  const int pistonId = w.addKinematicMover(piston);
+  RigidBodyDesc ball;
+  ball.position = {0.f, 0.3f, 0.f};
+  ball.radius = 0.2f;
+  ball.restitution = 0.f;
+  ball.linearDamping = 0.f;
+  const int id = w.createRigidBody(ball);
+
+  w.setNextKinematicTransform(pistonId, 0.f, 0.3f, 0.f, 0.f, 0.f, 0.f, 1.f);
+  w.step(static_cast<float>(substeps) * FIXED_DT);
+  return readVel(w, id).y;
+}
+
+} // namespace
+
+TEST_CASE("a mover's velocity is its push over the whole tick", "[520][kinematic]") {
+  // 0.3 m over one fixed step is 18 m/s; over two it is 9. The old step()
+  // derived the velocity over one fixed step whatever the tick ran, so a
+  // 30 fps tick launched the ball at 18.
+  const float oneStep = pistonLaunchSpeed(1);
+  const float twoSteps = pistonLaunchSpeed(2);
+  CHECK(oneStep > 0.9f * 18.f);
+  CHECK(twoSteps > 0.9f * 9.f);
+  CHECK(twoSteps < 1.1f * 9.f);
+}
+
+TEST_CASE("a kinematic body moves substep by substep and carries the tick's velocity", "[520][kinematic]") {
+  WorldParams params;
+  params.gravity = {0.f, 0.f, 0.f};
+  PhysicsWorld w(params);
+  RigidBodyDesc d;
+  d.position = {0.f, 1.f, 0.f};
+  const int id = w.createRigidBody(d);
+  w.setBodyType(id, BodyType::Kinematic);
+
+  w.setNextKinematicTransform(id, 0.6f, 1.f, 0.f, 0.f, 0.f, 0.f, 1.f);
+  w.step(2.f * FIXED_DT);  // two substeps (step() caps a tick at 1/30 s)
+  CHECK(near(readPos(w, id).x, 0.6f, 1e-6f));
+  CHECK(near(readVel(w, id).x, 0.6f / (2.f * FIXED_DT), 1e-3f));  // 18 m/s, not 36
+}
+
+TEST_CASE("a tick that runs no substep leaves the pose push pending", "[520][kinematic]") {
+  WorldParams params;
+  params.gravity = {0.f, 0.f, 0.f};
+  PhysicsWorld w(params);
+  RigidBodyDesc d;
+  d.position = {0.f, 1.f, 0.f};
+  const int id = w.createRigidBody(d);
+  w.setBodyType(id, BodyType::Kinematic);
+
+  w.setNextKinematicTransform(id, 0.5f, 1.f, 0.f, 0.f, 0.f, 0.f, 1.f);
+  w.step(0.25f * FIXED_DT);  // accumulates, no substep
+  CHECK(readPos(w, id).x == 0.f);  // it used to teleport here, with no substep to see it
+  w.step(0.75f * FIXED_DT);
+  CHECK(near(readPos(w, id).x, 0.5f, 1e-6f));
+  CHECK(near(readVel(w, id).x, 0.5f / FIXED_DT, 1e-2f));
+}
