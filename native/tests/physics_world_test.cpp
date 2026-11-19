@@ -423,8 +423,10 @@ TEST_CASE("broadphase emits pairs for nearby static colliders", "[physics][broad
   world.setGravity(0.f, -9.81f, 0.f);
   world.addStaticBox(0.f, 0.f, 0.f, 2.f, 0.5f, 2.f, 0.f, 0.f, 0.f, 1.f);
 
+  // Just above the top face (y = 0.5): the 3D grid (#520 row 14) no longer
+  // pairs a ball with a box 1.25 m below it, as the XZ one did.
   world.createRigidBody({
-    {0.f, 2.f, 0.f}, {0.f, 0.f, 0.f},
+    {0.f, 0.8f, 0.f}, {0.f, 0.f, 0.f},
     1.f, 0.25f, 0.5f, 0.02f, BodyType::Dynamic
   });
 

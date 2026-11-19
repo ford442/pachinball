@@ -42,28 +42,45 @@ int BroadphaseGrid::cellX(float x) const {
   return toCell((x - config_.minX) / config_.cellSize);
 }
 
+int BroadphaseGrid::cellY(float y) const {
+  return toCell((y - config_.minY) / config_.cellSize);
+}
+
 int BroadphaseGrid::cellZ(float z) const {
   return toCell((z - config_.minZ) / config_.cellSize);
 }
 
-void BroadphaseGrid::cellsForAabb(float minX, float maxX, float minZ, float maxZ,
-                                  std::vector<CellKey>& out) const {
-  const int cx0 = cellX(minX);
-  const int cx1 = cellX(maxX);
-  const int cz0 = cellZ(minZ);
-  const int cz1 = cellZ(maxZ);
-  for (int cz = cz0; cz <= cz1; ++cz) {
-    for (int cx = cx0; cx <= cx1; ++cx) {
-      out.push_back({cx, cz});
+Vec3 BroadphaseGrid::rotatedHalfExtents(const Quat& rotation, const Vec3& halfExtents) {
+  const Vec3 ax = rotation.rotate(Vec3{halfExtents.x, 0.f, 0.f});
+  const Vec3 ay = rotation.rotate(Vec3{0.f, halfExtents.y, 0.f});
+  const Vec3 az = rotation.rotate(Vec3{0.f, 0.f, halfExtents.z});
+  return {
+    std::fabs(ax.x) + std::fabs(ay.x) + std::fabs(az.x),
+    std::fabs(ax.y) + std::fabs(ay.y) + std::fabs(az.y),
+    std::fabs(ax.z) + std::fabs(ay.z) + std::fabs(az.z),
+  };
+}
+
+void BroadphaseGrid::cellsForAabb(const Vec3& lo, const Vec3& hi, std::vector<CellKey>& out) const {
+  const int cx0 = cellX(lo.x);
+  const int cx1 = cellX(hi.x);
+  const int cy0 = cellY(lo.y);
+  const int cy1 = cellY(hi.y);
+  const int cz0 = cellZ(lo.z);
+  const int cz1 = cellZ(hi.z);
+  for (int cy = cy0; cy <= cy1; ++cy) {
+    for (int cz = cz0; cz <= cz1; ++cz) {
+      for (int cx = cx0; cx <= cx1; ++cx) {
+        out.push_back({cx, cy, cz});
+      }
     }
   }
 }
 
-void BroadphaseGrid::cellsForObb(const Vec3& center, const Vec3& halfExtents,
-                                 std::vector<CellKey>& out) const {
-  // Rotation-agnostic conservative bound: the OBB's XZ circumscribing radius.
-  const float r = std::sqrt(halfExtents.x * halfExtents.x + halfExtents.z * halfExtents.z) + 0.05f;
-  cellsForAabb(center.x - r, center.x + r, center.z - r, center.z + r, out);
+void BroadphaseGrid::cellsForObb(const Vec3& center, const Quat& rotation, const Vec3& halfExtents,
+                                 float margin, std::vector<CellKey>& out) const {
+  const Vec3 e = rotatedHalfExtents(rotation, halfExtents) + Vec3{margin, margin, margin};
+  cellsForAabb(center - e, center + e, out);
 }
 
 void BroadphaseGrid::addStaticToCell(const CellKey& key, StaticRef ref) {
@@ -71,13 +88,8 @@ void BroadphaseGrid::addStaticToCell(const CellKey& key, StaticRef ref) {
 }
 
 void BroadphaseGrid::insertStaticBox(int boxIndex, const BoxDesc& box) {
-  const Vec3 he = box.halfExtents;
-  const float margin = 0.05f;
   std::vector<CellKey> cells;
-  cellsForAabb(
-    box.center.x - he.x - margin, box.center.x + he.x + margin,
-    box.center.z - he.z - margin, box.center.z + he.z + margin,
-    cells);
+  cellsForObb(box.center, box.rotation, box.halfExtents, 0.05f, cells);
   StaticRef ref{StaticRef::Box, boxIndex};
   for (const auto& c : cells) {
     addStaticToCell(c, ref);
@@ -90,10 +102,8 @@ void BroadphaseGrid::insertStaticCapsule(int capIndex, const CapsuleDesc& cap) {
   const Vec3 b = cap.center + axisHalf;
   const float r = cap.radius + 0.05f;
   std::vector<CellKey> cells;
-  cellsForAabb(
-    std::min(a.x, b.x) - r, std::max(a.x, b.x) + r,
-    std::min(a.z, b.z) - r, std::max(a.z, b.z) + r,
-    cells);
+  cellsForAabb(Vec3{std::min(a.x, b.x) - r, std::min(a.y, b.y) - r, std::min(a.z, b.z) - r},
+               Vec3{std::max(a.x, b.x) + r, std::max(a.y, b.y) + r, std::max(a.z, b.z) + r}, cells);
   StaticRef ref{StaticRef::Capsule, capIndex};
   for (const auto& c : cells) {
     addStaticToCell(c, ref);
@@ -111,9 +121,8 @@ void BroadphaseGrid::cellsForCylinder(const Vec3& center, const Quat& rotation,
     const float perp = std::sqrt(std::max(0.f, 1.f - ae * ae));
     return std::fabs(halfHeight * ae) + radius * perp + 0.05f;
   };
-  const float ex = extent(a.x);
-  const float ez = extent(a.z);
-  cellsForAabb(center.x - ex, center.x + ex, center.z - ez, center.z + ez, out);
+  const Vec3 e{extent(a.x), extent(a.y), extent(a.z)};
+  cellsForAabb(center - e, center + e, out);
 }
 
 void BroadphaseGrid::insertStaticCylinder(int cylIndex, const CylinderDesc& cyl) {
@@ -138,8 +147,7 @@ void BroadphaseGrid::insertStaticCone(int coneIndex, const ConeDesc& cone) {
 void BroadphaseGrid::insertStaticSphere(int sphereIndex, const SphereDesc& sphere) {
   const float r = sphere.radius + 0.05f;
   std::vector<CellKey> cells;
-  cellsForAabb(sphere.center.x - r, sphere.center.x + r,
-               sphere.center.z - r, sphere.center.z + r, cells);
+  cellsForAabb(sphere.center - Vec3{r, r, r}, sphere.center + Vec3{r, r, r}, cells);
   StaticRef ref{StaticRef::Sphere, sphereIndex};
   for (const auto& c : cells) {
     addStaticToCell(c, ref);
@@ -148,7 +156,7 @@ void BroadphaseGrid::insertStaticSphere(int sphereIndex, const SphereDesc& spher
 
 void BroadphaseGrid::insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor) {
   std::vector<CellKey> cells;
-  cellsForObb(sensor.center, sensor.halfExtents, cells);
+  cellsForObb(sensor.center, sensor.rotation, sensor.halfExtents, 0.05f, cells);
   StaticRef ref{StaticRef::Sensor, sensorIndex};
   for (const auto& c : cells) {
     addStaticToCell(c, ref);
@@ -158,12 +166,13 @@ void BroadphaseGrid::insertSensorVolume(int sensorIndex, const SensorVolumeDesc&
 void BroadphaseGrid::insertTriangle(int triangleIndex, const MeshTriangle& tri) {
   const float margin = 0.05f;
   std::vector<CellKey> cells;
-  cellsForAabb(
-    std::min({tri.a.x, tri.b.x, tri.c.x}) - margin,
-    std::max({tri.a.x, tri.b.x, tri.c.x}) + margin,
-    std::min({tri.a.z, tri.b.z, tri.c.z}) - margin,
-    std::max({tri.a.z, tri.b.z, tri.c.z}) + margin,
-    cells);
+  cellsForAabb(Vec3{std::min({tri.a.x, tri.b.x, tri.c.x}) - margin,
+                    std::min({tri.a.y, tri.b.y, tri.c.y}) - margin,
+                    std::min({tri.a.z, tri.b.z, tri.c.z}) - margin},
+               Vec3{std::max({tri.a.x, tri.b.x, tri.c.x}) + margin,
+                    std::max({tri.a.y, tri.b.y, tri.c.y}) + margin,
+                    std::max({tri.a.z, tri.b.z, tri.c.z}) + margin},
+               cells);
   StaticRef ref{StaticRef::Triangle, triangleIndex};
   for (const auto& c : cells) {
     addStaticToCell(c, ref);
@@ -179,8 +188,8 @@ void BroadphaseGrid::rebuildMoverCells(const std::vector<KinematicMover>& movers
   std::vector<CellKey> cells;
   for (int i = 0; i < static_cast<int>(movers.size()); ++i) {
     cells.clear();
-    cellsForObb(movers[static_cast<std::size_t>(i)].currentPos,
-               movers[static_cast<std::size_t>(i)].halfExtents, cells);
+    const KinematicMover& mover = movers[static_cast<std::size_t>(i)];
+    cellsForObb(mover.currentPos, mover.currentRot, mover.halfExtents, 0.05f, cells);
     for (const auto& c : cells) {
       moverCells_[c].push_back(i);
     }
@@ -208,7 +217,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
   std::vector<CellKey> cells;
   cells.reserve(16);
 
-  // XZ extent a body's cells must cover around its position.
+  // Extent a body's cells must cover around its position, on every axis.
   const auto boundingRadius = [&bodies](int i) {
     float r = bodies.radius(i);
     const Shape shape = static_cast<Shape>(bodies.shape(i));
@@ -228,11 +237,10 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     const bool awake = bodies.isAwake(i);
     if (!awake && type != BodyType::Dynamic) continue;
 
-    const float px = bodies.posX(i);
-    const float pz = bodies.posZ(i);
+    const Vec3 p{bodies.posX(i), bodies.posY(i), bodies.posZ(i)};
     const float r = boundingRadius(i);
     cells.clear();
-    cellsForAabb(px - r, px + r, pz - r, pz + r, cells);
+    cellsForAabb(p - Vec3{r, r, r}, p + Vec3{r, r, r}, cells);
     for (const auto& c : cells) {
       if (awake) {
         addToCell(c, i);
@@ -348,49 +356,54 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     }
   }
 
-  // Neighbor cell dynamic-dynamic pairs (3×3 stencil)
+  // Neighbor cell dynamic-dynamic pairs (3×3×3 stencil)
   for (const auto& entry : dynamicCells_) {
     const CellKey base = entry.first;
     const auto& dynamics = entry.second;
-    for (int dz = -1; dz <= 1; ++dz) {
-      for (int dx = -1; dx <= 1; ++dx) {
-        if (dx == 0 && dz == 0) continue;
-        const CellKey neighbor{base.cx + dx, base.cz + dz};
-        const auto nit = dynamicCells_.find(neighbor);
-        if (nit == dynamicCells_.end()) continue;
-        const auto& other = nit->second;
-        for (int a : dynamics) {
-          for (int b : other) {
-            if (a >= b) continue;
-            if (!bodies.isAwake(a) || !bodies.isAwake(b)) continue;
-            if (!groupsInteract(bodies.membership(a), bodies.filter(a),
-                                bodies.membership(b), bodies.filter(b))) continue;
-            const uint64_t key = pairKeyBody(a, b);
-            if (!seenBody.insert(key).second) continue;
-            outPairs.push_back({Pair::BodyBody, a, b});
+    for (int dy = -1; dy <= 1; ++dy) {
+      for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dy == 0 && dz == 0) continue;
+          const CellKey neighbor{base.cx + dx, base.cy + dy, base.cz + dz};
+          const auto nit = dynamicCells_.find(neighbor);
+          if (nit == dynamicCells_.end()) continue;
+          const auto& other = nit->second;
+          for (int a : dynamics) {
+            for (int b : other) {
+              if (a >= b) continue;
+              if (!bodies.isAwake(a) || !bodies.isAwake(b)) continue;
+              if (!groupsInteract(bodies.membership(a), bodies.filter(a),
+                                  bodies.membership(b), bodies.filter(b))) continue;
+              const uint64_t key = pairKeyBody(a, b);
+              if (!seenBody.insert(key).second) continue;
+              outPairs.push_back({Pair::BodyBody, a, b});
+            }
           }
         }
       }
     }
   }
 
-  // Awake body vs sleeper (same cell or one of the 8 neighbours). Emitted with
+  // Awake body vs sleeper (same cell or one of the 26 neighbours). Emitted with
   // the lower dense index first, like the awake pairs above; `seenBody` dedups
   // the cells a pair shares. Contact, not proximity, is what wakes the sleeper.
   if (!sleeperCells_.empty()) {
     for (const auto& entry : dynamicCells_) {
-      for (int dz = -1; dz <= 1; ++dz) {
-        for (int dx = -1; dx <= 1; ++dx) {
-          const auto sit = sleeperCells_.find(CellKey{entry.first.cx + dx, entry.first.cz + dz});
-          if (sit == sleeperCells_.end()) continue;
-          for (int awakeBody : entry.second) {
-            for (int sleeper : sit->second) {
-              if (!groupsInteract(bodies.membership(awakeBody), bodies.filter(awakeBody),
-                                  bodies.membership(sleeper), bodies.filter(sleeper))) continue;
-              const int lo = std::min(awakeBody, sleeper);
-              const int hi = std::max(awakeBody, sleeper);
-              if (!seenBody.insert(pairKeyBody(lo, hi)).second) continue;
-              outPairs.push_back({Pair::BodyBody, lo, hi});
+      for (int dy = -1; dy <= 1; ++dy) {
+        for (int dz = -1; dz <= 1; ++dz) {
+          for (int dx = -1; dx <= 1; ++dx) {
+            const CellKey c{entry.first.cx + dx, entry.first.cy + dy, entry.first.cz + dz};
+            const auto sit = sleeperCells_.find(c);
+            if (sit == sleeperCells_.end()) continue;
+            for (int awakeBody : entry.second) {
+              for (int sleeper : sit->second) {
+                if (!groupsInteract(bodies.membership(awakeBody), bodies.filter(awakeBody),
+                                    bodies.membership(sleeper), bodies.filter(sleeper))) continue;
+                const int lo = std::min(awakeBody, sleeper);
+                const int hi = std::max(awakeBody, sleeper);
+                if (!seenBody.insert(pairKeyBody(lo, hi)).second) continue;
+                outPairs.push_back({Pair::BodyBody, lo, hi});
+              }
             }
           }
         }
@@ -419,9 +432,10 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
         travelSq > SENSOR_SWEEP_MAX_DISTANCE * SENSOR_SWEEP_MAX_DISTANCE) continue;
 
     const float r = boundingRadius(i);
+    const Vec3 to{bodies.posX(i), bodies.posY(i), bodies.posZ(i)};
     cells.clear();
-    cellsForAabb(std::min(from.x, bodies.posX(i)) - r, std::max(from.x, bodies.posX(i)) + r,
-                 std::min(from.z, bodies.posZ(i)) - r, std::max(from.z, bodies.posZ(i)) + r,
+    cellsForAabb(Vec3{std::min(from.x, to.x) - r, std::min(from.y, to.y) - r, std::min(from.z, to.z) - r},
+                 Vec3{std::max(from.x, to.x) + r, std::max(from.y, to.y) + r, std::max(from.z, to.z) + r},
                  cells);
     for (const auto& c : cells) {
       const auto sit = staticCells_.find(c);
