@@ -11,6 +11,21 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript 7 (the native port) ships no programmatic API, and typescript-eslint@8.x peers
+      # `typescript <6.1.0`: with ~7.0.x, plain `npm ci` fails ERESOLVE and eslint throws
+      # "typescript-eslint does not support TS 7.0" (#539 did this to main on 2026-11-19).
+      # Stay on ~6.0.x. Lift this ignore (and move package.json off ~6.0.3) only when BOTH hold:
+      #   1. typescript-eslint declares TS 7 in its peer range / typed linting works on it
+      #      (tracking: https://github.com/typescript-eslint/typescript-eslint/issues/10940), and
+      #   2. the migration path is settled: the "Running Side-by-Side with TypeScript 6.0" section of
+      #      https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/ (the
+      #      @typescript/typescript6 package / tsc6) is how tools that still need the compiler API
+      #      keep working while `tsc` runs 7.
+      # Minor and patch updates of 6.0.x keep flowing.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     groups:
       babylon:
         patterns:
