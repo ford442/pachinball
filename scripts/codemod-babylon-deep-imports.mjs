@@ -6,7 +6,6 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { globSync } from 'glob'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const CORE_PKG = path.join(ROOT, 'node_modules/@babylonjs/core')
@@ -136,7 +135,13 @@ function transformFile(text) {
 }
 
 function main() {
-  const files = globSync('{src,tests}/**/*.{ts,tsx}', { cwd: ROOT, absolute: true })
+  // node:fs only: `glob` is not a declared dependency of this repo.
+  const files = ['src', 'tests'].flatMap((dir) =>
+    fs
+      .readdirSync(path.join(ROOT, dir), { recursive: true })
+      .filter((rel) => /\.tsx?$/.test(String(rel)))
+      .map((rel) => path.join(ROOT, dir, String(rel))),
+  )
   let changed = 0
 
   for (const file of files) {
