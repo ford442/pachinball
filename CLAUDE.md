@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev        # Start Vite dev server (http://localhost:5173)
-npm run build      # tsc -b → build:wasm (skips without Emscripten) → Vite build; writes dist/build-info.json
+npm run build      # typecheck → build:wasm (skips without Emscripten) → Vite build; writes dist/build-info.json
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
-npm run check:index-strict  # noUncheckedIndexedAccess ratchet: the ENFORCED_DIRS in scripts/check-index-strict.mjs (core, wasm, game/physics, materials, audio, game-elements, effects, shaders, replay, arcade, game.ts) must stay clean
+npm run typecheck  # `tsc -b` on TypeScript 7 (the native compiler, `typescript7` alias, ~5 s): app, node, worker, worklet and test projects. `typecheck:ts6` runs TS 6, `typecheck:compare` both and diffs their diagnostics (CI). Never run a bare `tsc` / `npx tsc`: both packages declare a `tsc` bin and which one `node_modules/.bin/tsc` is is not guaranteed
 npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero (track modules build through TrackBuilderApi)
 npm run preview    # Preview production build locally
 npm run machine:validate  # Weekly machine golden + next 53 ISO weeks + free seeds; MachineDescriptor: public/machines/*.json, 2027 weekly round-trip, share-link ≤ 8 KB

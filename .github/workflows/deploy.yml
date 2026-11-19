@@ -79,7 +79,7 @@ jobs:
       - name: Set up the pinned Emscripten SDK
         uses: ./.github/actions/setup-emsdk
 
-      # tsc -b → build:wasm (fails on any emcc but the pin) → vite build → dist/build-info.json
+      # typecheck → build:wasm (fails on any emcc but the pin) → vite build → dist/build-info.json
       - name: Production build
         env:
           CI: 'true'

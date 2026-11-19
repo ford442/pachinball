@@ -277,10 +277,11 @@ fi
 GENERATED_DTS="${REPO_ROOT}/src/wasm/generated/PhysicsModule.d.ts"
 EMIT_TSD="OFF"
 if [[ "${BUILD_TYPE}" == "Release" ]]; then
-  if [[ -x "${REPO_ROOT}/node_modules/.bin/tsc" ]]; then
+  if [[ -f "${REPO_ROOT}/node_modules/typescript/bin/tsc" ]]; then
     # scripts/emcc-tsc/tsc first: it adds --ignoreConfig, without which
     # TypeScript 6 fails emcc's `tsc ... jsdoc.js` with TS5112 (a tsconfig.json
-    # is found upward but files were named on the command line).
+    # is found upward but files were named on the command line). The shim runs
+    # node_modules/typescript (6) by path: node_modules/.bin/tsc may be TS 7's.
     export PATH="${REPO_ROOT}/scripts/emcc-tsc:${REPO_ROOT}/node_modules/.bin:${PATH}"
   fi
   if command -v tsc &>/dev/null; then

@@ -8,11 +8,16 @@
 # specified on commandline") whenever a tsconfig.json is found upward — the
 # repo root has one. --ignoreConfig is the TS 6 opt-out: compile exactly the
 # files named, as emcc expects. Everything else is passed through unchanged.
+#
+# It names TypeScript 6 (`typescript`) by path, never node_modules/.bin/tsc: `typescript7` (the
+# native compiler used by `npm run typecheck`) also declares a `tsc` bin and npm may link that one
+# there. src/wasm/generated/PhysicsModule.d.ts is committed and CI diffs it, so the declaration
+# emitter must not change underneath it by accident.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_tsc="${here}/../../node_modules/.bin/tsc"
-if [[ ! -x "${repo_tsc}" ]]; then
+repo_tsc="${here}/../../node_modules/typescript/bin/tsc"
+if [[ ! -f "${repo_tsc}" ]]; then
   echo "[emcc-tsc] ${repo_tsc} missing — run npm ci" >&2
   exit 127
 fi
-exec "${repo_tsc}" --ignoreConfig "$@"
+exec node "${repo_tsc}" --ignoreConfig "$@"
