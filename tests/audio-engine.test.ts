@@ -104,7 +104,7 @@ describe('AudioEngine', () => {
     engine.playVoice({ type: 'drain', velocity: 0.5, position: { x: -99 } })
     engine.playVoice({ type: 'bumper', velocity: 0.5 })
     expect(posted).toEqual([
-      { velocity: 0.5, impact: 0.5, metal: 1, spin: 1, fever: 1, pan: 0.5 },
+      { velocity: 0.5, impact: 0.5, metal: 1, spin: 1, fever: 1, pan: 6 / 14 },
       { velocity: 0.5, impact: 0.5, metal: 0.12, spin: 0, fever: 0, pan: -1 },
       { velocity: 0.5, impact: 0.5, metal: 0.55, spin: 0, fever: 0, pan: 0 },
     ])
