@@ -7,6 +7,7 @@
  * PhysicsWorld methods — declared in PhysicsWorld.h, defined here.
  */
 #include "CollisionFilter.h"
+#include "ContactQueries.h"
 #include "PhysicsWorld.h"
 #include "SolverConstants.h"
 
@@ -33,14 +34,10 @@ int PhysicsWorld::addStaticSphere(float px, float py, float pz,
 void PhysicsWorld::resolveSphereVsStaticSphere(BodyView& body, const SphereDesc& sph, int sphId) {
   if (!groupsInteract(body.getMembership(), body.getFilter(), sph.membership, sph.filter)) return;
 
-  const Vec3 delta = body.getPosition() - sph.center;
-  const float distSq = delta.lengthSq();
-  const float minDist = body.getRadius() + sph.radius;
-  if (distSq >= minDist * minDist) return;
-
-  const float dist = std::sqrt(std::max(distSq, CONTACT_EPSILON_SQ));
-  const Vec3 normal = (dist > 1e-5f) ? (delta / dist) : Vec3::up();
-  const float penetration = minDist - dist;
+  SurfaceHit hit;
+  if (!querySphere(sph, body.getPosition(), body.getRadius(), hit)) return;
+  const Vec3 normal = hit.normal;
+  const float penetration = hit.penetration;
 
   const float velN = body.getVelocity().dot(normal);
   if (velN >= 0.5f) return;

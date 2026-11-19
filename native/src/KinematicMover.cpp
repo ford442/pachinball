@@ -1,5 +1,6 @@
 #include "KinematicMover.h"
 #include "CollisionFilter.h"
+#include "ContactQueries.h"
 #include "VolumeShape.h"
 #include "PhysicsWorld.h"
 
@@ -119,29 +120,11 @@ void PhysicsWorld::resolveSphereVsMover(BodyView& body, int moverIndex) {
   KinematicMover& mover = movers_[static_cast<std::size_t>(moverIndex)];
   if (!groupsInteract(body.getMembership(), body.getFilter(), mover.membership, mover.filter)) return;
 
-  const Quat invRot = mover.currentRot.conjugate();
-  const Vec3 localCenter = invRot.rotate(body.getPosition() - mover.currentPos);
-  bool inside = false;
-  const Vec3 closest = closestPointOnVolume(mover.shape, localCenter, mover.halfExtents, inside);
-
-  const Vec3 delta = localCenter - closest;
-  const float distSq = delta.lengthSq();
   const float radius = body.getRadius();
-  if (!inside && distSq >= radius * radius) return;
-
-  Vec3 localNormal;
-  float penetration = 0.f;
-  if (inside || distSq < MOVER_EPSILON_SQ) {
-    float shallow = 0.f;
-    deepestVolumeNormal(mover.shape, localCenter, mover.halfExtents, localNormal, shallow);
-    penetration = radius + shallow;
-  } else {
-    const float dist = std::sqrt(distSq);
-    localNormal = delta / dist;
-    penetration = radius - dist;
-  }
-
-  const Vec3 normal = mover.currentRot.rotate(localNormal).normalized();
+  SurfaceHit hit;
+  if (!queryMover(mover, body.getPosition(), radius, hit)) return;
+  const Vec3 normal = hit.normal;
+  const float penetration = hit.penetration;
   const Vec3 contactPoint = body.getPosition() - normal * radius;
   const Vec3 moverArm = contactPoint - mover.currentPos;
   const Vec3 moverPointVel = mover.linearVelocity + mover.angularVelocity.cross(moverArm);

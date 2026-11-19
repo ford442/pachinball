@@ -72,6 +72,7 @@ set(PHYSICS_CORE_SOURCES
   src/ForceField.cpp
   src/DynamicBox.cpp
   src/Narrowphase.cpp
+  src/ContactQueries.cpp
   src/StaticShapes.cpp
   src/Cone.cpp
   src/PinField.cpp

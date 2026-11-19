@@ -5,14 +5,13 @@
  */
 #include "Cylinder.h"
 #include "CollisionFilter.h"
+#include "ContactQueries.h"
 #include "PhysicsWorld.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace pachinball {
-
-static constexpr float CYLINDER_EPSILON_SQ = 1e-10f;
 
 Vec3 closestPointOnCylinder(const Vec3& local, float radius, float halfHeight, bool& outInside) {
   const float rhoSq = local.x * local.x + local.z * local.z;
@@ -73,30 +72,11 @@ int PhysicsWorld::addStaticCylinder(float px, float py, float pz,
 void PhysicsWorld::resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId, int subIndex) {
   if (!groupsInteract(body.getMembership(), body.getFilter(), cyl.membership, cyl.filter)) return;
 
-  const Quat invRot = cyl.rotation.conjugate();
-  const Vec3 localCenter = invRot.rotate(body.getPosition() - cyl.center);
-
-  bool inside = false;
-  const Vec3 closest = closestPointOnCylinder(localCenter, cyl.radius, cyl.halfHeight, inside);
-
-  const Vec3 delta = localCenter - closest;
-  const float distSq = delta.lengthSq();
   const float radius = body.getRadius();
-  if (!inside && distSq >= radius * radius) return;
-
-  Vec3 localNormal;
-  float penetration = 0.f;
-  if (inside || distSq < CYLINDER_EPSILON_SQ) {
-    float shallow = 0.f;
-    deepestCylinderNormal(localCenter, cyl.radius, cyl.halfHeight, localNormal, shallow);
-    penetration = radius + shallow;
-  } else {
-    const float dist = std::sqrt(distSq);
-    localNormal = delta / dist;
-    penetration = radius - dist;
-  }
-
-  const Vec3 normal = cyl.rotation.rotate(localNormal).normalized();
+  SurfaceHit hit;
+  if (!queryCylinder(cyl, body.getPosition(), radius, hit)) return;
+  const Vec3 normal = hit.normal;
+  const float penetration = hit.penetration;
 
   const float velN = body.getVelocity().dot(normal);
   if (velN >= 0.5f) return;
