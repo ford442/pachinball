@@ -6,8 +6,9 @@ import * as v from 'valibot'
 import type { SerializableProgressionState } from './adventure-track-progression'
 import { StoredCampaignSchema, StoredProgressionSchema, type StoredProgression } from '../schemas/storage'
 import { TRACK_CATALOG } from './adventure-track-progression'
+import { profileKey } from '../profile/profile-store'
 
-export const CAMPAIGN_STORAGE_KEY = 'pachinball.campaign.rewards.v1'
+export const CAMPAIGN_STORAGE_KEY = profileKey('campaign')
 export const CAMPAIGN_STORAGE_VERSION = 2
 
 export interface CampaignPersistencePayload {

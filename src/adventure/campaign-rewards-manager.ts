@@ -3,12 +3,12 @@ import type { AdventureTrackProgression, SerializableProgressionState } from './
 import { CampaignRewardNotifier } from './campaign-reward-notifier'
 import type { EventBus } from '../core/event-bus'
 import {
-  CAMPAIGN_STORAGE_KEY,
   CAMPAIGN_STORAGE_VERSION,
   migrateCampaignStorage,
   serializeCampaignStorage,
   type CampaignPersistencePayload,
 } from './adventure-campaign-persistence'
+import { profileStore } from '../profile/profile-store'
 
 export type CampaignRewardType = 'ball-skin' | 'cabinet-theme' | 'backbox-tint'
 
@@ -263,7 +263,7 @@ export class CampaignRewardsManager {
 
   private load(): void {
     try {
-      const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY)
+      const raw = profileStore.readText('campaign')
       if (!raw) return
 
       const parsed: unknown = JSON.parse(raw)
@@ -297,7 +297,7 @@ export class CampaignRewardsManager {
     }
 
     try {
-      localStorage.setItem(CAMPAIGN_STORAGE_KEY, serializeCampaignStorage(serializableState))
+      profileStore.writeText('campaign', serializeCampaignStorage(serializableState))
     } catch (error) {
       console.warn('[CampaignRewards] Failed to save campaign rewards state:', error)
     }

@@ -1,7 +1,7 @@
 import { GameConfig } from '../config'
 import type { AudioSourceMode } from '../audio/audio-sample-bank'
-import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
-import { StoredSettingsSchema } from '../schemas/settings'
+import { pickDefined } from '../schemas/schema-kit'
+import { profileStore } from '../profile/profile-store'
 
 
 
@@ -29,7 +29,6 @@ export interface GameSettings {
 }
 
 export class SettingsManager {
-  private static STORAGE_KEY = 'pachinball.settings'
   static load(): GameSettings {
     const defaults: GameSettings = {
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -53,7 +52,7 @@ export class SettingsManager {
     }
     
     try {
-      const parsed = parseJsonWith(StoredSettingsSchema, localStorage.getItem(this.STORAGE_KEY))
+      const parsed = profileStore.get('settings')
       if (parsed) {
         const { scanlineIntensity, ...stored } = parsed
         const migratedScanlineWeight = parsed.scanlineWeight ?? scanlineIntensity ?? defaults.scanlineWeight
@@ -77,7 +76,7 @@ export class SettingsManager {
   
   static save(settings: GameSettings): void {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings))
+      profileStore.set('settings', settings)
     } catch {
       // Ignore localStorage errors
     }

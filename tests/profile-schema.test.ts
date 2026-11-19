@@ -24,8 +24,19 @@ describe('parseProfile', () => {
     }
   })
 
+  it('migrates a v1 file to the current version', () => {
+    const result = parseProfile({ version: 1, settings: { muted: true }, bests: { classic: 5 } })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.version).toBe(PROFILE_VERSION)
+  })
+
+  it('reads updatedAt and refuses a negative one', () => {
+    expect(parseProfile({ version: PROFILE_VERSION, settings: {}, updatedAt: 1_700_000_000_000 }).ok).toBe(true)
+    expect(parseProfile({ version: PROFILE_VERSION, settings: {}, updatedAt: -1 }).ok).toBe(false)
+  })
+
   it('reports errors with their paths', () => {
-    const result = parseProfile({ version: 1, settings: {}, keyBindings: { flipperLeft: ['Key Z'] }, bests: { classic: -1 }, drafts: [{ id: 'x' }] })
+    const result = parseProfile({ version: PROFILE_VERSION, settings: {}, keyBindings: { flipperLeft: ['Key Z'] }, bests: { classic: -1 }, drafts: [{ id: 'x' }] })
     expect(result.ok).toBe(false)
     if (!result.ok) {
       const paths = result.errors.map((e) => e.path)

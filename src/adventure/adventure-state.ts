@@ -13,8 +13,9 @@
 import type { TableMapType } from '../config/table-maps'
 import * as v from 'valibot'
 import { apiFetch } from '../config'
-import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { pickDefined } from '../schemas/schema-kit'
 import { StoredAdventureProgressSchema, type RewardType, type UnlockableReward } from '../schemas/storage'
+import { profileStore } from '../profile/profile-store'
 
 export type { RewardType, UnlockableReward } from '../schemas/storage'
 
@@ -29,7 +30,6 @@ export interface AdventureProgress {
   lastPlayed: string
 }
 
-const STORAGE_KEY = 'pachinball_adventure_progress'
 
 /** Reward definitions, by reward id. Saves may hold any of these as unlocked. */
 const FREE_FORM_REWARDS: readonly UnlockableReward[] = [
@@ -144,7 +144,7 @@ export class AdventureState {
 
   private loadProgress(): AdventureProgress {
     try {
-      const parsed = parseJsonWith(StoredAdventureProgressSchema, localStorage.getItem(STORAGE_KEY))
+      const parsed = profileStore.get('adventure')
       // Each field is checked; a missing or mistyped one takes its default.
       if (parsed) return { ...defaultProgress(), ...pickDefined(parsed) }
     } catch (e) {
@@ -157,7 +157,7 @@ export class AdventureState {
   private saveProgress(): void {
     try {
       this.progress.lastPlayed = new Date().toISOString()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.progress))
+      profileStore.writeText('adventure', JSON.stringify(this.progress))
     } catch (e) {
       console.warn('[AdventureState] Failed to save progress:', e)
     }

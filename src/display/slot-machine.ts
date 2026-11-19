@@ -31,6 +31,7 @@ import {
   shouldActivate,
   recordActivation,
 } from './slot-logic'
+import { readLocal, removeLocal, writeLocal } from '../profile/local-store'
 
 /** Display labels for each internal SlotSymbol. */
 const SLOT_SYMBOL_DISPLAY: Record<SlotSymbol, string> = {
@@ -312,9 +313,8 @@ export class SlotMachine {
   }
 
   private loadDebugForceFromStorage(): void {
-    if (typeof localStorage === 'undefined') return
     try {
-      const valid = parseJsonWith(DEBUG_FORCE_SCHEMA, localStorage.getItem(DEBUG_FORCE_KEY))
+      const valid = parseJsonWith(DEBUG_FORCE_SCHEMA, readLocal(DEBUG_FORCE_KEY))
       if (valid && valid.length === 3) {
         this.debugForceResult = valid
       }
@@ -324,12 +324,11 @@ export class SlotMachine {
   }
 
   private saveDebugForceToStorage(): void {
-    if (typeof localStorage === 'undefined') return
     if (!this.debugForceResult) {
-      localStorage.removeItem(DEBUG_FORCE_KEY)
+      removeLocal(DEBUG_FORCE_KEY)
       return
     }
-    localStorage.setItem(DEBUG_FORCE_KEY, JSON.stringify(this.debugForceResult))
+    writeLocal(DEBUG_FORCE_KEY, JSON.stringify(this.debugForceResult))
   }
 
   dispose(): void {

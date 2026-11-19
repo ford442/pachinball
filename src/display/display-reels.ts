@@ -15,6 +15,7 @@ import type { Scene } from '@babylonjs/core/scene'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
+import { readLocal, removeLocal, writeLocal } from '../profile/local-store'
 
 /** Per-frame draw/upload budget (ms) for canvas reel rasterization. */
 export const REELS_RENDER_BUDGET_MS = 1.0
@@ -102,8 +103,7 @@ export class DisplayReelsLayer {
   }
 
   private readTelemetryFlagFromStorage(): boolean {
-    if (typeof localStorage === 'undefined') return false
-    return localStorage.getItem(DEBUG_TELEMETRY_KEY) === 'true'
+    return readLocal(DEBUG_TELEMETRY_KEY) === 'true'
   }
 
   private exposeDebugGlobals(): void {
@@ -119,12 +119,10 @@ export class DisplayReelsLayer {
 
   setTelemetryEnabled(enabled: boolean): void {
     this.telemetryEnabled = enabled
-    if (typeof localStorage !== 'undefined') {
-      if (enabled) {
-        localStorage.setItem(DEBUG_TELEMETRY_KEY, 'true')
-      } else {
-        localStorage.removeItem(DEBUG_TELEMETRY_KEY)
-      }
+    if (enabled) {
+      writeLocal(DEBUG_TELEMETRY_KEY, 'true')
+    } else {
+      removeLocal(DEBUG_TELEMETRY_KEY)
     }
     if (enabled) {
       console.log(

@@ -41,6 +41,7 @@ import { bootError, bootWarn } from './boot-log'
 import { engineDrawCallCount } from './engine/create-engine'
 import type { MachineDescriptor } from './schemas/machine'
 import { resolveGameScreens } from './game/game-screens'
+import { profileStore } from './profile/profile-store'
 
 export interface GameOptions {
   /** The machine to build (resolved by `src/machine/machine-loader.ts`); null or absent for the vanilla table. */
@@ -178,12 +179,7 @@ export class Game
         setCampaignSelected: (selected) => { this.campaignStartSelected = selected },
       })
 
-      try {
-        const v = localStorage.getItem('pachinball.best')
-        if (v) this.bestScore = Math.max(0, parseInt(v, 10) || 0)
-      } catch {
-        // Ignore localStorage errors
-      }
+      this.bestScore = profileStore.getBest()
 
       const settings = SettingsManager.load()
       this.debugHUDEnabledInSettings = settings.enableDebugHUD

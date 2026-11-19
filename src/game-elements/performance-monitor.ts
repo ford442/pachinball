@@ -1,3 +1,4 @@
+import { readLocal } from '../profile/local-store'
 /**
  * Performance Monitor - Lightweight metrics tracking
  * Tracks FPS, frame time, physics step time, and render time.
@@ -118,7 +119,7 @@ export class PerformanceMonitor {
       this.updateAverages()
       this.checkSustainedJank()
 
-      if (this.enabled && window.localStorage.getItem('debug:perf-log') === 'true') {
+      if (this.enabled && readLocal('debug:perf-log') === 'true') {
         console.log(
           `[PERF] FPS: ${this.metrics.fps.toFixed(1)} | Frame: ${this.metrics.frameTimeMs.toFixed(2)}ms | Physics: ${this.metrics.physicsStepMs.toFixed(2)}ms | Render: ${this.metrics.renderTimeMs.toFixed(2)}ms`
         )
@@ -247,7 +248,7 @@ export class PerformanceMonitor {
       this.trackSwitchStartedAt = null
       this.trackSwitchSampleFrames = 0
 
-      if (this.enabled && window.localStorage.getItem('debug:perf-log') === 'true') {
+      if (this.enabled && readLocal('debug:perf-log') === 'true') {
         console.log(
           `[PERF] Track switch ${this.metrics.lastTrackSwitchId ?? 'unknown'}: ${this.metrics.lastTrackSwitchMs.toFixed(1)}ms, peak frame ${this.metrics.peakFrameAfterSwitchMs.toFixed(1)}ms`,
         )
