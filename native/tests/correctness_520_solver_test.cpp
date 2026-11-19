@@ -1,7 +1,8 @@
 /**
  * Regression tests for the #520 §1 correctness rows that move the numbers
- * (rows 1, 3, 4, 6, 7, 11): each one failed before its fix. Their golden
- * traces and replay tapes were re-recorded with the fix that needed them.
+ * (rows 1, 3, 6, 7, 11; row 4 is shape_contacts_test.cpp): each one failed
+ * before its fix. Their golden traces and replay tapes were re-recorded with
+ * the fix that needed them.
  *
  *   npm run test:native
  */

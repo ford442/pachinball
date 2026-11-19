@@ -150,11 +150,12 @@ void PhysicsWorld::appendPinFieldPairs() {
   if (pinFields_.empty()) return;
   for (int i = 0; i < bodies_.denseCount(); ++i) {
     if (!bodies_.isAwake(i)) continue;
-    // Only spheres meet static cylinders (the cylinder dispatch rule), so
-    // only spheres are worth a pin-field pair.
-    if (static_cast<Shape>(bodies_.shape(i)) != Shape::Sphere) continue;
     if (static_cast<BodyType>(bodies_.type(i)) != BodyType::Dynamic) continue;
-    const float r = bodies_.radius(i);
+    // Capsules and boxes meet pins too (#520 row 4): reach by their bounding sphere.
+    const Shape shape = static_cast<Shape>(bodies_.shape(i));
+    const float r = shape == Shape::Box       ? bodies_.boxHalfExtents(i).length()
+                  : shape == Shape::Capsule   ? bodies_.radius(i) + bodies_.capsuleHalfHeight(i)
+                                              : bodies_.radius(i);
     const float px = bodies_.posX(i);
     const float py = bodies_.posY(i);
     const float pz = bodies_.posZ(i);

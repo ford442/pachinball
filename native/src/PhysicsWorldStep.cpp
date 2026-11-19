@@ -238,40 +238,62 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
         const BoxDesc& box = boxes_[static_cast<std::size_t>(pair.bodyB)];
         if (body.getShape() == Shape::Box) {
           resolveBoxBodyVsBox(body, box, boxId);
+        } else if (body.getShape() == Shape::Capsule) {
+          resolveShapeVsStatic(body, pair);
         } else {
           resolveSphereVsBox(body, box, boxId);
         }
       } else if (pair.type == BroadphaseGrid::Pair::BodyCapsule) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!meetsStatics(body)) continue;
+        if (body.getShape() != Shape::Sphere) {
+          resolveShapeVsStatic(body, pair);
+          continue;
+        }
         const int capId = STATIC_CAPSULE_ID_BASE - pair.bodyB;
         resolveSphereVsCapsule(body, capsules_[static_cast<std::size_t>(pair.bodyB)], capId);
       } else if (pair.type == BroadphaseGrid::Pair::BodyCylinder) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!meetsStatics(body)) continue;
-        if (body.getShape() != Shape::Sphere) continue;
+        if (body.getShape() != Shape::Sphere) {
+          resolveShapeVsStatic(body, pair);
+          continue;
+        }
         const int cylId = STATIC_CYLINDER_ID_BASE - pair.bodyB;
         resolveSphereVsCylinder(body, cylinders_[static_cast<std::size_t>(pair.bodyB)], cylId);
       } else if (pair.type == BroadphaseGrid::Pair::BodySphere) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!meetsStatics(body)) continue;
-        if (body.getShape() != Shape::Sphere) continue;
+        if (body.getShape() != Shape::Sphere) {
+          resolveShapeVsStatic(body, pair);
+          continue;
+        }
         const int sphId = STATIC_SPHERE_ID_BASE - pair.bodyB;
         resolveSphereVsStaticSphere(body, spheres_[static_cast<std::size_t>(pair.bodyB)], sphId);
       } else if (pair.type == BroadphaseGrid::Pair::BodyCone) {
         BodyView body = bodies_.view(pair.bodyA);
-        if (!meetsStatics(body) || body.getShape() != Shape::Sphere) continue;
+        if (!meetsStatics(body)) continue;
+        if (body.getShape() != Shape::Sphere) {
+          resolveShapeVsStatic(body, pair);
+          continue;
+        }
         const int coneId = STATIC_CONE_ID_BASE - pair.bodyB;
         resolveSphereVsCone(body, cones_[static_cast<std::size_t>(pair.bodyB)], coneId);
       } else if (pair.type == BroadphaseGrid::Pair::BodyPinField) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!meetsStatics(body)) continue;
-        resolveSphereVsPinField(body, pair.bodyB);
+        if (body.getShape() == Shape::Sphere) {
+          resolveSphereVsPinField(body, pair.bodyB);
+        } else {
+          resolveShapeVsPinField(body, pair.bodyB);
+        }
       } else if (pair.type == BroadphaseGrid::Pair::BodyTriangle) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!meetsStatics(body)) continue;
         if (body.getShape() == Shape::Box) {
           resolveBoxBodyVsTriangle(body, pair.bodyB);
+        } else if (body.getShape() == Shape::Capsule) {
+          resolveShapeVsStatic(body, pair);
         } else {
           resolveSphereVsTriangle(body, pair.bodyB);
         }
@@ -288,6 +310,8 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
         if (!meetsStatics(body)) continue;
         if (body.getShape() == Shape::Capsule) {
           resolveCapsuleVsMover(body, pair.bodyB);
+        } else if (body.getShape() == Shape::Box) {
+          resolveBoxBodyVsMover(body, pair.bodyB);
         } else {
           resolveSphereVsMover(body, pair.bodyB);
         }
@@ -297,10 +321,12 @@ void PhysicsWorld::substep(float dt, int substepIndex) {
     for (int i = 0; i < bodies_.denseCount(); ++i) {
       BodyView body = bodies_.view(i);
       if (!meetsStatics(body)) continue;
-      const bool isBox = body.getShape() == Shape::Box;
+      const Shape shape = body.getShape();
       for (const auto& plane : planes_) {
-        if (isBox) {
+        if (shape == Shape::Box) {
           resolveBoxBodyVsPlane(body, plane);
+        } else if (shape == Shape::Capsule) {
+          resolveCapsuleVsPlane(body, plane);
         } else {
           resolveSphereVsPlane(body, plane);
         }

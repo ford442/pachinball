@@ -28,6 +28,13 @@ struct SurfaceHit {
   float penetration = 0.f;
 };
 
+/** One penetrating probe of a capsule / box body (ShapeContacts.cpp): contact point on the body, normal, depth. */
+struct ProbeHit {
+  Vec3  point = Vec3::zero();
+  Vec3  normal = Vec3::up();
+  float penetration = 0.f;
+};
+
 bool queryPlane(const PlaneDesc& plane, const Vec3& c, float r, SurfaceHit& hit);
 bool queryBox(const BoxDesc& box, const Vec3& c, float r, SurfaceHit& hit);
 bool queryCapsule(const CapsuleDesc& cap, const Vec3& c, float r, SurfaceHit& hit);

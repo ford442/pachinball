@@ -7,6 +7,7 @@
 #include "CollisionFilter.h"
 #include "HandleTable.h"
 #include "BroadphaseGrid.h"
+#include "ContactQueries.h"
 #include "HingeJoint.h"
 #include "KinematicMover.h"
 #include "SensorVolume.h"
@@ -385,6 +386,19 @@ private:
   void resolveBoxBodyVsPlane(BodyView& box, const PlaneDesc& plane);
   void resolveBoxBodyVsBox(BodyView& box, const BoxDesc& other, int otherId);
   void resolveBoxBodyVsTriangle(BodyView& box, int triangleIndex);
+
+  // ---- Capsule / box bodies vs statics (ShapeContacts.cpp, #520 row 4) --
+  /** A capsule or box body against the static of a solid broadphase pair (not plane, mover, pin field, sensor). */
+  void resolveShapeVsStatic(BodyView& body, const BroadphaseGrid::Pair& pair);
+  void resolveCapsuleVsPlane(BodyView& body, const PlaneDesc& plane);
+  void resolveShapeVsPinField(BodyView& body, int fieldIndex);
+  void resolveBoxBodyVsMover(BodyView& box, int moverIndex);
+  /**
+   * Impulse at every probe (against `mover`'s surface velocity when given),
+   * one positional correction along the deepest, one contact event.
+   */
+  void applyProbeHits(BodyView& body, const ProbeHit* hits, int count, float restitution, float friction,
+                      int otherId, int subIndex, const KinematicMover* mover);
 
   void wakeOnContact(BodyView& a, BodyView* b);
 
