@@ -28,7 +28,7 @@ function makeSlot(progression: AdventureTrackProgression, active = false) {
     mapManager: null,
     scene: { activeCamera: {} },
     accessibility: { reducedMotion: false },
-    scoreElement: null,
+    screens: { score: null },
     score: 0,
     adventureCinematicTriggers: null,
     adventureCinematicSystem: null,

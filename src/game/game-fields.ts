@@ -65,8 +65,8 @@ import { CheckpointDebugController } from './checkpoint-debug'
 import { createTimerScope } from '../core/timers'
 import type { FreeMapTestMode } from './free-map-test-mode'
 import { LevelLoader } from './level-loader'
-import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
-import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
+import { ArcadeOverlays } from './arcade-overlays'
+import { NO_SCREENS, type GameScreens } from './game-screens'
 import type { CampaignMapScreen } from '../adventure/ui/campaign-map'
 import type { MachineDescriptor } from '../schemas/machine'
 
@@ -123,57 +123,16 @@ export abstract class GameFields {
   performanceMonitor = new PerformanceMonitor()
   hapticManager: HapticManager | null = null
   soundSystem!: SoundSystem
-  private _leaderboardSystem: LeaderboardSystem | null = null
-  private _nameEntryDialog: NameEntryDialog | null = null
-  private _overlaySystemsReady: Promise<void> | null = null
+  /** Leaderboard + name entry, loaded on first use (`arcade-overlays.ts`). */
+  readonly overlays = new ArcadeOverlays({
+    signal: this.abort.signal,
+    onSpectate: (replayId) => { void this.startSpectateReplay(replayId) },
+  })
   readonly replayRecorder = new ReplayRecorder()
   readonly replayRunner = new ReplayRunner()
 
   abstract startSpectateReplay(replayId: string): Promise<boolean>
 
-  async ensureOverlaySystems(): Promise<void> {
-    if (this._leaderboardSystem && this._nameEntryDialog) return
-    if (!this._overlaySystemsReady) {
-      this._overlaySystemsReady = Promise.all([
-        import('../game-elements/leaderboard-system'),
-        import('../game-elements/name-entry-dialog'),
-      ]).then(([lb, ne]) => {
-        // dispose() ran while the chunks were loading: creating the singletons now would
-        // register resets on a list nothing drains, leaking them into the next Game.
-        // Callers re-check `signal.aborted` before touching the getters.
-        if (this.signal.aborted) return
-        this._leaderboardSystem = lb.getLeaderboardSystem()
-        this._nameEntryDialog = ne.getNameEntryDialog()
-        this.lazySingletonResets.push(lb.resetLeaderboardSystem, ne.resetNameEntryDialog)
-        this._leaderboardSystem.setOnSpectateCallback((replayId) => {
-          void this.startSpectateReplay(replayId)
-        })
-      }).catch((err: unknown) => {
-        this._overlaySystemsReady = null
-        throw err
-      })
-    }
-    await this._overlaySystemsReady
-  }
-
-  get leaderboardSystem(): LeaderboardSystem {
-    if (!this._leaderboardSystem) {
-      throw new Error('LeaderboardSystem not loaded — call ensureOverlaySystems() first')
-    }
-    return this._leaderboardSystem
-  }
-
-  get nameEntryDialog(): NameEntryDialog {
-    if (!this._nameEntryDialog) {
-      throw new Error('NameEntryDialog not loaded — call ensureOverlaySystems() first')
-    }
-    return this._nameEntryDialog
-  }
-
-  /**
-   * `reset*` hooks for module singletons that are loaded lazily (and so cannot be
-   * imported statically by the disposer without defeating code splitting).
-   */
   protected lazySingletonResets: Array<() => void> = []
 
   /** Register a teardown for something a lazily loaded module created (run by dispose). */
@@ -181,16 +140,13 @@ export abstract class GameFields {
     this.lazySingletonResets.push(reset)
   }
 
-  disposeOverlaySystems(): void {
-    this._leaderboardSystem?.stop()
-    // Resets (and so disposes) the leaderboard singleton too, not just this Game's
-    // reference: getLeaderboardSystem() would otherwise hand a disposed instance
-    // to the next Game.
+  /**
+   * Run (and drop) every registered reset. `overlays.dispose()` resets its own singletons, so this
+   * covers the rest: the campaign save, the live UI, the ghost race.
+   */
+  runDisposeHooks(): void {
     for (const reset of this.lazySingletonResets) reset()
     this.lazySingletonResets = []
-    this._leaderboardSystem = null
-    this._nameEntryDialog = null
-    this._overlaySystemsReady = null
   }
 
   // New obstacle builders
@@ -255,13 +211,8 @@ export abstract class GameFields {
   cameraFollowTransition = 0
   readonly cameraFollowTransitionSpeed = GameConfig.visuals.cameraFollowTransitionSpeed
 
-  // UI References
-  scoreElement: HTMLElement | null = null
-  menuOverlay: HTMLElement | null = null
-  startScreen: HTMLElement | null = null
-  gameOverScreen: HTMLElement | null = null
-  pauseOverlay: HTMLElement | null = null
-  finalScoreElement: HTMLElement | null = null
+  /** The static index.html screens (`game-screens.ts`); resolved once by `init()`. */
+  screens: GameScreens = NO_SCREENS
 
   // Quality tier
   qualityTier: QualityTier = QualityTier.MEDIUM

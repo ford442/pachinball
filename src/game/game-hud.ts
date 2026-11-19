@@ -6,8 +6,7 @@ import type { BallManager } from '../game-elements/ball-manager'
 import type { BallStackVisual } from '../game-elements/ball-stack-visual'
 import type { EffectsSystem } from '../effects'
 import type { GameUIManager } from './game-ui'
-import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
-import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
+import type { ArcadeOverlays } from './arcade-overlays'
 import type { TableMapManager } from './game-maps'
 import type { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
 import type { AdventureTrackProgression } from '../adventure/adventure-track-progression'
@@ -26,9 +25,7 @@ export interface HUDHost {
   readonly ballStackVisual: BallStackVisual | null
   readonly effects: EffectsSystem | null
   readonly uiManager: GameUIManager | null
-  ensureOverlaySystems(): Promise<void>
-  readonly leaderboardSystem: LeaderboardSystem
-  readonly nameEntryDialog: NameEntryDialog
+  readonly overlays: Pick<ArcadeOverlays, 'ensure' | 'leaderboard' | 'nameEntry'>
   readonly mapManager: TableMapManager | null
   readonly adventureMode: AdventureMode | null
   readonly adventureGoalTracker: AdventureGoalTracker | null
@@ -203,9 +200,9 @@ export class GameHUD {
       console.log('[Leaderboard] Score too low for submission')
       return
     }
-    await this.host.ensureOverlaySystems()
+    await this.host.overlays.ensure()
     if (this.host.signal.aborted) return
-    const leaderboard = this.host.leaderboardSystem
+    const leaderboard = this.host.overlays.leaderboard
     void leaderboard.flushQueue()
     leaderboard.setContext(board)
     const rank = await leaderboard.checkRank(this.host.score)
@@ -220,12 +217,12 @@ export class GameHUD {
 
   /** Name entry, then the run (replay first, then the score citing it). */
   async submitRun(run: FinishedRun, rank: number | null): Promise<void> {
-    const result = await this.host.nameEntryDialog.show(run.score, rank ?? 0)
+    const result = await this.host.overlays.nameEntry.show(run.score, rank ?? 0)
     if (!result.submitted || !result.name) return
     run.name = result.name
     const replayJson = run.payload ? (await import('../game-elements')).ReplayRecorder.toJSON(run.payload, true) : undefined
     const challengeId = getChallengeSystem().getActiveChallenge()?.id
-    const submitResult = await this.host.leaderboardSystem.submitScore({
+    const submitResult = await this.host.overlays.leaderboard.submitScore({
       name: result.name,
       score: run.score,
       map_id: run.board,
@@ -238,7 +235,7 @@ export class GameHUD {
     if (submitResult.success) {
       run.replayId = submitResult.replay_id
       console.log(`[Leaderboard] Score submitted! Rank #${submitResult.rank}`)
-      this.host.leaderboardSystem.show()
+      this.host.overlays.leaderboard.show()
     } else if (submitResult.queued) {
       this.host.uiManager?.showMessage(submitResult.message ?? 'Score saved; it will be sent when you reconnect', 4000)
     }

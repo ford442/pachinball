@@ -41,6 +41,7 @@ import { GAME_TUNING } from '../config'
 import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../config/table-maps'
 import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
+import type { GameScreens } from './game-screens'
 
 /** Caller-owned out-vector for `getBallPosition`; consumers clone what they keep. */
 const scratchBallPos = new Vector3()
@@ -73,12 +74,7 @@ export interface LifecycleHost {
   qualityTier: QualityTier
   accessibility: import('../game-elements').AccessibilityConfig
 
-  startScreen: HTMLElement | null
-  menuOverlay: HTMLElement | null
-  pauseOverlay: HTMLElement | null
-  gameOverScreen: HTMLElement | null
-  finalScoreElement: HTMLElement | null
-  scoreElement: HTMLElement | null
+  readonly screens: GameScreens
 
   score: number
   bestScore: number
@@ -116,7 +112,8 @@ export class GameLifecycle {
   }
 
   setGameState(newState: GameState): void {
-    const { stateManager, startScreen, menuOverlay, pauseOverlay, gameOverScreen, finalScoreElement } = this.host
+    const { stateManager } = this.host
+    const { startScreen, menuOverlay, pauseOverlay, gameOverScreen, finalScore } = this.host.screens
     stateManager.setState(newState)
 
     if (menuOverlay) menuOverlay.classList.remove('hidden')
@@ -166,7 +163,7 @@ export class GameLifecycle {
           })
         }
         if (gameOverScreen) gameOverScreen.classList.remove('hidden')
-        if (finalScoreElement) finalScoreElement.textContent = this.host.score.toString()
+        if (finalScore) finalScore.textContent = this.host.score.toString()
         this.host.updateHUD()
         if (this.host.replayRecorder?.isRecording()) {
           this.host.replayRecorder.stop(this.host.score)
