@@ -30,7 +30,7 @@ function createGoal(
   }
 }
 
-export interface CampaignGoalTemplate {
+interface CampaignGoalTemplate {
   goldTarget: number
   comboTarget: number
   survivalSeconds: number
@@ -124,23 +124,3 @@ export function getGoalsForTrack(trackId: string): AdventureGoal[] {
   return buildCampaignGoalsForTrack('NEON_HELIX')
 }
 
-export function getCompletionPercentage(goals: AdventureGoal[]): number {
-  if (goals.length === 0) return 0
-  const completed = goals.filter((g) => g.completed).length
-  return (completed / goals.length) * 100
-}
-
-export function getTotalReward(goals: AdventureGoal[]): number {
-  return goals.filter((g) => g.completed).reduce((sum, g) => sum + g.reward, 0)
-}
-
-export function cloneGoals(goals: AdventureGoal[]): AdventureGoal[] {
-  return goals.map((g) => ({ ...g }))
-}
-
-/** @deprecated Legacy exports kept for barrel compatibility. */
-export const NEON_HELIX_GOALS = buildCampaignGoalsForTrack('NEON_HELIX')
-export const CYBER_CORE_GOALS = buildCampaignGoalsForTrack('CYBER_CORE')
-export const QUANTUM_GRID_GOALS = buildCampaignGoalsForTrack('QUANTUM_GRID')
-export const PACHINKO_SPIRE_GOALS = buildCampaignGoalsForTrack('PACHINKO_SPIRE')
-export const SINGULARITY_WELL_GOALS = buildCampaignGoalsForTrack('SINGULARITY_WELL')

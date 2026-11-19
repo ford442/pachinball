@@ -30,9 +30,9 @@ import {
 import type { PinFieldSpec } from '../core/pin-field'
 
 /** Rapier's `ColliderDesc` defaults — keep in sync with Rapier. */
-export const TABLE_DEFAULT_FRICTION = 0.5
-export const TABLE_DEFAULT_RESTITUTION = 0
-export const TABLE_DEFAULT_DENSITY = 1
+const TABLE_DEFAULT_FRICTION = 0.5
+const TABLE_DEFAULT_RESTITUTION = 0
+const TABLE_DEFAULT_DENSITY = 1
 /** Rapier's default group word: member of and interacting with every group. */
 export const TABLE_DEFAULT_COLLISION_GROUPS = 0xffffffff
 
@@ -263,7 +263,7 @@ class WasmQuaternion implements PhysicsRotation {
 }
 
 /** Volume of a collider shape, for density → mass. Null for shapes without a closed form here. */
-export function shapeVolume(shape: TableColliderShape): number | null {
+function shapeVolume(shape: TableColliderShape): number | null {
   switch (shape.kind) {
     case 'box':
       return 8 * shape.halfExtents.x * shape.halfExtents.y * shape.halfExtents.z

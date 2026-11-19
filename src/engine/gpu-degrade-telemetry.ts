@@ -50,19 +50,26 @@ export const GPU_DEGRADE_RING_SIZE = 16
 /** Property name on `window`; exported so tests and Playwright agree on the spelling. */
 export const GPU_DEGRADE_GLOBAL = 'bootstrapGpuDegrades'
 
-type DegradeHost = Record<string, unknown>
+/** Property name on `window`; exported so tests and Playwright agree on the spelling. */
+export const GPU_PROBE_GLOBAL = 'bootstrapGpuProbe'
+
+/** The two globals this module owns (`Window` declares them in vite-env.d.ts). */
+interface DegradeHost {
+  [GPU_DEGRADE_GLOBAL]?: GpuDegradeEntry[]
+  [GPU_PROBE_GLOBAL]?: GpuProbeSnapshot
+}
 
 /** Module-level fallback so the buffer still works in Node (vitest, SSR-ish contexts). */
 const fallbackHost: DegradeHost = {}
 
 function host(): DegradeHost {
-  return typeof window !== 'undefined' ? (window as unknown as DegradeHost) : fallbackHost
+  return typeof window !== 'undefined' ? window : fallbackHost
 }
 
 function buffer(): GpuDegradeEntry[] {
   const h = host()
   const existing = h[GPU_DEGRADE_GLOBAL]
-  if (Array.isArray(existing)) return existing as GpuDegradeEntry[]
+  if (Array.isArray(existing)) return existing
   const created: GpuDegradeEntry[] = []
   h[GPU_DEGRADE_GLOBAL] = created
   return created
@@ -143,13 +150,10 @@ export interface GpuProbeSnapshot {
   postProcessTier: string | null
 }
 
-/** Property name on `window`; exported so tests and Playwright agree on the spelling. */
-export const GPU_PROBE_GLOBAL = 'bootstrapGpuProbe'
-
 function probe(): GpuProbeSnapshot {
   const h = host()
   const existing = h[GPU_PROBE_GLOBAL]
-  if (existing && typeof existing === 'object') return existing as GpuProbeSnapshot
+  if (existing && typeof existing === 'object') return existing
   const created: GpuProbeSnapshot = {
     backend: null,
     featureLevel: null,

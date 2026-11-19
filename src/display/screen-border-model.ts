@@ -9,7 +9,7 @@
  * is the one the simulation is in.
  *
  * Accessibility, in three tiers:
- *   - default: the jackpot script of docs/PLAN.md §8 — a red pulse in the
+ *   - default: the jackpot script of docs/archive/PLAN.md §8 — a red pulse in the
  *     breach, a white/gold strobe in the critical phase, a rainbow wave from the
  *     top down in the meltdown. PLAN names 4 Hz and 10 Hz; every pulse is
  *     clamped to `flashFrequencyMax` (2 Hz by default, the project's seizure
@@ -39,7 +39,7 @@ export interface ScreenBorderAccessibility {
   flashFrequencyMax: number
 }
 
-/** Nominal pulse rates from docs/PLAN.md §8 and the state pulses of `BackboxBorderGlow`. */
+/** Nominal pulse rates from docs/archive/PLAN.md §8 and the state pulses of `BackboxBorderGlow`. */
 export const BORDER_NOMINAL_HZ = { breach: 4, critical: 10, fever: 4, reach: 2 } as const
 
 const WAVE_HZ = 0.5
@@ -74,8 +74,10 @@ function hsvToRgb(h: number, s: number, v: number): Rgb {
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 
 /** Steady colour of each non-jackpot display state. */
+const IDLE_BASE: Rgb = [0.15, 0.15, 0.18]
+
 const STATE_BASE: Record<string, Rgb> = {
-  [DisplayState.IDLE]: [0.15, 0.15, 0.18],
+  [DisplayState.IDLE]: IDLE_BASE,
   [DisplayState.REACH]: hexToRgb(PALETTE.ALERT, INTENSITY.ACTIVE),
   [DisplayState.FEVER]: hexToRgb(PALETTE.GOLD, INTENSITY.ACTIVE),
   [DisplayState.ADVENTURE]: hexToRgb(PALETTE.PURPLE, INTENSITY.ACTIVE),
@@ -146,16 +148,16 @@ export class ScreenBorderModel {
 
     this.contactLevel = Math.max(0, this.contactLevel - (CONTACT_BOOST / CONTACT_DECAY_S) * dt)
     for (let i = 0; i < BORDER_SEGMENT_COUNT; i++) {
-      const shown = this.shown[i]
-      const t = target[i]
+      const shown = this.shown[i]!
+      const t = target[i]!
       shown[0] += (t[0] - shown[0]) * k
       shown[1] += (t[1] - shown[1]) * k
       shown[2] += (t[2] - shown[2]) * k
     }
     const swell = 1 + this.contactLevel
     for (let i = 0; i < BORDER_SEGMENT_COUNT; i++) {
-      const out = this.colors[i]
-      const shown = this.shown[i]
+      const out = this.colors[i]!
+      const shown = this.shown[i]!
       out[0] = shown[0] * swell
       out[1] = shown[1] * swell
       out[2] = shown[2] * swell
@@ -176,14 +178,14 @@ export class ScreenBorderModel {
       } else if (jackpot === 2) {
         out.push(this.strobe(animate))
       } else {
-        out.push(this.wave(BORDER_SEGMENT_ROW[i], animate))
+        out.push(this.wave(BORDER_SEGMENT_ROW[i]!, animate))
       }
     }
     return out
   }
 
   private stateColor(animate: boolean): Rgb {
-    const base = STATE_BASE[this.state] ?? STATE_BASE[DisplayState.IDLE]
+    const base = STATE_BASE[this.state] ?? IDLE_BASE
     if (!animate) return base
     if (this.state === DisplayState.FEVER) return this.pulsed(base, BORDER_NOMINAL_HZ.fever, true, 0.8)
     if (this.state === DisplayState.REACH) return this.pulsed(base, BORDER_NOMINAL_HZ.reach, true, 0.5)

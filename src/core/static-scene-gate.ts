@@ -30,10 +30,10 @@ import type { EventBus } from './event-bus'
 export const FRAMES_BEFORE_REFREEZE = 2
 
 /** More than this many refreezes inside the window means the scene is not actually static... */
-export const THRASH_MAX_REFREEZES = 8
-export const THRASH_WINDOW_MS = 4000
+const THRASH_MAX_REFREEZES = 8
+const THRASH_WINDOW_MS = 4000
 /** ...so stay thawed until it has been quiet this long. */
-export const THRASH_COOLDOWN_MS = 3000
+const THRASH_COOLDOWN_MS = 3000
 
 /** While a target says it cannot freeze yet, ask again this many frames later (not every frame). */
 export const READINESS_RETRY_FRAMES = 8

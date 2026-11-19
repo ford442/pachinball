@@ -135,7 +135,7 @@ function renderBuffer(ctx: AudioContext, duration: number, render: SampleRendere
   return buf
 }
 
-export function createSynthesizedSound(state: SoundSystemSynthState, name: string): void {
+function createSynthesizedSound(state: SoundSystemSynthState, name: string): void {
   const audioContext = state.audioContext
   if (!audioContext) return
 

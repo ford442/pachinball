@@ -38,7 +38,9 @@ function heapF32(engine: HeapWorld): Float32Array | null {
 /** Duck-type packed views the in-process / worker engines already maintain. */
 export function peekPackedPhysicsBuffers(engine: WasmSimEngine | null): PackedViews {
   if (!engine) return { transforms: null, contacts: null, contactCount: 0 }
-  const e = engine as unknown as HeapWorld
+  // The engines keep these members on themselves (not part of the WasmSimEngine contract): one
+  // downcast to the intersection, every member optional and checked at the use.
+  const e = engine as WasmSimEngine & HeapWorld
   let transforms = e.transformView ?? null
   const heap = heapF32(e)
   const world = e.world

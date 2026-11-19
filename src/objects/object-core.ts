@@ -322,10 +322,10 @@ export class GameObjects {
   updateTargets(dt: number): void {
     this.targets.update(
       dt,
-      (i) => { this.targetMeshes[i].isVisible = true },
+      (i) => { this.targetMeshes[i]!.isVisible = true },
       (i) => {
         const pulse = Math.sin(performance.now() * 0.005) * 0.1 + 1
-        this.targetMeshes[i].scaling.set(pulse, pulse, pulse)
+        this.targetMeshes[i]!.scaling.set(pulse, pulse, pulse)
       },
     )
   }
@@ -348,7 +348,7 @@ export class GameObjects {
   deactivateTarget(body: PhysicsBody): boolean {
     const idx = this.targets.deactivate(body)
     if (idx === -1) return false
-    this.targetMeshes[idx].isVisible = false
+    this.targetMeshes[idx]!.isVisible = false
     return true
   }
 
@@ -483,7 +483,7 @@ export class GameObjects {
   removeBinding(rigidBody: PhysicsBody): void {
     const idx = this.bindings.findIndex(b => b.rigidBody === rigidBody)
     if (idx !== -1) {
-      this.bindings[idx].mesh.dispose()
+      this.bindings[idx]!.mesh.dispose()
       this.bindings.splice(idx, 1)
     }
   }

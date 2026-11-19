@@ -94,7 +94,10 @@ export function shouldForceLowQualityMobile(hints: MobileQualityHints = {}): boo
   return false
 }
 
-/** Resolve Babylon EngineOptions for EngineFactory.CreateAsync. */
+/**
+ * Resolve the Babylon engine options `createEngine` passes to `new Engine` / `new WebGPUEngine`
+ * (`EngineFactory.CreateAsync` is not used: see create-engine.ts).
+ */
 export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT): ResolvedEngineOptions {
   const params = new URLSearchParams(ctx.search)
 
@@ -127,7 +130,11 @@ export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT
   return {
     antialias: antialiasOn,
     preserveDrawingBuffer,
-    stencil: true,
+    // No stencil buffer: nothing in src/ draws with stencil state (no HighlightLayer, no stencil
+    // masks; the GlowLayer and every frame-graph pass use depth only), and requesting one makes the
+    // WebGPU swapchain / scene target depth-stencil instead of depth-only. A feature that needs it
+    // (HighlightLayer, a stencil mask) must turn this back on and say why here.
+    stencil: false,
     setMaximumLimits: !maxLimitsOff,
     powerPreference,
     adaptToDeviceRatio: false,

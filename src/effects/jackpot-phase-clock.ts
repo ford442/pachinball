@@ -1,5 +1,5 @@
 /**
- * Jackpot phase clock — the Cyber-Shock sequence (docs/PLAN.md §8) counted in
+ * Jackpot phase clock — the Cyber-Shock sequence (docs/archive/PLAN.md §8) counted in
  * fixed physics steps, never render dt or `setTimeout`.
  *
  * The sequence decides when the display returns to IDLE, and the display state
@@ -19,8 +19,6 @@ import { FIXED_TIMESTEP } from '../core/sim-clock'
 export type JackpotPhase = 0 | 1 | 2 | 3
 
 export const JACKPOT_PHASE_NAMES = ['idle', 'breach', 'critical', 'meltdown'] as const
-export type JackpotPhaseName = (typeof JACKPOT_PHASE_NAMES)[number]
-
 const stepsFor = (seconds: number): number => Math.round(seconds / FIXED_TIMESTEP)
 
 /** Phase boundaries in steps after the sequence starts (2 s / 5 s / 10 s at 60 Hz). */

@@ -62,7 +62,7 @@ async function loadBackboxGlsl(): Promise<void> {
 }
 
 /** WGSL on WebGPU (no glslang / twgsl download), GLSL on WebGL2; each from its own lazy chunk. */
-export function displayShaderSource(isWebGPU: boolean): DisplayShaderSource {
+function displayShaderSource(isWebGPU: boolean): DisplayShaderSource {
   return isWebGPU
     ? { shaderLanguage: ShaderLanguage.WGSL, extraInitializationsAsync: loadBackboxWgsl }
     : { shaderLanguage: ShaderLanguage.GLSL, extraInitializationsAsync: loadBackboxGlsl }
@@ -364,7 +364,7 @@ export class DisplayShaderLayer {
       ctx.font = 'bold 92px monospace'
       ctx.shadowColor = '#ff0'
       ctx.shadowBlur = 16
-      ctx.fillText(digits[idx], tw / 2, th * 0.5)
+      ctx.fillText(digits[idx]!, tw / 2, th * 0.5)
     } else if (phase === 3) {
       ctx.fillStyle = '#ffeb3b'
       ctx.font = 'bold 28px monospace'

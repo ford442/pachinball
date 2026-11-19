@@ -27,7 +27,7 @@ type Entries = v.ObjectEntries
 type ObjectIssueMessage = (issue: v.BaseIssue<unknown>) => string
 
 /** `segments[3].offset.x` from an issue's path items. */
-export function issuePath(issue: v.BaseIssue<unknown>): string {
+function issuePath(issue: v.BaseIssue<unknown>): string {
   let out = ''
   for (const item of issue.path ?? []) {
     const key: unknown = item.key
@@ -38,7 +38,7 @@ export function issuePath(issue: v.BaseIssue<unknown>): string {
 }
 
 /** Flatten Valibot issues into `{ path, message }`, in the order Valibot found them. */
-export function toSchemaIssues(issues: readonly v.BaseIssue<unknown>[]): SchemaIssue[] {
+function toSchemaIssues(issues: readonly v.BaseIssue<unknown>[]): SchemaIssue[] {
   const out: SchemaIssue[] = []
   const seen = new Set<string>()
   for (const issue of issues) {
@@ -107,13 +107,6 @@ function objectMessage(entries: Entries, message: string): ObjectIssueMessage {
 /** An object that rejects keys it does not declare. */
 export function strict<const E extends Entries>(entries: E, message = 'must be an object') {
   const schema = v.strictObject(entries, objectMessage(entries, message))
-  objectMessages.set(schema, message)
-  return schema
-}
-
-/** An object that keeps (and does not check) keys it does not declare. */
-export function loose<const E extends Entries>(entries: E, message = 'must be an object') {
-  const schema = v.looseObject(entries, objectMessage(entries, message))
   objectMessages.set(schema, message)
   return schema
 }
@@ -216,7 +209,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Report `message` at `keys` below the value a `rawCheck` runs on (`[]` = the value itself). */
-export function addIssueAt(addIssue: AddIssue, root: unknown, keys: readonly (string | number)[], message: string): void {
+function addIssueAt(addIssue: AddIssue, root: unknown, keys: readonly (string | number)[], message: string): void {
   if (keys.length === 0) {
     addIssue({ message })
     return

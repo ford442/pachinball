@@ -1,11 +1,11 @@
 /**
- * Context-aware display state machine (PLAN.md §2).
+ * Context-aware display state machine (docs/archive/PLAN.md §2).
  * Manages smooth cross-fades between Idle, Reach, Fever, and Jackpot states.
  */
 
 import { DisplayState } from './display-types'
 
-export type DisplayLightingMode = 'idle' | 'reach' | 'fever' | 'jackpot'
+type DisplayLightingMode = 'idle' | 'reach' | 'fever' | 'jackpot'
 
 export interface DisplayTransitionSnapshot {
   current: DisplayState

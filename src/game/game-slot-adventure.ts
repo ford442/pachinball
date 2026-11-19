@@ -23,6 +23,7 @@ import type { PerformanceMonitor } from '../game-elements/performance-monitor'
 
 import type { TableMapManager } from './game-maps'
 import type { LevelLoader } from './level-loader'
+import type { GameScreens } from './game-screens'
 
 /** Caller-owned out-vector for `getBallPosition`; consumers clone what they keep. */
 const scratchBallPos = new Vector3()
@@ -39,7 +40,7 @@ export interface SlotAdventureHost {
   readonly scene: Scene | null
   readonly accessibility: { reducedMotion: boolean }
 
-  scoreElement: HTMLElement | null
+  readonly screens: Pick<GameScreens, 'score'>
   score: number
 
   // Optional adventure orchestration systems (populated after init)
@@ -157,7 +158,7 @@ export class GameSlotAdventure {
     const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(this.nextAdventureTrack)
     const prevIndex = (currentIndex - 1 + GameSlotAdventure.TRACK_ORDER.length) % GameSlotAdventure.TRACK_ORDER.length
     const newIndex = (prevIndex + direction + GameSlotAdventure.TRACK_ORDER.length) % GameSlotAdventure.TRACK_ORDER.length
-    const newTrack = GameSlotAdventure.TRACK_ORDER[newIndex]
+    const newTrack = GameSlotAdventure.TRACK_ORDER[newIndex]!
     this.nextAdventureTrack = newTrack
     this.endAdventureMode()
     this.startAdventureMode()
@@ -197,8 +198,8 @@ export class GameSlotAdventure {
         this.host.adventureCinematicSystem?.setCamera(this.host.adventureMode!.getFollowCamera())
 
         const trackName = this.getTrackDisplayName(track)
-        if (this.host.scoreElement) {
-          this.host.scoreElement.innerText = `HOLO-DECK: ${trackName}`
+        if (this.host.screens.score) {
+          this.host.screens.score.innerText = `HOLO-DECK: ${trackName}`
         }
 
         this.host.display?.setTrackInfo(trackName)
@@ -206,7 +207,7 @@ export class GameSlotAdventure {
         getTrackThemingSystem()?.applyTheme(track)
 
         const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(track)
-        this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]
+        this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]!
       })
     }
   }
@@ -270,7 +271,7 @@ export class GameSlotAdventure {
     const idx = GameSlotAdventure.TRACK_ORDER.indexOf(trackType)
     if (idx !== -1) {
       this.nextAdventureTrack =
-        GameSlotAdventure.TRACK_ORDER[(idx + 1) % GameSlotAdventure.TRACK_ORDER.length]
+        GameSlotAdventure.TRACK_ORDER[(idx + 1) % GameSlotAdventure.TRACK_ORDER.length]!
     }
 
     const trackName = this.getTrackDisplayName(trackType)
@@ -286,8 +287,8 @@ export class GameSlotAdventure {
     this.host.adventureProgressionSupervisor?.startTrack(trackType, this.host.score)
 
     // Update HUD overlays
-    if (this.host.scoreElement) {
-      this.host.scoreElement.innerText = `HOLO-DECK: ${trackName}`
+    if (this.host.screens.score) {
+      this.host.screens.score.innerText = `HOLO-DECK: ${trackName}`
     }
     this.host.display?.setTrackInfo(trackName)
     this.host.display?.setStoryText(`ENTERING: ${trackName}`)

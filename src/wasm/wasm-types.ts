@@ -69,12 +69,6 @@ export const enum Shape {
 // ---------------------------------------------------------------------------
 
 export {
-  ContactPhase,
-  CONTACT_STRIDE,
-  decodeContactBuffer,
-  encodeContactBuffer,
-  contactStarted,
-  toWasmContactEvent,
   type PhysicsContact,
   type WasmContactBatch,
   type WasmContactEvent,

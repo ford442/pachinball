@@ -12,12 +12,12 @@
 
 import { formatMachineErrors, validateMachine, type MachineDescriptor } from '../schemas/machine'
 
-export const SHARE_HASH_KEY = 'machine'
+const SHARE_HASH_KEY = 'machine'
 export const SHARE_FORMAT_PREFIX = 'v1.'
 /** Budget for the encoded hash value (the whole `#machine=…`). */
 export const SHARE_LINK_MAX_BYTES = 8 * 1024
 /** Largest inflated descriptor a link may carry. */
-export const SHARE_INFLATED_MAX_BYTES = 256 * 1024
+const SHARE_INFLATED_MAX_BYTES = 256 * 1024
 
 function toBase64Url(bytes: Uint8Array): string {
   let binary = ''

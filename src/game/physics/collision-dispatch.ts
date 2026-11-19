@@ -18,13 +18,12 @@
  */
 
 import type { PhysicsBody } from '../../core/physics-api'
-import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { BumperRef } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { ContactPhase, contactPhaseAt, contactPointXAt, contactStarted, type PhysicsContact, type WasmContactBatch, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
-import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
+import { simNowMs } from '../../core/sim-clock'
 import { bootError } from '../../boot-log'
 import { faultMessage } from '../../core/fault-window'
 import type { ScoringBridge } from './scoring-bridge'
@@ -51,7 +50,6 @@ import {
   handleLauncherCollision,
   handleGateCollision,
   handleLaneRolloverCollision,
-  getBallMeshForBody as lookupBallMeshForBody,
   type CollisionHandlerContext,
 } from './collision-handlers'
 import { PairDebounce } from './pair-debounce'
@@ -373,7 +371,7 @@ export class CollisionDispatcher {
    * Hosts without a step counter (unit-test stubs) fall back to wall time.
    */
   private debounceClockMs(): number {
-    return simNowMs(this.host.physics as SimClockPhysics)
+    return simNowMs(this.host.physics)
   }
 
   /**
@@ -595,10 +593,6 @@ export class CollisionDispatcher {
     if (maxForce > CollisionDispatcher.HARD_IMPACT_THRESHOLD) {
       this.host.effects?.addCameraShake(intensity * CollisionDispatcher.SHAKE_FORCE_SCALE)
     }
-  }
-
-  getBallMeshForBody(body: PhysicsBody): Mesh | null {
-    return lookupBallMeshForBody(this.host, body)
   }
 
   private resolveLaneSensor(

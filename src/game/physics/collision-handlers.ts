@@ -4,7 +4,6 @@
  * focused on handle-space conversion and routing.
  */
 
-import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
 
 import type { BumperRef } from '../../game-elements/types'
@@ -51,8 +50,7 @@ export function handleBumperCollision(
   // The bumper's centre comes from its body, not its mesh: the impact normal below feeds the
   // ball's spin (#528 — the headless replay runner has no meshes).
   const bumperPos = vis.body.translation()
-  const ballMesh = getBallMeshForBody(ctx.host, ballBody)
-  if (ballMesh && ctx.host.ballAnimator) {
+  if (ctx.host.ballAnimator) {
     const velocity = ballBody.linvel()
     const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
     const impactIntensity = Math.min(speed / 20, 1.0)
@@ -61,7 +59,7 @@ export function handleBumperCollision(
       ballPos.y - bumperPos.y,
       ballPos.z - bumperPos.z
     )
-    ctx.host.ballAnimator.animateBallImpact(ballMesh, impactNormal, impactIntensity)
+    ctx.host.ballAnimator.impactOnBody(ballBody, impactNormal, impactIntensity)
   }
 
   // Tall bumper hologram sensors sit above the playfield. Do not steal balls that
@@ -157,10 +155,7 @@ export function handleFlipperCollision(
     ballPos.z - flipperPos.z
   )
 
-  const ballMesh = getBallMeshForBody(ctx.host, ballBody)
-  if (ballMesh && ctx.host.ballAnimator) {
-    ctx.host.ballAnimator.animateBallImpact(ballMesh, collisionNormal, impactIntensity * 0.7)
-  }
+  ctx.host.ballAnimator?.impactOnBody(ballBody, collisionNormal, impactIntensity * 0.7)
 
   ctx.host.hapticManager?.flipper()
   ctx.host.effects?.playBeep(880 + Math.random() * 200)
@@ -194,12 +189,11 @@ export function handleTargetCollision(
   ballHandle: number
 ): void {
   if (ctx.ballHandleSet.has(ballHandle)) {
-    const ballMesh = getBallMeshForBody(ctx.host, ballBody)
-    if (ballMesh && ctx.host.ballAnimator) {
+    if (ctx.host.ballAnimator) {
       const velocity = ballBody.linvel()
       const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
       const impactIntensity = Math.min(speed / 20, 1.0)
-      ctx.host.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
+      ctx.host.ballAnimator.simpleImpactOnBody(ballBody, impactIntensity)
       ctx.host.soundSystem.playImpact('peg', speed, {
         position: {
           x: ctx.contactX() ?? ballBody.translation().x,
@@ -339,16 +333,7 @@ export function handleLaneRolloverCollision(
   ctx.host.updateHUD()
 }
 
-export function getBallMeshForBody(host: PhysicsHost, body: PhysicsBody): Mesh | null {
-  const gameObjectBinding = host.gameObjects?.getBindings().find(b => b.rigidBody === body)
-  if (gameObjectBinding) {
-    return gameObjectBinding.mesh as Mesh
-  }
-  const ballManagerBinding = host.ballManager?.getBindings().find(b => b.rigidBody === body)
-  return ballManagerBinding?.mesh as Mesh || null
-}
-
-export function applySpinTransfer(
+function applySpinTransfer(
   ball: PhysicsBody,
   collisionNormal: Vec3Like,
   contactSpeed: number

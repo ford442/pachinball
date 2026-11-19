@@ -114,13 +114,13 @@ export function createVerticalCabinet(scene: Scene, materials: ReturnType<typeof
 
   for (let i = 0; i < legPositions.length; i++) {
     const leg = MeshBuilder.CreateBox(`cabinetLeg${i}`, { width: 1.5, height: 6, depth: 1.5 }, scene)
-    leg.position = legPositions[i]
+    leg.position = legPositions[i]!
     leg.material = trimMat
     meshes.push(leg)
 
     // Foot pad
     const foot = MeshBuilder.CreateCylinder(`cabinetFoot${i}`, { diameter: 2.4, height: 0.5 }, scene)
-    foot.position = legPositions[i].clone()
+    foot.position = legPositions[i]!.clone()
     foot.position.y -= 3
     foot.material = trimMat
     meshes.push(foot)
@@ -348,7 +348,7 @@ export function createVerticalCabinet(scene: Scene, materials: ReturnType<typeof
   // Vertical connecting traces
   const vTracePositions = [-5, 5]
   for (let i = 0; i < vTracePositions.length; i++) {
-    const traceX = vTracePositions[i]
+    const traceX = vTracePositions[i]!
     const trace = MeshBuilder.CreateBox(
       `cabinetCircuitTraceV${i}`,
       { width: 0.15, height: bbHeight - 4, depth: 0.1 },
@@ -406,7 +406,7 @@ export function createVerticalCabinet(scene: Scene, materials: ReturnType<typeof
       { diameter: 0.6 },
       scene
     )
-    bulb.position = cornerPositions[i]
+    bulb.position = cornerPositions[i]!
     bulb.material = bulbMat
     meshes.push(bulb)
   }

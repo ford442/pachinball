@@ -13,12 +13,14 @@ import {
   toWebGPUEngineOptions,
   attachGpuContextLogging,
   createWebGPUEngineWithFallback,
+  getAppliedEngineOptions,
   DEBUG_LOSE_CONTEXT_GLOBAL,
   DEBUG_RESTORE_CONTEXT_GLOBAL,
   type WebGPUEngineFactory,
   type WebGPUEngineLike,
 } from '../src/engine/create-engine'
 import { resolveEngineOptions } from '../src/engine/engine-options'
+import { recentBootLog } from '../src/boot-log'
 import { getGpuDegrades, resetGpuDegradesForTests } from '../src/engine/gpu-degrade-telemetry'
 import { RENDERER_AUTO, RENDERER_WEBGL2, RENDERER_WEBGPU } from '../src/renderers/renderer-selector'
 
@@ -151,6 +153,35 @@ describe('create-engine', () => {
     expect(restored.callbacks).toHaveLength(0)
   })
 
+  it('logs why a WebGPU device was lost (Babylon only logs "[object GPUDeviceLostInfo]")', async () => {
+    const lost = makeObservable()
+    const engine = {
+      onContextLostObservable: lost.observable,
+      _device: { lost: Promise.resolve({ reason: 'unknown', message: 'GPU hung (TDR)' }) },
+    }
+    const detach = attachGpuContextLogging(engine, { featureLevel: 'core', debugHookHost: null })
+
+    lost.fire()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const line = recentBootLog().map((l) => l.text).find((t) => t.includes('WebGPU device lost') && t.includes('TDR'))
+    expect(line).toContain('reason=unknown')
+    expect(line).toContain('GPU hung (TDR)')
+    expect(line).toContain('featureLevel=core')
+    detach()
+  })
+
+  it('has nothing extra to log for a WebGL context loss (no _device)', async () => {
+    const lost = makeObservable()
+    const deviceLostLines = () => recentBootLog().filter((l) => l.text.includes('WebGPU device lost')).length
+    const before = deviceLostLines()
+    attachGpuContextLogging({ onContextLostObservable: lost.observable }, { featureLevel: 'webgl2', debugHookHost: null })
+    lost.fire()
+    await Promise.resolve()
+    expect(deviceLostLines()).toBe(before)
+  })
+
   it('tolerates an engine without context observables', () => {
     expect(() => attachGpuContextLogging({})()).not.toThrow()
   })
@@ -162,6 +193,20 @@ describe('createWebGPUEngineWithFallback', () => {
   function stubEngine(init: () => Promise<void>): WebGPUEngineLike & { dispose: Mock } {
     return { initAsync: init, dispose: vi.fn() }
   }
+
+  it('hands back the options of the attempt that succeeded, compat retry and negotiated features included', async () => {
+    let call = 0
+    const factory = vi.fn(() =>
+      call++ === 0 ? stubEngine(() => Promise.reject(new Error('nope'))) : stubEngine(() => Promise.resolve()),
+    ) as unknown as WebGPUEngineFactory
+    const probe = () => Promise.resolve(new Set(['timestamp-query']))
+
+    const result = await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, probe)
+
+    expect(result?.featureLevel).toBe('compatibility')
+    expect(result?.options.setMaximumLimits).toBe(false)
+    expect(result?.options.deviceDescriptor?.requiredFeatures).toEqual(['timestamp-query'])
+  })
 
   it('returns the core engine when the first attempt succeeds', async () => {
     const engine = stubEngine(() => Promise.resolve())
@@ -398,6 +443,34 @@ describe('WebGL2 fallback gets a fresh canvas (#451)', () => {
 
     expect(errorSpy).toHaveBeenCalledTimes(1)
     expect(String(errorSpy.mock.calls[0][0])).toContain('WebGL2 fallback failed')
+  })
+
+  it('publishes what the engine was built with: the fallback backend, not the one requested', async () => {
+    const { original } = stubCanvas()
+    await createEngine(original, failingFactory())
+    expect(getAppliedEngineOptions()).toMatchObject({ backend: 'webgl2', requiredFeatures: [], stencil: false })
+  })
+
+  it('publishes the compat retry (setMaximumLimits off, featureLevel compatibility) and the negotiated features', async () => {
+    const { original } = stubCanvas()
+    let call = 0
+    const factory = vi.fn(() => {
+      const engine = {
+        initAsync: () => (call++ === 0 ? Promise.reject(new Error('core rejected')) : Promise.resolve()),
+        dispose: vi.fn(),
+        getClassName: () => 'WebGPUEngine',
+        onDisposeObservable: undefined,
+      }
+      return engine
+    }) as unknown as WebGPUEngineFactory
+
+    await createEngine(original, factory)
+
+    expect(getAppliedEngineOptions()).toMatchObject({
+      backend: 'webgpu',
+      featureLevel: 'compatibility',
+      setMaximumLimits: false,
+    })
   })
 
   it('does not touch the canvas when WebGL2 is requested up front', async () => {

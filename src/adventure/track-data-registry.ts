@@ -48,12 +48,6 @@ const REGISTRY = buildRegistry()
 /** Validated data-driven track definitions keyed by AdventureTrackType id. */
 export const DATA_TRACK_REGISTRY: ReadonlyMap<string, TrackDefinition> = REGISTRY.byId
 
-/**
- * Source path each definition was loaded from, keyed by track id. Lets the
- * manifest registry verify a declared `dataPath` actually backs that track.
- */
-export const DATA_TRACK_SOURCE_PATHS: ReadonlyMap<string, string> = REGISTRY.pathById
-
 /** Glob-relative source path for a loaded track definition, if any. */
 export function getDataTrackSourcePath(trackId: string): string | undefined {
   return REGISTRY.pathById.get(trackId)

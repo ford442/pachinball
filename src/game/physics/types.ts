@@ -105,15 +105,15 @@ export interface BallTrapSimState {
   rearmTimer: number
   trapColor: string
 }
-export interface LauncherSimState {
+interface LauncherSimState {
   readonly body: PhysicsBody
   cooldownTimer: number
 }
-export interface MovingGateSimState {
+interface MovingGateSimState {
   readonly body: PhysicsBody
   isOpen: boolean
 }
-export interface SpinnerSimVisual {
+interface SpinnerSimVisual {
   readonly body: PhysicsBody
 }
 
@@ -122,17 +122,17 @@ export interface BallTrapSim {
   catchBall(state: BallTrapSimState, ball: PhysicsBody, ballPosition?: Vec3Like): void
   updateTrap(state: BallTrapSimState, dt: number): unknown
 }
-export interface LauncherSim {
+interface LauncherSim {
   getBodies(): PhysicsBody[]
   triggerLauncher(state: LauncherSimState, force?: number): Vec3Like
   updateLauncher(state: LauncherSimState, dt: number): void
 }
-export interface MovingGateSim {
+interface MovingGateSim {
   getBodies(): PhysicsBody[]
   openGate(state: MovingGateSimState, duration?: number): void
   updateGate(state: MovingGateSimState, dt: number): void
 }
-export interface SpinnerSim {
+interface SpinnerSim {
   getBodies(): PhysicsBody[]
   triggerSpin(visual: SpinnerSimVisual, impactForce: number, ballPosition?: Vec3Like): void
 }
@@ -149,7 +149,8 @@ export interface PhysicsHost {
   readonly display: DisplaySystem | null
   /** The backbox state gameplay gates on (`SimDisplayState`, #528) — never `display.getDisplayState()`. */
   readonly displayState: { get(): import('../../display/display-types').DisplayState }
-  readonly ballAnimator: BallAnimator | null
+  /** Impact squash-and-stretch by body: what contact handlers may ask of the presentation (#528). */
+  readonly ballAnimator: Pick<BallAnimator, 'impactOnBody' | 'simpleImpactOnBody'> | null
   readonly hapticManager: HapticManager | null
   readonly soundSystem: Pick<SoundSystem, 'playImpact' | 'playGoldBallCollect'>
   readonly mapManager: import('../game-maps').TableMapManager | null

@@ -1,7 +1,7 @@
 name: CI
 
 # Gate every PR and every push to main. Nothing landed on main should be red here.
-# Mirrors the local swarm discipline (tsc -b, lint, vitest, build) so regressions are
+# Mirrors the local swarm discipline (typecheck, lint, vitest, build) so regressions are
 # caught before merge rather than after a direct-to-main push.
 on:
   pull_request:
@@ -33,18 +33,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npx tsc -b
+      # `tsc -b` on BOTH compilers: TypeScript 7 (native, the `typecheck` script, ~5x faster) and
+      # TypeScript 6 (what typescript-eslint's type-aware lint still runs on). Each must be clean and
+      # their diagnostics must match; a divergence is printed as a diff. The comparison window runs
+      # until typescript-eslint supports TS 7, then `typescript` moves to 7 and this step becomes
+      # `npm run typecheck` (scripts/typecheck.mjs, .github/dependabot.yml).
+      - name: Typecheck (TS 7 native + TS 6, diagnostics compared)
+        run: npm run typecheck:compare
 
-      # noUncheckedIndexedAccess ratchet (#441): src/core, src/wasm and src/game/physics are held
-      # to the flag; the rest of src/ is reported as backlog.
-      - name: Indexed-access ratchet
-        run: npm run check:index-strict
-
-      # `as unknown as` ratchet (#489): src/adventure is held to zero — track modules build through
-      # TrackBuilderApi; the rest of src/ is reported as backlog.
+      # `as unknown as` ratchet (#489): all of src/ is held to zero (track modules build through
+      # TrackBuilderApi; elsewhere a Window global, a Pick<> of the host, or one downcast).
       - name: Unknown-cast ratchet
         run: npm run check:unknown-casts
+
+      # Dead code: unused files, exports, types and dependencies (knip.jsonc). Zero findings; a
+      # symbol a test or a Playwright page reaches in a way knip cannot follow is tagged `@public`.
+      - name: Dead code (knip)
+        run: npm run check:knip
 
       # The voice AudioWorklet script in public/audio/ is build output of src/audio/pachinko-voice-processor.ts.
       - name: Worklet script drift
@@ -227,7 +232,7 @@ jobs:
         run: rm -rf public/wasm
 
       - name: Build
-        run: npx tsc -b && npx vite build
+        run: npm run typecheck && npx vite build
 
       # The bundle this job boots must carry the WASM just built, not a stale copy (#464 item 1).
       - name: dist/wasm matches public/wasm

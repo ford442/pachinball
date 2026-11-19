@@ -20,7 +20,7 @@ export interface PlayVoiceParams {
  * load time: a root-absolute `/audio/…` 404s under `/pachinball/` and silently
  * left every player on the oscillator fallback (#464 item 5).
  */
-export const WORKLET_PATH = 'audio/pachinko-voice-processor.js'
+const WORKLET_PATH = 'audio/pachinko-voice-processor.js'
 
 let instance: AudioEngine | null = null
 let ownedContextCount = 0

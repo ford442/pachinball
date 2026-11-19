@@ -1,5 +1,5 @@
 /**
- * PLAN.md §1 Layer 1 — Physical / mechanical backbox depth.
+ * docs/archive/PLAN.md §1 Layer 1 — Physical / mechanical backbox depth.
  * Rotating drum cylinders and a static backdrop simulate the "real" props
  * behind the glass LCD screen.
  */
@@ -70,7 +70,7 @@ export class DisplayPhysicalLayer {
     ]
 
     for (let i = 0; i < drumConfigs.length; i++) {
-      const cfg = drumConfigs[i]
+      const cfg = drumConfigs[i]!
       const drum = MeshBuilder.CreateCylinder(
         `physicalDrum${i}`,
         { diameter: cfg.radius * 2, height: 0.35, tessellation: 24 },

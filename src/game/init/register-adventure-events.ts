@@ -184,7 +184,7 @@ export function registerAdventureEvents(game: Game, campaignRewards: CampaignRew
  * no portal UI/display change occurs — `portal:activation-failed` is emitted
  * so the supervisor can re-attempt on the next tick.
  */
-export function handlePortalOpen(game: Game, { trackId, kind, mode }: PachinballEventMap['portal:open']): void {
+function handlePortalOpen(game: Game, { trackId, kind, mode }: PachinballEventMap['portal:open']): void {
   const resolvedTrack = resolvePortalTrack(game, trackId)
   const resolvedMode = mode || (game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
   const shouldUseFlashes = shouldUseFlashEffects(game)

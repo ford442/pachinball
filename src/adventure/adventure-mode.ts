@@ -12,8 +12,8 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { AdventurePortalMixin } from './adventure-portal'
-import { CAMERA_PRESETS } from './camera-presets'
-import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
+import { cameraPresetFor } from './camera-presets'
+import { AdventureTrackType } from './adventure-types'
 import { getTrackStartAnchor } from './portal-routing'
 import { getTrackManifest } from './manifests'
 import { TRACK_CATALOG } from './adventure-track-progression'
@@ -31,8 +31,7 @@ import {
   validateTrackDefinition,
 } from '../schemas/track'
 
-export { AdventureTrackType, CAMERA_PRESETS }
-export type { AdventureCallback, CameraPreset }
+export { AdventureTrackType }
 
 export class AdventureMode extends AdventurePortalMixin {
   /** Current zone/track type for zone transition detection */
@@ -131,7 +130,7 @@ export class AdventureMode extends AdventurePortalMixin {
 
     // Camera update
     if (this.followCamera && ballBodies.length > 0 && this.currentCameraPreset) {
-      this.updateCinematicCamera(ballBodies[0], dt)
+      this.updateCinematicCamera(ballBodies[0]!, dt)
     }
 
     // Animate Obstacles
@@ -266,7 +265,7 @@ export class AdventureMode extends AdventurePortalMixin {
       dataDef?.cameraPresetId ??
       getTrackManifest(trackType)?.cameraPresetId ??
       trackType
-    this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
+    this.currentCameraPreset = cameraPresetFor(presetKey)
     const preset = this.currentCameraPreset
 
     // Create new RPG-style Isometric Camera with preset configuration
@@ -364,7 +363,7 @@ export class AdventureMode extends AdventurePortalMixin {
     // Reset camera transition timer for smooth zone switch
     this.cameraTransitionTime = 0
 
-    this.currentCameraPreset = CAMERA_PRESETS[newZone as string] || CAMERA_PRESETS.DEFAULT
+    this.currentCameraPreset = cameraPresetFor(newZone)
     if (this.currentCameraPreset) {
       this.applyCameraPresetTransition(this.currentCameraPreset, 0.7)
     }
@@ -457,7 +456,7 @@ export class AdventureMode extends AdventurePortalMixin {
     this.cameraTransitionTime = 0
 
     const presetKey = dataDef?.cameraPresetId ?? newZone
-    this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
+    this.currentCameraPreset = cameraPresetFor(presetKey)
 
     // Tear down old track geometry and physics
     this.clearTrack()

@@ -62,8 +62,8 @@ export class RailBuilder {
 
     // Physics colliders for left rail
     for (let i = 0; i < leftRailPath.length - 1; i++) {
-      const start = leftRailPath[i]
-      const end = leftRailPath[i + 1]
+      const start = leftRailPath[i]!
+      const end = leftRailPath[i + 1]!
       const mid = Vector3.Center(start, end)
       const direction = end.subtract(start)
       const length = direction.length()
@@ -104,8 +104,8 @@ export class RailBuilder {
 
     // Physics colliders for right rail
     for (let i = 0; i < rightRailPath.length - 1; i++) {
-      const start = rightRailPath[i]
-      const end = rightRailPath[i + 1]
+      const start = rightRailPath[i]!
+      const end = rightRailPath[i + 1]!
       const mid = Vector3.Center(start, end)
       const direction = end.subtract(start)
       const length = direction.length()
@@ -211,8 +211,8 @@ export class RailBuilder {
 
     // Physics collider for left ramp
     for (let i = 0; i < leftRampPath.length - 1; i++) {
-      const start = leftRampPath[i]
-      const end = leftRampPath[i + 1]
+      const start = leftRampPath[i]!
+      const end = leftRampPath[i + 1]!
       const mid = Vector3.Center(start, end)
       const direction = end.subtract(start)
       const length = direction.length()
@@ -256,8 +256,8 @@ export class RailBuilder {
 
     // Physics collider for right ramp
     for (let i = 0; i < rightRampPath.length - 1; i++) {
-      const start = rightRampPath[i]
-      const end = rightRampPath[i + 1]
+      const start = rightRampPath[i]!
+      const end = rightRampPath[i + 1]!
       const mid = Vector3.Center(start, end)
       const direction = end.subtract(start)
       const length = direction.length()
@@ -331,8 +331,8 @@ export class RailBuilder {
     this.meshes.push(leftDeflector)
 
     for (let i = 0; i < leftDeflectorPath.length - 1; i++) {
-      const start = leftDeflectorPath[i]
-      const end = leftDeflectorPath[i + 1]
+      const start = leftDeflectorPath[i]!
+      const end = leftDeflectorPath[i + 1]!
       const mid = Vector3.Center(start, end)
       const direction = end.subtract(start)
       const length = direction.length()
@@ -370,8 +370,8 @@ export class RailBuilder {
     this.meshes.push(rightDeflector)
 
     for (let i = 0; i < rightDeflectorPath.length - 1; i++) {
-      const start = rightDeflectorPath[i]
-      const end = rightDeflectorPath[i + 1]
+      const start = rightDeflectorPath[i]!
+      const end = rightDeflectorPath[i + 1]!
       const mid = Vector3.Center(start, end)
       const direction = end.subtract(start)
       const length = direction.length()

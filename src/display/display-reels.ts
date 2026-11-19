@@ -248,7 +248,7 @@ export class DisplayReelsLayer {
         position: 0,
         speed: 0,
         stopping: false,
-        targetSymbol: symbols[0],
+        targetSymbol: symbols[0]!,
       })
     }
   }
@@ -315,7 +315,7 @@ export class DisplayReelsLayer {
     const gap = 4
 
     for (let i = 0; i < reelCount; i++) {
-      const reel = this.reels[i]
+      const reel = this.reels[i]!
       const x = i * stripWidth + gap
       const stripW = stripWidth - gap * 2
 
@@ -344,7 +344,7 @@ export class DisplayReelsLayer {
           ((Math.floor(reel.position * symbols.length) + s) % symbols.length +
             symbols.length) %
           symbols.length
-        const symbol = symbols[symbolIndex]
+        const symbol = symbols[symbolIndex]!
         const y = centerY + s * symbolHeight - offset
 
         // Clip to reel strip
@@ -398,7 +398,7 @@ export class DisplayReelsLayer {
 
     for (const reel of this.reels) {
       reel.symbols = getSessionRngFork(RNG_FORK.SLOT).shuffle([...this.reelSymbols])
-      reel.targetSymbol = reel.symbols[0]
+      reel.targetSymbol = reel.symbols[0]!
     }
     this.renderReels()
   }
@@ -445,11 +445,11 @@ export class DisplayReelsLayer {
     const rng = getSessionRngFork(RNG_FORK.SLOT)
 
     for (let i = 0; i < this.reels.length; i++) {
-      const reel = this.reels[i]
+      const reel = this.reels[i]!
       reel.speed = options?.reelSpeeds?.[i] ?? 10 + rng.next() * 5
       reel.stopping = false
       if (options?.targetSymbols?.[i]) {
-        reel.targetSymbol = options.targetSymbols[i]
+        reel.targetSymbol = options.targetSymbols[i]!
       }
     }
   }
@@ -460,7 +460,7 @@ export class DisplayReelsLayer {
    */
   stopReel(index: number, targetSymbol?: string): void {
     if (index < 0 || index >= this.reels.length) return
-    const reel = this.reels[index]
+    const reel = this.reels[index]! // bounds-checked above
     reel.stopping = true
     reel.targetSymbol = targetSymbol ?? this.pickRandomSymbol()
   }
@@ -480,8 +480,8 @@ export class DisplayReelsLayer {
    */
   forceResult(symbols: string[]): void {
     for (let i = 0; i < this.reels.length; i++) {
-      const reel = this.reels[i]
-      reel.targetSymbol = symbols[i] ?? reel.symbols[0]
+      const reel = this.reels[i]!
+      reel.targetSymbol = symbols[i] ?? reel.symbols[0]!
       reel.stopping = false
       reel.speed = 0
       const targetIndex = reel.symbols.indexOf(reel.targetSymbol)
@@ -513,8 +513,8 @@ export class DisplayReelsLayer {
     const defaultStopDelays = [0, 0.5, 1.0]
 
     for (let i = 0; i < this.reels.length; i++) {
-      const reel = this.reels[i]
-      const stopDelay = this.spinOptions.stopDelays?.[i] ?? defaultStopDelays[i]
+      const reel = this.reels[i]!
+      const stopDelay = this.spinOptions.stopDelays?.[i] ?? defaultStopDelays[i]!
 
       // Start stopping reels with staggered delays
       if (autoStop && !reel.stopping && this.stopTimer > spinDuration + stopDelay) {

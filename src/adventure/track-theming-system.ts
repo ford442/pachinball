@@ -4,7 +4,7 @@ import { getMaterialLibrary } from '../materials'
 import type { DisplaySystem } from '../display'
 import type { EffectsSystem } from '../effects'
 import type { BallManager } from '../game-elements/ball-manager'
-import { TRACK_CATALOG, type TrackInfo } from './adventure-track-progression'
+import { TRACK_CATALOG } from './adventure-track-progression'
 import { PALETTE, SURFACES, INTENSITY, emissive, color, QualityTier } from '../game-elements/visual-language'
 import {
   getTrackThemeProfile,
@@ -20,7 +20,7 @@ import type { SpinnerBumperVisual, MovingGateState, GameObjects } from '../objec
  * which would invert the layering. `TableMapManager` satisfies this
  * structurally, so callers keep passing it unchanged.
  */
-export interface TrackThemingMapSource {
+interface TrackThemingMapSource {
   getCurrentConfig(): { baseColor: string; accentColor: string } | undefined
 }
 import type { AdventureMode } from './adventure-mode'
@@ -34,7 +34,7 @@ export interface TrackVisualTheme {
   surfaceTint?: SurfaceTintKey
 }
 
-export const TRACK_THEME_OVERRIDES: Record<string, TrackVisualTheme> = {
+const TRACK_THEME_OVERRIDES: Record<string, TrackVisualTheme> = {
   NEON_HELIX: { primary: 'CYAN', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   PACHINKO_HALL: { primary: 'GOLD', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   CYBER_CORE: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },
@@ -186,7 +186,7 @@ export class TrackThemingSystem {
   }
 
   private getCatalogTheme(trackId: string): TrackVisualTheme | null {
-    const track = TRACK_CATALOG[trackId] as TrackInfo | undefined
+    const track = TRACK_CATALOG[trackId]
     if (!track?.visualTheme) return null
     return {
       primary: track.visualTheme.primary,

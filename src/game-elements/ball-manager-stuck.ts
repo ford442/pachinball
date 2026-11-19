@@ -2,9 +2,9 @@ import type { PhysicsBody } from '../core/physics-api'
 import type { BallManagerHost } from './ball-manager-context'
 
 /** Threshold: if ball moves less than this per second, it may be stuck */
-export const STUCK_VELOCITY_THRESHOLD = 0.1
+const STUCK_VELOCITY_THRESHOLD = 0.1
 /** Time before a stuck ball is auto-reset */
-export const STUCK_TIMEOUT = 5.0
+const STUCK_TIMEOUT = 5.0
 
 /**
  * Detect stuck balls and out-of-bounds balls.

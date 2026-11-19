@@ -156,3 +156,11 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     maxRadius: 35,
   },
 }
+
+/** The always-present fallback preset (`CAMERA_PRESETS.DEFAULT`, which an index signature types as optional). */
+export const DEFAULT_CAMERA_PRESET: CameraPreset = CAMERA_PRESETS.DEFAULT!
+
+/** The preset registered under `key` (a track id or an explicit `cameraPresetId`), else `DEFAULT`. */
+export function cameraPresetFor(key: string): CameraPreset {
+  return CAMERA_PRESETS[key] ?? DEFAULT_CAMERA_PRESET
+}

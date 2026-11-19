@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { chromium } from '@playwright/test'
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

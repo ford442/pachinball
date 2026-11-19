@@ -76,7 +76,7 @@ export function straightRampLayout(
   return { center, endPos }
 }
 
-export interface CurvedRampSegment {
+interface CurvedRampSegment {
   center: GeoVec3
   /** Heading at the segment's midpoint — the yaw its slab is built with. */
   heading: number
@@ -241,7 +241,7 @@ export function triangularPrismLayout(radius: number, height: number): ConvexMes
     faces.push([j, k, k + 3], [j, k + 3, j + 3])
   }
 
-  const at = (i: number): GeoVec3 => ({ x: vertices[i * 3], y: vertices[i * 3 + 1], z: vertices[i * 3 + 2] })
+  const at = (i: number): GeoVec3 => ({ x: vertices[i * 3]!, y: vertices[i * 3 + 1]!, z: vertices[i * 3 + 2]! })
   const indices: number[] = []
   for (const [a, b, c] of faces) {
     const pa = at(a)

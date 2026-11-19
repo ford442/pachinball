@@ -26,7 +26,7 @@ export function shouldSkipColorClear(input: AutoClearInputs): boolean {
 }
 
 /** Fraction of the skybox half-extent the camera must stay within, so an edge case never reaches the faces. */
-export const SKYBOX_INSIDE_MARGIN = 0.9
+const SKYBOX_INSIDE_MARGIN = 0.9
 
 export interface SkyboxLike {
   readonly isVisible: boolean

@@ -133,13 +133,13 @@ export function createClassicCabinet(scene: Scene, materials: ReturnType<typeof 
 
   for (let i = 0; i < legPositions.length; i++) {
     const leg = MeshBuilder.CreateCylinder(`cabinetLeg${i}`, { diameter: 1.8, height: 6 }, scene)
-    leg.position = legPositions[i]
+    leg.position = legPositions[i]!
     leg.material = trimMat
     meshes.push(leg)
 
     // Foot pad
     const foot = MeshBuilder.CreateCylinder(`cabinetFoot${i}`, { diameter: 2.4, height: 0.5 }, scene)
-    foot.position = legPositions[i].clone()
+    foot.position = legPositions[i]!.clone()
     foot.position.y -= 3
     foot.material = trimMat
     meshes.push(foot)

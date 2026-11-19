@@ -27,7 +27,7 @@ const NO_HASH = '0000000000000000'
 export type LiveArcade = Pick<typeof import('./arcade-api'), 'startLiveRun' | 'appendLiveChunk' | 'ArcadeError'>
 
 /** The service said no (a 4xx other than a rate limit): retrying the same request will not help. */
-export function isRefusal(err: unknown, ArcadeError: LiveArcade['ArcadeError']): boolean {
+function isRefusal(err: unknown, ArcadeError: LiveArcade['ArcadeError']): boolean {
   return err instanceof ArcadeError && !err.offline && err.status >= 400 && err.status < 500 && err.status !== 429
 }
 

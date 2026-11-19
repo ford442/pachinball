@@ -140,7 +140,7 @@ export class DecorationFactory {
 
       wire.parent = parent
       wire.material = getSharedMaterial(scene, 'decorWire', {
-        emissive: emissive(colors[i % colors.length], 0.95 + i * 0.08),
+        emissive: emissive(colors[i % colors.length]!, 0.95 + i * 0.08),
         diffuse: Color3.Black(),
         unlit: true,
       })

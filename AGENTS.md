@@ -45,8 +45,8 @@ npm run check:dist-wasm
 # Lint the entire codebase
 npm run lint
 
-# Type-check only
-npx tsc -b
+# Type-check only (TypeScript 7 native compiler, ~5 s; `typecheck:ts6` runs TS 6, `typecheck:compare` both)
+npm run typecheck
 
 # Preview the production build locally
 npm run preview
@@ -98,8 +98,8 @@ supabase db start && supabase test db
 ### Continuous Integration
 
 `.github/workflows/ci.yml` gates every pull request and every push to `main`. The blocking
-`check` job runs, in order: `npm ci` → `npx tsc -b` → `npm run check:index-strict` →
-`npm run lint` → `npx vitest run` → `npx vite build` → `npm run check:bundle`. **PRs must stay
+`check` job runs, in order: `npm ci` → `npm run typecheck:compare` (TS 7 and TS 6, diagnostics diffed) →
+`npm run check:unknown-casts` → `npm run check:worklet` → `npm run lint` → `npx vitest run` → `npx vite build` → `npm run check:bundle`. **PRs must stay
 green** — do not merge red. A second, also **blocking** `e2e` job runs the Playwright physics-degrade
 spec (no `public/wasm`, `playwright.degrade.config.ts`) and the desktop + mobile smoke specs.
 
@@ -530,4 +530,4 @@ Standard commands are in section 2 (`npm run dev`, `npm run build`, `npm run lin
 - **Dev server:** `npm run dev` serves on `http://localhost:5173`. `playwright.config.ts` has a `webServer` block that starts it automatically (and reuses one already running), so port 5173 must be free or already serving this app.
 - **Tests:** `npm test` (Vitest, Node env, Babylon/Rapier mocked) needs no server. `*.spec.ts` files are Playwright E2E and use the dev server Playwright starts.
 - **Renderer for automation:** WebGPU canvases can't be read by Playwright/computer-use tooling. Append `?renderer=webgl2` to the URL (e.g. `http://localhost:5173/?renderer=webgl2`) when driving the game from automation or capturing screenshots.
-- **`npm run build` and WASM:** `build` runs `tsc -b && npm run build:wasm && vite build` (WASM first, so `dist/` ships and precaches the fresh bundle). The `build:wasm` step compiles the C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Without the C++ bundle, gameplay physics degrades to Rapier WASM (bundled via npm, loaded lazily).
+- **`npm run build` and WASM:** `build` runs `npm run typecheck && npm run build:wasm && vite build` (WASM first, so `dist/` ships and precaches the fresh bundle). The `build:wasm` step compiles the C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Without the C++ bundle, gameplay physics degrades to Rapier WASM (bundled via npm, loaded lazily).

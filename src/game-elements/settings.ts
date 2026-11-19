@@ -3,7 +3,7 @@ import type { AudioSourceMode } from '../audio/audio-sample-bank'
 import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
 import { StoredSettingsSchema } from '../schemas/settings'
 
-export type { AudioSourceMode } from '../audio/audio-sample-bank'
+
 
 export interface GameSettings {
   reducedMotion: boolean
@@ -30,7 +30,6 @@ export interface GameSettings {
 
 export class SettingsManager {
   private static STORAGE_KEY = 'pachinball.settings'
-  
   static load(): GameSettings {
     const defaults: GameSettings = {
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,

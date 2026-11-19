@@ -33,7 +33,7 @@ import { CONTACT_STRIDE } from './contact-buffer'
 import { TRANSFORM_STRIDE } from './transform-buffer'
 
 /** ASCII "PBSL" (little-endian). */
-export const SHARED_LAYOUT_MAGIC = 0x4c534250
+const SHARED_LAYOUT_MAGIC = 0x4c534250
 /** Bump whenever a header word or region moves. */
 export const SHARED_LAYOUT_VERSION = 1
 

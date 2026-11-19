@@ -194,7 +194,7 @@ export class CabinetBuilder {
     const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
     const currentIndex = types.indexOf(this.currentPreset.type)
     const nextIndex = (currentIndex + 1) % types.length
-    const nextType = types[nextIndex]
+    const nextType = types[nextIndex]! // modulo keeps nextIndex inside `types`
 
     await this.loadCabinetPreset(nextType, options)
     return nextType

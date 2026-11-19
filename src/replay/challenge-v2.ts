@@ -148,15 +148,15 @@ export async function createRunChallenge(run: {
  */
 export async function challengeFriends(
   run: FinishedRun | null,
-  host: Pick<HUDHost, 'ensureOverlaySystems' | 'leaderboardSystem' | 'uiManager' | 'score'>,
+  host: Pick<HUDHost, 'overlays' | 'uiManager' | 'score'>,
   submitRun: (run: FinishedRun, rank: number | null) => Promise<void>,
 ): Promise<void> {
   let link: string | null = null
   if (run?.payload) {
     if (!run.replayId) {
-      await host.ensureOverlaySystems()
-      host.leaderboardSystem.setContext(run.board)
-      await submitRun(run, await host.leaderboardSystem.checkRank(run.score))
+      await host.overlays.ensure()
+      host.overlays.leaderboard.setContext(run.board)
+      await submitRun(run, await host.overlays.leaderboard.checkRank(run.score))
     }
     if (run.replayId && run.name) {
       link = await createRunChallenge({

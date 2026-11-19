@@ -11,7 +11,7 @@ import {
   type SampleCategory,
 } from './audio-sample-bank'
 
-export interface SampleMetadata {
+interface SampleMetadata {
   id: string
   name: string
   url: string
@@ -307,7 +307,7 @@ function retireCrossfadeChannel(outSource: AudioBufferSourceNode, outGain: GainN
   }, delayMs)
 }
 
-export async function crossfadeToBuffer(
+async function crossfadeToBuffer(
   state: SoundSystemSamplesState,
   targetBuffer: AudioBuffer,
   trackId: string,

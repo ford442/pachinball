@@ -41,7 +41,7 @@ export function buildBioHazardLab(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(centrifugeCenter, centrifugeRadius, centrifugeSpeed, hazardMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platformBody = adventureBodies[adventureBodies.length - 1]
+    const platformBody = adventureBodies[adventureBodies.length - 1]!
     const wallHeight = 0.5
     const wallThickness = 0.5
 

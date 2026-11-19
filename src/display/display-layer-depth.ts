@@ -1,5 +1,5 @@
 /**
- * PLAN.md §1 layer depth constants for the backbox display stack.
+ * docs/archive/PLAN.md §1 layer depth constants for the backbox display stack.
  * Values are local Z offsets within the backbox root.
  *
  * Draw order is NOT decided by these offsets any more: the backbox Frame Graph renders one task per
@@ -30,4 +30,3 @@ export const DISPLAY_LAYER_Z = {
   COMPOSITE: -0.75,
 } as const
 
-export type DisplayLayerId = keyof typeof DISPLAY_LAYER_Z

@@ -72,7 +72,9 @@ export function disposeGame(game: Game): void {
   game.hud = null
   game.mapCabinet = null
 
-  game.disposeOverlaySystems()
+  // The leaderboard stops and its singletons reset first, then every other registered reset.
+  game.overlays.dispose()
+  game.runDisposeHooks()
 
   game.bloomPipeline?.dispose()
   game.bloomPipeline = null

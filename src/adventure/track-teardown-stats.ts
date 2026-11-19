@@ -40,17 +40,3 @@ export function createEmptyTeardownStats(): TrackTeardownStats {
   }
 }
 
-/** Documented teardown contract — every counter must reach zero lingering bodies. */
-export const PLAYFIELD_TEARDOWN_FIELDS: ReadonlyArray<keyof TrackTeardownStats> = [
-  'meshesDisposed',
-  'materialsDisposed',
-  'bodiesRemoved',
-  'conveyorZonesRemoved',
-  'gravityWellsRemoved',
-  'dampingZonesRemoved',
-  'resetSensorsRemoved',
-  'chromaGatesRemoved',
-  'adventureSensorRemoved',
-  'exitPortalsRemoved',
-  'lingeringBodies',
-] as const

@@ -10,7 +10,7 @@
 
 import { bootError, recentBootLog, type BootLogLine } from '../boot-log'
 
-export interface ReportedError {
+interface ReportedError {
   readonly kind: 'error' | 'unhandledrejection'
   readonly message: string
   readonly stack: string | null
@@ -68,7 +68,7 @@ export function installErrorReporter(
 
   const reporter: ErrorReporter = { reports }
   if (typeof window !== 'undefined' && target === window) {
-    ;(window as unknown as { pachinballErrors?: ErrorReporter }).pachinballErrors = reporter
+    window.pachinballErrors = reporter
   }
   return reporter
 }

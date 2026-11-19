@@ -80,7 +80,7 @@ export function buildGravityForge(builder: TrackBuilderApi): void {
     const phases = [0, 1.5, 3.0]
 
     for (let i = 0; i < 3; i++) {
-      const dist = positions[i]
+      const dist = positions[i]!
       const pistonPos = crushStart.add(forward.scale(dist))
       const floorY = pistonPos.y
       const gap = 0.2
@@ -110,7 +110,7 @@ export function buildGravityForge(builder: TrackBuilderApi): void {
         basePos,
         frequency: 2.0,
         amplitude: amp,
-        phase: phases[i]
+        phase: phases[i]!
       })
     }
   }
@@ -135,7 +135,7 @@ export function buildGravityForge(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(castCenter, castRadius, castSpeed, steelMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platformBody = adventureBodies[adventureBodies.length - 1]
+    const platformBody = adventureBodies[adventureBodies.length - 1]!
     const wallHeight = 3.0
     const wallThickness = 0.5
     const gapAngle = (30 * Math.PI) / 180

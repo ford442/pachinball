@@ -57,7 +57,7 @@ export interface ActiveListParticleSystem {
   readonly emitter: unknown
 }
 
-export interface ActiveListCamera {
+interface ActiveListCamera {
   readonly uniqueId: number
   readonly fov?: number
   readonly globalPosition: { readonly x: number; readonly y: number; readonly z: number }
@@ -73,17 +73,28 @@ export interface RenderStateScene {
   readonly particlesEnabled?: boolean
 }
 
-/** What the target drives, including the Babylon internals it needs. */
-export interface ActiveMeshesScene extends RenderStateScene {
+/** The part of what the target drives that Babylon's own `Scene` type declares (a `Scene` is one). */
+export interface ActiveMeshesSceneApi extends RenderStateScene {
   skipFrustumClipping: boolean
   updateTransformMatrix(force?: boolean): void
   unfreezeActiveMeshes(): unknown
+}
+
+/**
+ * The Babylon internals the freeze needs. They are private in `Scene`'s types (or not typed at all),
+ * so a `Scene` is not assignable to a type that names them; `FrozenActiveMeshes` narrows to
+ * `ActiveMeshesScene` once, and `isSupported` checks each is really there.
+ */
+interface ActiveMeshesInternals {
   _evaluateActiveMeshes?: () => void
   _activeMeshes?: { readonly data: Array<{ _freeze?: () => void }>; readonly length: number }
   _activeMeshesFrozen?: boolean
   _activeMeshesFrozenButKeepClipping?: boolean
   _skipEvaluateActiveMeshesCompletely?: boolean
 }
+
+/** What the target drives, including the Babylon internals it needs. */
+export type ActiveMeshesScene = ActiveMeshesSceneApi & ActiveMeshesInternals
 
 /** The camera's position is compared on this grid, so only a real move counts. */
 const CAMERA_POSITION_STEP = 0.25
@@ -109,7 +120,7 @@ export class RenderStateWatcher {
     const { meshes, materials, particleSystems, activeCamera, particlesEnabled } = this.scene
     mix(particlesEnabled === false ? 1 : 0)
     for (let i = 0; i < meshes.length; i++) {
-      const mesh = meshes[i]
+      const mesh = meshes[i]!
       mix(
         (mesh.isEnabled() ? 1 : 0) |
           (mesh.isVisible ? 2 : 0) |
@@ -118,11 +129,11 @@ export class RenderStateWatcher {
       )
     }
     for (let i = 0; i < materials.length; i++) {
-      const material = materials[i]
+      const material = materials[i]!
       mix((material.needAlphaBlending() ? 1 : 0) | (material.needAlphaTesting() ? 2 : 0))
     }
     for (let i = 0; i < particleSystems.length; i++) {
-      const system = particleSystems[i]
+      const system = particleSystems[i]!
       if (!system.isStarted() || !system.emitter) {
         mix(0)
         continue
@@ -154,7 +165,9 @@ export class FrozenActiveMeshes implements StaticSceneTarget {
   private frozen = false
   private _declined = false
 
-  constructor(scene: ActiveMeshesScene) {
+  constructor(scene: ActiveMeshesSceneApi) {
+    // The internals are all optional, so the public shape is already an ActiveMeshesScene; `isSupported`
+    // checks each is really there.
     this.scene = scene
   }
 
@@ -193,7 +206,7 @@ export class FrozenActiveMeshes implements StaticSceneTarget {
     if (!this.isSupported || !this.scene.activeCamera) return true
     const { meshes } = this.scene
     for (let i = 0; i < meshes.length; i++) {
-      const mesh = meshes[i]
+      const mesh = meshes[i]!
       if (!mesh.subMeshes || mesh.subMeshes.length === 0) continue
       if (!mesh.isEnabled() || !mesh.isVisible) continue
       if (!mesh.isReady(true)) return false
@@ -225,7 +238,7 @@ export class FrozenActiveMeshes implements StaticSceneTarget {
     // Skip even the per-mesh computeWorldMatrix: a mesh that moved is still re-posed lazily by
     // getWorldMatrix() when it is drawn.
     scene._skipEvaluateActiveMeshesCompletely = true
-    for (let i = 0; i < active.length; i++) active.data[i]._freeze?.()
+    for (let i = 0; i < active.length; i++) active.data[i]!._freeze?.()
     this.frozen = true
   }
 }

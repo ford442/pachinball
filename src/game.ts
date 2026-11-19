@@ -40,6 +40,7 @@ import { SimFaultPolicy } from './game/sim-fault-policy'
 import { bootError, bootWarn } from './boot-log'
 import { engineDrawCallCount } from './engine/create-engine'
 import type { MachineDescriptor } from './schemas/machine'
+import { resolveGameScreens } from './game/game-screens'
 
 export interface GameOptions {
   /** The machine to build (resolved by `src/machine/machine-loader.ts`); null or absent for the vanilla table. */
@@ -150,13 +151,8 @@ export class Game
     this.applyFogPreference(scene, this.accessibility?.reducedMotion ?? false)
 
     await this.runCheckpointStage('settings_ui', async () => {
-      this.scoreElement = document.getElementById('score')
-      this.menuOverlay = document.getElementById('menu-overlay')
-      this.pauseOverlay = document.getElementById('pause-overlay')
+      this.screens = resolveGameScreens(document)
       this.uiManager = new GameUIManager(scene, this.signal)
-      this.startScreen = document.getElementById('start-screen')
-      this.gameOverScreen = document.getElementById('game-over-screen')
-      this.finalScoreElement = document.getElementById('final-score')
 
       const { signal } = this
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
@@ -276,6 +272,7 @@ export class Game
     await this.systemsInitializer.initAll()
 
     this.ballAnimator = new BallAnimator(scene)
+    this.ballAnimator.setMeshResolver((body) => this.ballManager?.presentation?.meshForBody(body) ?? null)
 
     await this.runCheckpointStage('input_runtime', () => {
       // Provide scene reference so the per-frame plunger animation can find meshes by name
@@ -324,8 +321,8 @@ export class Game
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
         onLevelSelectToggle: () => { void this.toggleCampaignMap() },
         onLeaderboardToggle: () => {
-          void this.ensureOverlaySystems().then(() => {
-            if (!this.signal.aborted) this.leaderboardSystem.toggle()
+          void this.overlays.ensure().then(() => {
+            if (!this.signal.aborted) this.overlays.leaderboard.toggle()
           })
         },
         onDynamicModeToggle: () => this.scenarioManager?.toggleDynamicMode(),

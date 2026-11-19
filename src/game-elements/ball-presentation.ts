@@ -100,6 +100,8 @@ export class BallPresentation implements BallView, TrailEffectsHost {
   /** Recycles the per-ball trail materials: a ball's trail takes one, its removal hands it back (#524). */
   readonly trailMaterialPool: TrailMaterialPool
   readonly ballTrails: Map<PhysicsBody, BallTrailData> = new Map()
+  /** Body → ball mesh, so a contact finds its mesh in O(1) instead of scanning `bindings` (shared with every table object). */
+  private readonly meshByBody = new Map<PhysicsBody, Mesh>()
   private glowTime = 0
   private sim: BallPresentationSim | null = null
 
@@ -117,6 +119,17 @@ export class BallPresentation implements BallView, TrailEffectsHost {
     this.sim = sim
   }
 
+  /** The mesh drawing `body`, or null when it is not one of this view's balls. */
+  meshForBody(body: PhysicsBody): Mesh | null {
+    return this.meshByBody.get(body) ?? null
+  }
+
+  /** Every ball binding goes through here so `meshByBody` and the shared `bindings` list agree. */
+  private bind(mesh: Mesh, body: PhysicsBody): void {
+    this.bindings.push({ mesh, rigidBody: body })
+    this.meshByBody.set(body, mesh)
+  }
+
   // ---- BallView ---------------------------------------------------------
 
   spawned(body: PhysicsBody, spec: BallVisualSpec): void {
@@ -130,7 +143,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
       case 'reset': {
         const b = MeshBuilder.CreateSphere('ball', { diameter: GameConfig.ball.radius * 2, segments: 32 }, this.scene)
         b.material = this.matLib.getEnhancedChromeBallMaterial()
-        this.bindings.push({ mesh: b, rigidBody: body })
+        this.bind(b, body)
         return
       }
       case 'typed': {
@@ -140,7 +153,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
           slice: 1,
         }, this.scene)
         ball.material = this.getMaterialForType(spec.type)
-        this.bindings.push({ mesh: ball, rigidBody: body })
+        this.bind(ball, body)
         this.addTrailForBall(body, spec.trailColor)
         return
       }
@@ -152,7 +165,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
         }, this.scene)
         // Use bright gold material with strong emissive
         goldBall.material = this.matLib.getSolidGoldBallMaterial()
-        this.bindings.push({ mesh: goldBall, rigidBody: body })
+        this.bind(goldBall, body)
         // Bright gold trail
         this.addTrailForBall(body, '#ffdd00')
         return
@@ -167,6 +180,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
       binding.mesh.dispose()
       this.bindings.splice(bIdx, 1)
     }
+    this.meshByBody.delete(body)
     this.disposeTrail(body)
   }
 
@@ -177,6 +191,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
       if (b.rigidBody === keep) continue
       b.mesh.dispose()
       this.bindings.splice(i, 1)
+      this.meshByBody.delete(b.rigidBody)
     }
   }
 
@@ -194,7 +209,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
   }
 
   caught(body: PhysicsBody): void {
-    const mesh = this.bindings.find((b) => b.rigidBody === body)?.mesh as Mesh
+    const mesh = this.meshByBody.get(body)
     if (mesh && mesh.material) {
       // PBRMaterial also has emissiveColor
       (mesh.material as PBRMaterial).emissiveColor = new Color3(1, 0, 0)
@@ -207,7 +222,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
   }
 
   released(body: PhysicsBody): void {
-    const mesh = this.bindings.find((b) => b.rigidBody === body)?.mesh as Mesh
+    const mesh = this.meshByBody.get(body)
     if (mesh && mesh.material) {
       (mesh.material as PBRMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2)
     }
@@ -474,11 +489,11 @@ export class BallPresentation implements BallView, TrailEffectsHost {
   }
 
   addTrailForBall(body: PhysicsBody, colorHex: string): void {
-    const binding = this.bindings.find((b) => b.rigidBody === body)
-    if (!binding) return
+    const mesh = this.meshByBody.get(body)
+    if (!mesh) return
 
     const trailWidth = GameConfig.ball.radius * 0.6
-    const trail = new TrailMesh(`trail_${body.handle}`, binding.mesh, this.scene, trailWidth, 20, true)
+    const trail = new TrailMesh(`trail_${body.handle}`, mesh, this.scene, trailWidth, 20, true)
     const trailMat = this.trailMaterialPool.acquire(Color3.FromHexString(colorHex))
     trail.material = trailMat
 
@@ -530,7 +545,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
     // Position mesh at spawn point immediately so it is visible before physics syncs
     ball.position.set(spawn.x, spawn.y, spawn.z)
 
-    this.bindings.push({ mesh: ball, rigidBody: ballBody })
+    this.bind(ball, ballBody)
 
     // Add subtle point light for ball visibility (disabled in reduced motion mode)
     if (!GameConfig.camera.reducedMotion) {
@@ -562,7 +577,7 @@ export class BallPresentation implements BallView, TrailEffectsHost {
     b.position.set(at.x, at.y, at.z)
     b.material = this.matLib.getExtraBallMaterial()
 
-    this.bindings.push({ mesh: b, rigidBody: body })
+    this.bind(b, body)
 
     // Add velocity-based trail for extra balls
     const trailWidth = GameConfig.ball.radius * 0.4

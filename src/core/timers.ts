@@ -31,7 +31,7 @@ export interface TimerScope {
   dispose(): void
 }
 
-export function createTimerScope(base: TimerBase = globalThis as unknown as TimerBase): TimerScope {
+export function createTimerScope(base: TimerBase = globalThis): TimerScope {
   let nextId = 1
   let closed = false
   // id -> how to cancel it on the underlying platform

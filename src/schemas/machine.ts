@@ -38,18 +38,11 @@ import {
   type SchemaIssue,
 } from './schema-kit'
 
-export const MACHINE_SCHEMA_VERSION = 1
+const MACHINE_SCHEMA_VERSION = 1
 
 export const MACHINE_CABINETS = ['classic', 'neo', 'vertical', 'wide'] as const
-export type MachineCabinet = (typeof MACHINE_CABINETS)[number]
-
-export const MACHINE_SEED_POLICIES = ['vanilla', 'daily', 'weekly', 'free'] as const
-/** How the table's seed is chosen; mirrors `DailyCascadeMode`. */
-export type MachineSeedPolicy = (typeof MACHINE_SEED_POLICIES)[number]
-
-export const STEM_ROLES = ['drums', 'bass', 'lead', 'fever'] as const
-export type StemRole = (typeof STEM_ROLES)[number]
-
+const MACHINE_SEED_POLICIES = ['vanilla', 'daily', 'weekly', 'free'] as const
+const STEM_ROLES = ['drums', 'bass', 'lead', 'fever'] as const
 
 /** Limits the validator enforces; the editor's form renderer reads them too. */
 export const MACHINE_LIMITS = {
@@ -127,8 +120,8 @@ const AudioSchema = strict({
 })
 
 /** A shipped track by id, or a whole track definition inline (editor drafts, share links). */
-export const TrackIdRef = strict({ id: v.picklist(TRACK_IDS, 'unknown track id') })
-export const TrackInlineRef = strict({ inline: TrackDefinitionSchema })
+const TrackIdRef = strict({ id: v.picklist(TRACK_IDS, 'unknown track id') })
+const TrackInlineRef = strict({ inline: TrackDefinitionSchema })
 export const TrackRefSchema = v.lazy((input) => {
   if (isRecord(input) && 'id' in input) return TrackIdRef
   if (isRecord(input) && 'inline' in input) return TrackInlineRef
@@ -183,11 +176,6 @@ export const MachineDescriptorSchema = withCrossCheck(
 
 export type MachineDescriptor = v.InferOutput<typeof MachineDescriptorSchema>
 export type MachineBackbox = MachineDescriptor['backbox']
-export type VideoRef = MachineBackbox['idle']
-export type MachineAudio = MachineDescriptor['audio']
-export type StemRef = MachineAudio['stems'][number]
-export type TrackRef = MachineDescriptor['tracks'][number]
-
 export type MachineIssue = SchemaIssue
 
 export type MachineValidation =
@@ -222,12 +210,7 @@ export function formatMachineErrors(errors: readonly MachineIssue[]): string {
 
 export type { WeeklyMachineDescriptor }
 export {
-  BALL_TYPE_KEYS,
-  RULES_LIMITS,
-  defaultMachineRules,
   rulesAreDefault,
-  type BallTable,
-  type MachineRules,
 } from './rules'
 
 // ---------------------------------------------------------------------------

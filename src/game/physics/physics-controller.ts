@@ -79,8 +79,9 @@ export class GamePhysicsController extends SimPhysicsController {
     this.visualPhase.update()
   }
 
+  /** The mesh drawing `body` (the ball view's O(1) lookup); presentation and tests only, never gameplay. */
   getBallMeshForBody(body: PhysicsBody): Mesh | null {
-    return this.collisionDispatcher.getBallMeshForBody(body)
+    return this.host.ballManager?.presentation?.meshForBody(body) ?? null
   }
 
   /** The primary ball as its mesh is drawn this frame (interpolated), written into `out`; null if there is no ball. */

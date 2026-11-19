@@ -150,7 +150,7 @@ describe('ScreenBorderModel', () => {
     })
   })
 
-  describe('the jackpot script (docs/PLAN.md §8)', () => {
+  describe('the jackpot script (docs/archive/PLAN.md §8)', () => {
     it('breach is a red pulse, critical a white/gold strobe, meltdown a wave down the frame', () => {
       const breach = run(modelIn(DEFAULT, DisplayState.JACKPOT, 1), 1)
       expect(spread(breach)).toBeGreaterThan(0.1) // pulses

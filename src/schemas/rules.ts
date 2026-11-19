@@ -15,10 +15,10 @@ import { GAME_TUNING } from '../config/gameplay'
 import { canonicalJson, inRange, intInRange, isRecord, strict, withCrossCheck } from './schema-kit'
 import { WeeklyMachineSchema } from './weekly'
 
-export const BALL_TYPE_KEYS = [BallType.STANDARD, BallType.GOLD_PLATED, BallType.SOLID_GOLD] as const
+const BALL_TYPE_KEYS = [BallType.STANDARD, BallType.GOLD_PLATED, BallType.SOLID_GOLD] as const
 
 /** Limits the rules schema enforces; the editor's form renderer reads them too. */
-export const RULES_LIMITS = {
+const RULES_LIMITS = {
   points: { max: 1_000_000 },
   feverMultiplier: { min: 1, max: 100 },
   feverThreshold: { min: 1, max: 100 },
@@ -57,8 +57,6 @@ export const MachineRulesSchema = strict({
 })
 
 export type MachineRules = v.InferOutput<typeof MachineRulesSchema>
-export type BallTable = Record<BallType, number>
-
 /** The rules the game plays today (`BALL_SPAWN_CONFIG`, `GAME_TUNING.combo`), as machine rules. */
 export function defaultMachineRules(): MachineRules {
   return {

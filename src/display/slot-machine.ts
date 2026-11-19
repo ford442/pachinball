@@ -223,7 +223,7 @@ export class SlotMachine {
 
       const stopDelay = this.spinPlan.stopDelays[i] ?? 0
       if (this.spinTimer >= spinDuration + stopDelay) {
-        const targetSymbol = this.spinPlan.targetSymbols[i]
+        const targetSymbol = this.spinPlan.targetSymbols[i]!
         this.reelsLayer.stopReel(i, SLOT_SYMBOL_DISPLAY[targetSymbol])
         this.stoppedReels[i] = true
 

@@ -312,7 +312,7 @@ export class HeadlessGaussCannon extends HeadlessFeeder {
   }
 }
 
-export class HeadlessQuantumTunnel extends HeadlessFeeder {
+class HeadlessQuantumTunnel extends HeadlessFeeder {
   constructor(guard: HeadlessGuard, private readonly world: PhysicsWorldSink, private readonly sensor: PhysicsBody) {
     super(guard, 'quantum tunnel')
   }

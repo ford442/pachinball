@@ -59,7 +59,7 @@ import type { ScenePostController, ScenePostOwner } from './scene-post-controlle
 import { hdrTextureType, resolveGpuCapabilities, type HdrFormat } from '../engine/gpu-capabilities'
 
 /** Rendered frames a new canvas size must hold still before the graph is rebuilt for it. */
-export const RESIZE_SETTLE_FRAMES = 8
+const RESIZE_SETTLE_FRAMES = 8
 
 /**
  * How long a new generation may take to compile before the build is given up. The geometry pass

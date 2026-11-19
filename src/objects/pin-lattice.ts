@@ -75,15 +75,15 @@ export function pinLatticeMatrices(
 
 /** Determinant of the upper-left 3x3 of the matrix starting at `offset`. */
 function determinant3(m: Float32Array, offset: number): number {
-  const a = m[offset]
-  const b = m[offset + 1]
-  const c = m[offset + 2]
-  const d = m[offset + 4]
-  const e = m[offset + 5]
-  const f = m[offset + 6]
-  const g = m[offset + 8]
-  const h = m[offset + 9]
-  const i = m[offset + 10]
+  const a = m[offset]!
+  const b = m[offset + 1]!
+  const c = m[offset + 2]!
+  const d = m[offset + 4]!
+  const e = m[offset + 5]!
+  const f = m[offset + 6]!
+  const g = m[offset + 8]!
+  const h = m[offset + 9]!
+  const i = m[offset + 10]!
   return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
 }
 
@@ -114,7 +114,7 @@ export function assertUniformPinLattice(matrices: Float32Array, label: string): 
       )
     }
     for (const slot of ROTATION_SLOTS) {
-      if (Math.abs(matrices[o + slot] - matrices[slot]) > ROTATION_EPSILON) {
+      if (Math.abs(matrices[o + slot]! - matrices[slot]!) > ROTATION_EPSILON) {
         throw new Error(`${label}: a pin lattice takes one rotation per lattice (instance ${i} differs from instance 0)`)
       }
     }

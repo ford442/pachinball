@@ -1,5 +1,5 @@
 /**
- * PLAN.md §1 Layer 3 — Transparent LCD overlay.
+ * docs/archive/PLAN.md §1 Layer 3 — Transparent LCD overlay.
  * Alpha canvas texture for Reach text, idle walk-bys, fever sparks, and jackpot cracks.
  * Renders over the main video layer (Layer 2).
  */
@@ -196,7 +196,7 @@ export class DisplayLcdOverlayLayer {
       this.walkBy = {
         x: -0.12,
         speed: 0.08 + Math.random() * 0.06,
-        emoji: this.walkByEmojis[Math.floor(Math.random() * this.walkByEmojis.length)],
+        emoji: this.walkByEmojis[Math.floor(Math.random() * this.walkByEmojis.length)]!,
         active: true,
       }
     }

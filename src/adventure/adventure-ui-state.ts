@@ -263,7 +263,7 @@ export class AdventureUIStateManager {
     const panelHeight = Math.min(450, screenHeight * 0.6)
 
     for (let i = 0; i < this.state.goalElements.length; i++) {
-      const element = this.state.goalElements[i]
+      const element = this.state.goalElements[i]!
       element.displayX = screenWidth - panelWidth - 20
       element.displayY = 20 + (i * (panelHeight / Math.max(this.state.goalElements.length, 1)))
       element.displayWidth = panelWidth - 40

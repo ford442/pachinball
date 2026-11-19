@@ -195,7 +195,7 @@ export const CreateChallengeResponse = v.object({ challenge_id: str() })
 export const PutSaveResponse = v.object({ updated_at: str() })
 
 /** What a finished run submits (OpenAPI `ScoreSubmission`); also what the offline queue stores. */
-export const ScoreSubmissionSchema = v.object({
+const ScoreSubmissionSchema = v.object({
   name: str(),
   score: n(),
   map_id: str(),
@@ -213,7 +213,7 @@ export const ScoreSubmissionSchema = v.object({
 export type ScoreSubmission = v.InferOutput<typeof ScoreSubmissionSchema>
 
 /** A run waiting for the network in `localStorage`. */
-export const QueuedRunSchema = v.object({
+const QueuedRunSchema = v.object({
   score: ScoreSubmissionSchema,
   /** Dropped once uploaded: `score.replay_id` then cites it. */
   replay: v.optional(str()),

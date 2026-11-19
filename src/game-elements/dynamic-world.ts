@@ -62,7 +62,7 @@ export interface DynamicWorldConfig {
   cameraSmoothing: number
 }
 
-export const DEFAULT_DYNAMIC_CONFIG: DynamicWorldConfig = {
+const DEFAULT_DYNAMIC_CONFIG: DynamicWorldConfig = {
   mode: 'fixed',
   totalLength: 200,
   zones: [],

@@ -53,7 +53,7 @@ function targetKey(cmd: Command): string {
 }
 
 /** A copy that survives the original's buffers being transferred to the worker. */
-export function cloneCommandForLog(cmd: Command): Command {
+function cloneCommandForLog(cmd: Command): Command {
   switch (cmd.type) {
     case 'addStaticTriangleMesh':
       return { ...cmd, vertices: cmd.vertices.slice(), indices: cmd.indices.slice() }

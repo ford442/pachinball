@@ -41,7 +41,7 @@ export function buildMagneticStorage(builder: TrackBuilderApi): void {
 
   // 3. Bad Sectors
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platterBody = adventureBodies[adventureBodies.length - 1]
+    const platterBody = adventureBodies[adventureBodies.length - 1]!
     const binding = kinematicBindings.find(b => b.body === platterBody)
 
     const positions = [

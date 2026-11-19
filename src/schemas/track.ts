@@ -32,12 +32,12 @@ import {
 export const TRACK_SCHEMA_VERSION = 1 as const
 
 /** Ceiling on a lattice's slot count — the occupancy mask and the visuals scale with it. */
-export const PIN_LATTICE_MAX_SLOTS = 4096
+const PIN_LATTICE_MAX_SLOTS = 4096
 /** Ceiling on a force field's acceleration — past this a field is a launcher, not a toy. */
-export const FORCE_FIELD_MAX_ACCEL = 60
+const FORCE_FIELD_MAX_ACCEL = 60
 
-export const TRACK_MATERIAL_ROLES = ['structure', 'accent', 'energy', 'glow'] as const satisfies readonly TrackMaterialRole[]
-export const GATE_COLORS = ['RED', 'GREEN', 'BLUE'] as const
+const TRACK_MATERIAL_ROLES = ['structure', 'accent', 'energy', 'glow'] as const satisfies readonly TrackMaterialRole[]
+const GATE_COLORS = ['RED', 'GREEN', 'BLUE'] as const
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/
 const TRACK_IDS: ReadonlySet<string> = new Set(Object.values(AdventureTrackType))
 const ROLE_SET: ReadonlySet<string> = new Set(TRACK_MATERIAL_ROLES)
@@ -67,8 +67,6 @@ const nonNegative = () => num('must be a finite number >= 0', { min: 0 })
 const opt = v.optional
 
 const Vec3 = strict({ x: finite(), y: finite(), z: finite() }, 'expected { x, y, z } object')
-export type Vec3Json = v.InferOutput<typeof Vec3>
-
 /** A `Vec3` whose every axis is > 0 (a size). */
 const PositiveVec3 = strict({ x: gt0(), y: gt0(), z: gt0() }, 'expected { x, y, z } object')
 
@@ -367,26 +365,26 @@ const SEGMENT_SCHEMAS = [
   AxisPullSegment,
 ] as const
 
-export const TRACK_SEGMENT_TYPES = SEGMENT_SCHEMAS.map((s) => s.entries.type.literal)
+const TRACK_SEGMENT_TYPES = SEGMENT_SCHEMAS.map((s) => s.entries.type.literal)
 
 const TrackSegmentSchema = v.variant('type', SEGMENT_SCHEMAS, (issue) =>
   issue.path ? `type must be one of: ${TRACK_SEGMENT_TYPES.join(', ')}` : 'segment must be an object',
 )
 
-export type StraightSegment = v.InferOutput<typeof StraightSegment>
-export type CurveSegment = v.InferOutput<typeof CurveSegment>
-export type GapSegment = v.InferOutput<typeof GapSegment>
-export type TurnSegment = v.InferOutput<typeof TurnSegment>
-export type BucketSegment = v.InferOutput<typeof BucketSegment>
-export type PortalSegment = v.InferOutput<typeof PortalSegment>
-export type SpinnerSegment = v.InferOutput<typeof SpinnerSegment>
-export type GateSegment = v.InferOutput<typeof GateSegment>
-export type CylinderSegment = v.InferOutput<typeof CylinderSegment>
-export type PinFieldSegment = v.InferOutput<typeof PinFieldSegment>
-export type MillSegment = v.InferOutput<typeof MillSegment>
-export type ResetBasinSegment = v.InferOutput<typeof ResetBasinSegment>
+type StraightSegment = v.InferOutput<typeof StraightSegment>
+type CurveSegment = v.InferOutput<typeof CurveSegment>
+type GapSegment = v.InferOutput<typeof GapSegment>
+type TurnSegment = v.InferOutput<typeof TurnSegment>
+type BucketSegment = v.InferOutput<typeof BucketSegment>
+type PortalSegment = v.InferOutput<typeof PortalSegment>
+type SpinnerSegment = v.InferOutput<typeof SpinnerSegment>
+type GateSegment = v.InferOutput<typeof GateSegment>
+type CylinderSegment = v.InferOutput<typeof CylinderSegment>
+type PinFieldSegment = v.InferOutput<typeof PinFieldSegment>
+type MillSegment = v.InferOutput<typeof MillSegment>
+type ResetBasinSegment = v.InferOutput<typeof ResetBasinSegment>
 export type PinLatticeSegment = v.InferOutput<typeof PinLatticeSegment>
-export type ForceFieldSegment = v.InferOutput<typeof ForceFieldSegment>
+type ForceFieldSegment = v.InferOutput<typeof ForceFieldSegment>
 export type ConeSegment = v.InferOutput<typeof ConeSegment>
 export type AxisPullSegment = v.InferOutput<typeof AxisPullSegment>
 export type TrackSegment = v.InferOutput<typeof TrackSegmentSchema>

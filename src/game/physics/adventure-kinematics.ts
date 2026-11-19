@@ -15,9 +15,7 @@ import type { DescQuat, DescVec3 } from '../../adventure/track-collider-descript
 import { quatMul } from '../../core/pose-math'
 
 export {
-  IDENTITY_POSE_ROTATION,
   composePose,
-  quatMul,
   quatRotateVec,
   sphereTouchesVolume,
   type Pose,

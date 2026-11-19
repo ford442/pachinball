@@ -32,7 +32,7 @@ export interface AdventureProgress {
 const STORAGE_KEY = 'pachinball_adventure_progress'
 
 /** Reward definitions, by reward id. Saves may hold any of these as unlocked. */
-export const FREE_FORM_REWARDS: readonly UnlockableReward[] = [
+const FREE_FORM_REWARDS: readonly UnlockableReward[] = [
   { id: 'neon-trail', name: 'Neon Trail', type: 'ball-trail', unlockedAt: '', equipped: false },
   { id: 'cyber-pattern', name: 'Cyber Pattern', type: 'neon-pattern', unlockedAt: '', equipped: false },
   { id: 'quantum-skin', name: 'Quantum Skin', type: 'skin', unlockedAt: '', equipped: false },

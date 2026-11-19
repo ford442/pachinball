@@ -11,7 +11,7 @@ import type { VisualThemeColor } from '../../game-elements/visual-language'
 import type { TrackBuilderApi } from '../track-builder-api'
 
 /** Zone theming / story metadata (derived into ZONE_REGISTRY). */
-export interface TrackManifestZone {
+interface TrackManifestZone {
   name: string
   storyText: string
   videoUrl?: string
@@ -24,7 +24,7 @@ export interface TrackManifestZone {
 }
 
 /** Campaign catalog metadata (derived into TRACK_CATALOG when present). */
-export interface TrackManifestCatalog {
+interface TrackManifestCatalog {
   description: string
   difficulty: 'easy' | 'medium' | 'hard' | 'expert'
   modeType: TrackModeType
@@ -40,13 +40,11 @@ export interface TrackManifestCatalog {
   }
 }
 
-export type TrackBuildKind = 'ts' | 'json'
-
 /** TS track builder function signature: builds only through the public API. */
 export type TrackBuilderFn = (api: TrackBuilderApi) => void
 
 /** Lazy loader for TS track builders (code-split per track). */
-export type TrackBuilderLoader = () => Promise<TrackBuilderFn>
+type TrackBuilderLoader = () => Promise<TrackBuilderFn>
 
 /** Fields shared by both build kinds. */
 interface TrackManifestBase {
@@ -63,13 +61,13 @@ interface TrackManifestBase {
 }
 
 /** Hand-tuned TS track — geometry emitted by a lazily loaded builder function. */
-export interface TsTrackManifest extends TrackManifestBase {
+interface TsTrackManifest extends TrackManifestBase {
   buildKind: 'ts'
   loadBuilder: TrackBuilderLoader
 }
 
 /** Declarative track — geometry compiled from a JSON definition. */
-export interface JsonTrackManifest extends TrackManifestBase {
+interface JsonTrackManifest extends TrackManifestBase {
   buildKind: 'json'
   /**
    * Glob-relative path of the backing JSON, as keyed by `track-data-registry`

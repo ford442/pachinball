@@ -13,7 +13,7 @@ import {
 } from '../cascade/daily-cascade-state'
 import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 
-export type StartMode = DailyCascadeMode | 'campaign'
+type StartMode = DailyCascadeMode | 'campaign'
 
 export interface DailyCascadeMenuOptions {
   getCampaignStageName?: () => string

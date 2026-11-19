@@ -40,13 +40,3 @@ export interface GameObjectRefs {
   pins: AbstractMesh[]
 }
 
-export interface FlipperVisuals {
-  root: TransformNode
-  blade: Mesh
-  tip: Mesh
-  bevelLeft: Mesh
-  bevelRight: Mesh
-  pivotCyl: Mesh
-  pivotCap: Mesh
-  pivotRing: Mesh
-}
