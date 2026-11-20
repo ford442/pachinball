@@ -33,11 +33,14 @@ const errorsOf = (raw: unknown): string[] => {
 }
 
 describe('shipped machines (public/machines)', () => {
-  it('are exactly the four cabinets, one machine each, listed in index.json', () => {
-    expect(machineFiles.map((f) => f.replace(/\.json$/, '')).sort()).toEqual([...SHIPPED_MACHINE_IDS].sort())
-    expect(SHIPPED_MACHINE_IDS.map((id) => shipped(id).cabinet).sort()).toEqual([...MACHINE_CABINETS].sort())
+  it('are the index.json entries: every cabinet has a machine, and each entry repeats its file', () => {
     const index = readJson(join(machineDir, 'index.json')) as { machines: Array<{ id: string; name: string; cabinet: string }> }
-    expect(index.machines).toEqual(SHIPPED_MACHINE_IDS.map((id) => ({ id, name: shipped(id).name, cabinet: shipped(id).cabinet })))
+    const ids = index.machines.map((m) => m.id)
+    expect(machineFiles.map((f) => f.replace(/\.json$/, '')).sort()).toEqual([...ids].sort())
+    // The per-cabinet machines (their ids are the cabinet names) stay one per cabinet.
+    expect([...SHIPPED_MACHINE_IDS].sort()).toEqual([...MACHINE_CABINETS].sort())
+    for (const id of SHIPPED_MACHINE_IDS) expect(shipped(id).cabinet).toBe(id)
+    expect(index.machines).toEqual(ids.map((id) => ({ id, name: shipped(id).name, cabinet: shipped(id).cabinet })))
   })
 
   for (const file of machineFiles) {

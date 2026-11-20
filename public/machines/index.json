@@ -20,6 +20,11 @@
       "id": "wide",
       "name": "Deluxe Wide",
       "cabinet": "wide"
+    },
+    {
+      "id": "weeks-on-fire",
+      "name": "Weeks on Fire (placeholder clips)",
+      "cabinet": "classic"
     }
   ]
 }

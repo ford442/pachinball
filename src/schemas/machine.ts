@@ -50,6 +50,8 @@ export const MACHINE_LIMITS = {
   nameMaxLength: 64,
   tracks: { min: 1, max: 8 },
   stems: { max: 8 },
+  /** Entries in `public/machines/index.json`. */
+  indexMax: 64,
   bpm: { min: 40, max: 240 },
   shaderParams: { maxCount: 16, keyPattern: /^[a-zA-Z][a-zA-Z0-9]{0,31}$/, min: -1000, max: 1000 },
 } as const
@@ -172,6 +174,32 @@ export const MachineDescriptorSchema = withCrossCheck(
       issue(['rules', 'cascade', 'weekly'], 'a weekly machine carries its seeded table')
     }
   },
+)
+
+/**
+ * `public/machines/index.json`: the machine picker's list. Each entry names a
+ * shipped `public/machines/<id>.json` and repeats its `name` and `cabinet`
+ * (tests/machine-data-audit.test.ts checks they agree). Unknown keys rejected.
+ */
+export const MachineIndexSchema = strict(
+  {
+    $schema: v.optional(v.string('must be a string')),
+    schemaVersion: v.literal(MACHINE_SCHEMA_VERSION, `must be ${MACHINE_SCHEMA_VERSION}`),
+    machines: v.pipe(
+      v.array(
+        strict({
+          id: safePath(MACHINE_LIMITS.idPattern, 'must be lower-case letters, digits and dashes (≤ 48)'),
+          name: v.pipe(v.string('must be a string'), v.minLength(1, 'must not be empty'), v.maxLength(MACHINE_LIMITS.nameMaxLength, `at most ${MACHINE_LIMITS.nameMaxLength} characters`)),
+          cabinet: enumOf(MACHINE_CABINETS),
+        }),
+        'must be an array',
+      ),
+      v.minLength(1, 'needs at least one machine'),
+      v.maxLength(MACHINE_LIMITS.indexMax, `at most ${MACHINE_LIMITS.indexMax} machines`),
+      v.check((list) => new Set(list.map((m) => m.id)).size === list.length, 'machine ids must be unique'),
+    ),
+  },
+  'machine index must be an object',
 )
 
 export type MachineDescriptor = v.InferOutput<typeof MachineDescriptorSchema>
