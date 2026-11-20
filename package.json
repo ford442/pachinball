@@ -56,7 +56,7 @@
   "dependencies": {
     "@babylonjs/core": "^9.36.0",
     "@babylonjs/loaders": "^9.36.0",
-    "@dimforge/rapier3d-compat": "^0.15.0",
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "idb-keyval": "^6.2.2",
     "valibot": "^1.5.0"
   },
