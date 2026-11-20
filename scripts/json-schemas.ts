@@ -27,7 +27,7 @@ import {
   TournamentSchema,
   TournamentStandingSchema,
 } from '../src/schemas/arcade'
-import { MachineDescriptorSchema, TrackRefSchema } from '../src/schemas/machine'
+import { MachineDescriptorSchema, MachineIndexSchema, TrackRefSchema } from '../src/schemas/machine'
 import { ProfileSchema } from '../src/schemas/profile'
 import { MachineRulesSchema } from '../src/schemas/rules'
 import { TrackDefinitionSchema } from '../src/schemas/track'
@@ -63,6 +63,11 @@ export function buildJsonSchemas(): Record<string, JsonObject> {
       'A machine: cabinet, tracks, backbox, audio, rules, seed policy (public/machines/*.json, .machine.json exports; docs/MACHINES.md).',
       MachineDescriptorSchema,
       machineDefs,
+    ),
+    'machine-index.json': document(
+      'Pachinball machine index',
+      'The shipped machines list (public/machines/index.json; docs/MACHINES.md).',
+      MachineIndexSchema,
     ),
     'rules.json': document(
       'Pachinball machine rules',

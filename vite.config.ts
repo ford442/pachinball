@@ -361,6 +361,9 @@ export default defineConfig(({ mode, command }) => ({
         globPatterns: [
           // glb: cabinet / insert models (~40 KB) — the default classic cabinet loads one at boot
           '**/*.{js,css,html,wasm,glb,svg,png,ogg,env,webp,ico,txt,webmanifest}',
+          // Machine descriptors + their JSON Schemas, so `?machine=<id>` loads offline (#518)
+          'machines/**/*.json',
+          'schemas/**/*.json',
         ],
         // Backbox clips (state loops, tracks/, incidents/) stream on demand; their .webp
         // posters are not precached either — only the state posters (attract.png, …) are.
