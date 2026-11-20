@@ -1,3 +1,4 @@
+import { readLocal, removeLocal, writeLocal } from '../profile/local-store'
 /**
  * Renderer selection for WebGPU vs WebGL2 fallback.
  *
@@ -52,13 +53,10 @@ export function getRendererPreference(): RendererPreference {
     if (normalized === RENDERER_WEBGL2 || normalized === RENDERER_WEBGPU) return normalized
   }
 
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === RENDERER_WEBGL2 || stored === RENDERER_WEBGPU || stored === RENDERER_AUTO) {
-      return stored
-    }
-  } catch {
-    // Private browsing / storage disabled — ignore.
+  // Private browsing / storage disabled reads as no preference.
+  const stored = readLocal(STORAGE_KEY)
+  if (stored === RENDERER_WEBGL2 || stored === RENDERER_WEBGPU || stored === RENDERER_AUTO) {
+    return stored
   }
 
   return RENDERER_AUTO
@@ -71,14 +69,11 @@ export function getRendererPreference(): RendererPreference {
  * player straight back into the renderer they just left (#450).
  */
 export function setRendererPreference(renderer: RendererPreference): void {
-  try {
-    if (renderer === RENDERER_AUTO) {
-      localStorage.removeItem(STORAGE_KEY)
-    } else {
-      localStorage.setItem(STORAGE_KEY, renderer)
-    }
-  } catch {
-    // Private browsing / storage disabled — ignore.
+  // Private browsing / storage disabled: the choice lasts for this page only.
+  if (renderer === RENDERER_AUTO) {
+    removeLocal(STORAGE_KEY)
+  } else {
+    writeLocal(STORAGE_KEY, renderer)
   }
 }
 

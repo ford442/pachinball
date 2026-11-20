@@ -20,6 +20,7 @@ import type { LiveBroadcast, LiveArcade, LiveBroadcastStatus } from '../arcade/l
 import type { LiveSpectator, LiveSpectateArcade, LiveSpectateHost } from '../replay/live-spectate'
 import type { LiveRun } from '../arcade/arcade-api'
 import type { StepInputActions } from './physics/physics-controller'
+import { readLocal, removeLocal, writeLocal } from '../profile/local-store'
 
 const PREF_KEY = 'pachinball:live-broadcast'
 const TAG_KEY = 'pachinball:live-tag'
@@ -60,25 +61,14 @@ async function liveArcade(): Promise<LiveArcadeApi | null> {
   return arcadeEnabled() ? import('../arcade/arcade-api') : null
 }
 
-function readStore(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
+// Storage disabled: the setting lasts for this page only.
 function writeStore(key: string, value: string | null): void {
-  try {
-    if (value === null) localStorage.removeItem(key)
-    else localStorage.setItem(key, value)
-  } catch {
-    // Storage disabled: the setting lasts for this page only.
-  }
+  if (value === null) removeLocal(key)
+  else writeLocal(key, value)
 }
 
 function readTag(): string | null {
-  const tag = readStore(TAG_KEY)
+  const tag = readLocal(TAG_KEY)
   return tag && /^[A-Z]{3}$/.test(tag) ? tag : null
 }
 
@@ -120,7 +110,7 @@ export class LiveUI {
 
     const toggle = document.getElementById('live-broadcast-toggle') as HTMLInputElement | null
     if (toggle) {
-      toggle.checked = readStore(PREF_KEY) === '1'
+      toggle.checked = readLocal(PREF_KEY) === '1'
       toggle.addEventListener('change', () => void this.setBroadcasting(toggle.checked), { signal })
     }
     const tagInput = document.getElementById('live-tag-input') as HTMLInputElement | null
@@ -134,7 +124,7 @@ export class LiveUI {
     }
     document.getElementById('live-btn')?.addEventListener('click', () => void this.openList(), { signal })
 
-    if (readStore(PREF_KEY) === '1') void this.setBroadcasting(true)
+    if (readLocal(PREF_KEY) === '1') void this.setBroadcasting(true)
     const live = new URLSearchParams(location.search).get('live')
     if (live && UUID.test(live)) void this.spectate(live)
   }

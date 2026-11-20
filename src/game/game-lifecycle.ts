@@ -44,6 +44,7 @@ import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../config/table-maps'
 import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 import type { GameScreens } from './game-screens'
+import { profileStore } from '../profile/profile-store'
 
 /** Caller-owned out-vector for `getBallPosition`; consumers clone what they keep. */
 const scratchBallPos = new Vector3()
@@ -156,11 +157,7 @@ export class GameLifecycle {
           const isNewBest = ownGame && this.host.score > previousBest
           if (isNewBest) {
             this.host.bestScore = this.host.score
-            try {
-              localStorage.setItem('pachinball.best', String(this.host.bestScore))
-            } catch {
-              // Ignore localStorage errors
-            }
+            profileStore.setBest('vanilla', this.host.bestScore)
           }
           this.host.uiManager?.showScoringBreakdown(this.scoringBreakdown.getSnapshot(), {
             finalScore: this.host.score,

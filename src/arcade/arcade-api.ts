@@ -44,6 +44,7 @@ import {
   type TournamentStanding,
 } from '../schemas/arcade'
 import { isRecord, parseJsonWith } from '../schemas/schema-kit'
+import { readLocal, removeLocal, writeLocal } from '../profile/local-store'
 
 export type {
   ArcadeChallenge,
@@ -89,20 +90,13 @@ const MAX_QUEUED_RUNS = 5
 
 /** A stored value, parsed with `schema`; null when absent, unreadable or not of that shape. */
 function readStore<S extends v.GenericSchema>(key: string, schema: S): v.InferOutput<S> | null {
-  try {
-    return parseJsonWith(schema, localStorage.getItem(key))
-  } catch {
-    return null
-  }
+  return parseJsonWith(schema, readLocal(key))
 }
 
+// Storage disabled or full: the session / queue just does not persist.
 function writeStore(key: string, value: unknown): void {
-  try {
-    if (value === null) localStorage.removeItem(key)
-    else localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Storage disabled or full: the session / queue just does not persist.
-  }
+  if (value === null) removeLocal(key)
+  else writeLocal(key, JSON.stringify(value))
 }
 
 /** A response body that is not what the contract says: the service is broken, not the request. */

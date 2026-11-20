@@ -12,6 +12,7 @@ import { loadDebugTools, registerRendering } from './init/register-rendering'
 import { registerGameplay } from './init/register-gameplay'
 import { registerObstacles } from './init/register-obstacles'
 import { registerCampaign } from './init/register-campaign'
+import { registerProfile } from './init/register-profile'
 import { registerAdventureEvents } from './init/register-adventure-events'
 import { registerStaticScene } from './init/register-static-scene'
 import { registerCriticalScene, registerGameplayBuild } from './init/register-scene-build'
@@ -48,6 +49,7 @@ export class GameSystemsInitializer {
       registerObstacles(game, ctx)
       const campaignRewards = registerCampaign(game)
       registerAdventureEvents(game, campaignRewards)
+      registerProfile(game)
     }, true)
 
     if (!(await registerStaticScene(game, ctx, staticSceneChunk))) return

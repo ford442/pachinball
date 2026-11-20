@@ -11,6 +11,7 @@ import { assetUrl } from '../core/asset-urls'
 import * as v from 'valibot'
 import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
 import { MapCacheSchema, RemoteTableMapListSchema, type RemoteTableMap } from '../schemas/storage'
+import { readLocal, removeLocal, writeLocal } from '../profile/local-store'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string
@@ -222,19 +223,15 @@ export class MapSystem {
   }
 
   private readCache(): DynamicMapConfig[] | null {
-    if (typeof localStorage === 'undefined') {
-      return null
-    }
-
     try {
-      const raw = localStorage.getItem(MapSystem.CACHE_KEY)
+      const raw = readLocal(MapSystem.CACHE_KEY)
       if (!raw) {
         return null
       }
 
       const parsed = parseJsonWith(MapCacheSchema, raw)
       if (!parsed || parsed.expiresAt < Date.now()) {
-        localStorage.removeItem(MapSystem.CACHE_KEY)
+        removeLocal(MapSystem.CACHE_KEY)
         return null
       }
 
@@ -246,30 +243,15 @@ export class MapSystem {
   }
 
   private writeCache(maps: DynamicMapConfig[]): void {
-    if (typeof localStorage === 'undefined') {
-      return
-    }
-
-    try {
-      localStorage.setItem(MapSystem.CACHE_KEY, JSON.stringify({
-        expiresAt: Date.now() + MapSystem.CACHE_TTL_MS,
-        maps,
-      }))
-    } catch (error) {
-      console.warn('[MapSystem] Failed to write map cache', error)
-    }
+    const written = writeLocal(MapSystem.CACHE_KEY, JSON.stringify({
+      expiresAt: Date.now() + MapSystem.CACHE_TTL_MS,
+      maps,
+    }))
+    if (!written) console.warn('[MapSystem] Failed to write map cache')
   }
 
   private clearCache(): void {
-    if (typeof localStorage === 'undefined') {
-      return
-    }
-
-    try {
-      localStorage.removeItem(MapSystem.CACHE_KEY)
-    } catch (error) {
-      console.warn('[MapSystem] Failed to clear map cache', error)
-    }
+    removeLocal(MapSystem.CACHE_KEY)
   }
 }
 

@@ -11,6 +11,7 @@ import type { ReplayWorldFingerprint } from './replay-snapshot'
 import * as v from 'valibot'
 import { StoredReplaySchema, type StoredReplay } from '../schemas/replay'
 import { LEGACY_RULES_HASH, RULES_HASH_PATTERN } from '../rules/rules-hash'
+import { readLocal, writeLocal } from '../profile/local-store'
 
 /** `{ wasmSha256 }` for a well-formed binary hash (64 lowercase hex), else nothing. */
 function wasmSha256Of(value: unknown): { wasmSha256?: string } {
@@ -370,16 +371,13 @@ export class ReplayRecorder {
   }
 
   static saveToLocalStorage(key: string, payload: ReplayPayload): void {
-    try {
-      localStorage.setItem(key, ReplayRecorder.toJSON(payload))
-    } catch {
-      // Storage quota or disabled error ignored
-    }
+    // Storage quota or disabled: the save is skipped.
+    writeLocal(key, ReplayRecorder.toJSON(payload))
   }
 
   static loadFromLocalStorage(key: string): ReplayPayload | null {
     try {
-      const item = localStorage.getItem(key)
+      const item = readLocal(key)
       if (!item) return null
       return ReplayRecorder.fromJSON(item)
     } catch {

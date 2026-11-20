@@ -144,6 +144,27 @@ export default defineConfig([
     files: ['src/materials/**/*.ts'],
     rules: { 'no-restricted-syntax': ['error', ...TIMER_SYNTAX] },
   },
+  // #506 slice 1: the player's state goes through ProfileStore, and every other `localStorage` use
+  // (flags, caches, the arcade session) through src/profile/local-store.ts, the one module that may
+  // touch it. It tolerates a missing or blocked storage; a bare call does not. `sessionStorage` is
+  // per-tab scratch and stays as is.
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/profile/local-store.ts'],
+    rules: {
+      'no-restricted-globals': ['error', {
+        name: 'localStorage',
+        message: 'Use ProfileStore (src/profile/profile-store.ts) for player data, or readLocal / writeLocal / removeLocal (src/profile/local-store.ts) for device-local keys.',
+      }],
+      'no-restricted-properties': ['error',
+        ...['window', 'globalThis', 'self'].map((object) => ({
+          object,
+          property: 'localStorage',
+          message: 'Use ProfileStore or src/profile/local-store.ts instead of reaching localStorage directly.',
+        })),
+      ],
+    },
+  },
   // ── Layering (#322) ───────────────────────────────────────────────────────
   // Dependencies point one way: core <- game-elements <- game. These rules make
   // that mechanical instead of a convention people have to remember.

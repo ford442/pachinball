@@ -8,10 +8,14 @@
       "type": "string"
     },
     "version": {
-      "const": 1
+      "const": 2
     },
     "exportedAt": {
       "type": "string"
+    },
+    "updatedAt": {
+      "type": "integer",
+      "minimum": 0
     },
     "settings": {
       "type": "object",

@@ -3,7 +3,7 @@
 Every piece of data the game reads from outside its own code is parsed with
 one Valibot schema in `src/schemas/`. That covers track and machine files,
 share links, the weekly descriptor, arcade responses, `apiFetch` bodies,
-replay tapes and `localStorage`. The types come from `v.InferOutput`, so
+replay tapes, `localStorage` and IndexedDB. The types come from `v.InferOutput`, so
 there is no second hand-written description, and nothing is cast
 (`JSON.parse(…) as T`, `response.json() as T`).
 
@@ -15,7 +15,8 @@ there is no second hand-written description, and nothing is cast
 | `rules.ts` | Machine rules: v1 (ball weights / points / fever multipliers, fever threshold, `cascade.weekly`) plus the v2 `program`; `RunRulesSchema`, the rules a tape carries inline | the machine loader; a replay with inline rules (`resolveRunRules`) |
 | `rules-program.ts` | Rules v2: the scoring program — events, values, conditions, actions, counters / timers / modes; a cross-check resolves every reference (docs/RULES.md) | with `rules.ts` |
 | `machine.ts` | `MachineDescriptor`; `validateMachine` | the machine loader (`?machine=`, share links) |
-| `profile.ts` | The versioned player `Profile` (export / import); `parseProfile` | not yet used at runtime (slice 5) |
+| `profile-core.ts` | The `Profile` minus editor drafts (`ProfileCoreSchema`), plus the key-binding, bests and achievement schemas | boot (`ProfileStore`) |
+| `profile.ts` | The versioned player `Profile` v2 (export / import, adds drafts); `parseProfile` migrates v1 | Settings → Profile (lazy) |
 | `arcade.ts` | Every arcade response body; the stored arcade session and offline queue | `arcade-api.ts` (lazy) |
 | `settings.ts` | The stored `GameSettings` | boot |
 | `storage.ts` | Small stored records: unseen rewards, scoring breakdown, campaign save, legacy adventure progress, LCD map list / cache | boot |
@@ -46,9 +47,40 @@ there is no second hand-written description, and nothing is cast
 - **Numbers are finite.** `num(message, { min, max, gt, lt })` checks bounds as
   Valibot actions, not closures, so the generated JSON Schema carries them.
 
+## The player profile
+
+`src/profile/` owns the player's persistent state (#506 slice 1). Nothing else
+in `src/` touches `localStorage` (ESLint `no-restricted-globals`).
+
+- `ProfileStore` (`profile-store.ts`, boot path): the profile's parts —
+  settings, key bindings, campaign, legacy adventure progress, scoring
+  breakdown, per-machine bests, achievements — each read and written
+  synchronously through the **mirror**, `localStorage`, under the key an
+  earlier build used (a new part gets a new key). It keeps no copy of a value;
+  every read parses the mirror with the part's schema.
+- The **durable copy** (`profile-durable.ts`, `profile-backend.ts`, lazy):
+  every write schedules one coalesced snapshot of all parts into IndexedDB
+  (`idb-keyval`, database `pachinball`, store `profile`). `restore()` runs at
+  boot before the `Game` reads anything: a mirror stamped by this build
+  (`pachinball.profile.meta`) returns at once; otherwise parts the browser
+  cleared are refilled from IndexedDB, and an upgrade from an older build seeds
+  IndexedDB from its parts. Editor drafts are too big for the mirror and live
+  in IndexedDB only.
+- `profile-file.ts` (lazy): `exportProfile` / `importProfile`, the Settings →
+  Profile buttons. Import replaces the profile (parts the file omits are
+  removed) and refuses a bad file whole, with `{ path, message }` errors.
+- `local-store.ts`: `readLocal` / `writeLocal` / `removeLocal`, the one place
+  that touches `localStorage` and tolerates it being absent or blocked. The
+  device-local keys that are not part of the portable profile go through it:
+  the renderer and physics-engine flags, caches, debug switches, the arcade
+  session and queue, saved replays.
+
+New player state is a new part in `PARTS` (and `profileCoreEntries`), not a
+new `localStorage` key.
+
 ## Entry chunk
 
-Only `settings.ts` and `storage.ts`, plus the Valibot functions they use, are
+Only `settings.ts`, `storage.ts` and `profile-core.ts`, plus the Valibot functions they use, are
 on the boot path. Track, machine, weekly, rules and arcade schemas load with
 their loaders. `npm run check:bundle` holds the entry inside `bundle-budget.json`.
 
@@ -82,3 +114,4 @@ files to them, and any file can name one in `$schema`.
 2. If people write the data by hand, add it to `buildJsonSchemas()` and run
    `npm run schemas:json`.
 3. Keep it off the boot path unless boot reads it.
+4. Player state that must persist belongs in `ProfileStore` (see above), not in a new `localStorage` key.

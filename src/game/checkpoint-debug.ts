@@ -1,3 +1,4 @@
+import { localStore } from '../profile/local-store'
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
 type DebugStageStatus = 'idle' | 'loading' | 'success' | 'failed' | 'skipped'
@@ -226,10 +227,6 @@ export class CheckpointDebugController {
   }
 
   private getDefaultStorage(): StorageLike | null {
-    try {
-      return typeof localStorage !== 'undefined' ? localStorage : null
-    } catch {
-      return null
-    }
+    return localStore
   }
 }

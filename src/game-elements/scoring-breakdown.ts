@@ -1,5 +1,4 @@
-import { parseJsonWith } from '../schemas/schema-kit'
-import { ScoringBreakdownSchema } from '../schemas/storage'
+import { profileStore } from '../profile/profile-store'
 
 export interface ScoringBreakdownSnapshot {
   bumpers: number
@@ -28,7 +27,6 @@ const SCORE_SOURCES = {
   PREMIUM: new Set(['jackpot', 'slot-win']),
 } as const
 
-const STORAGE_KEY = 'pachinball.scoring-breakdown'
 
 type MutableBreakdown = Omit<ScoringBreakdownSnapshot, 'total'>
 
@@ -93,11 +91,8 @@ export class ScoringBreakdownManager {
   }
 
   private loadFromStorage(): MutableBreakdown {
-    if (typeof localStorage === 'undefined') {
-      return { ...EMPTY_BREAKDOWN }
-    }
     try {
-      const parsed = parseJsonWith(ScoringBreakdownSchema, localStorage.getItem(STORAGE_KEY))
+      const parsed = profileStore.get('scoringBreakdown')
       if (!parsed) return { ...EMPTY_BREAKDOWN }
       return {
         bumpers: this.toSafeNumber(parsed.bumpers),
@@ -115,11 +110,8 @@ export class ScoringBreakdownManager {
   }
 
   private persist(): void {
-    if (typeof localStorage === 'undefined') {
-      return
-    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.breakdown))
+      profileStore.writeText('scoringBreakdown', JSON.stringify(this.breakdown))
     } catch (error) {
       console.warn('[ScoringBreakdown] Failed to persist local state:', error)
     }

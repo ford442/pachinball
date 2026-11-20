@@ -7,6 +7,7 @@ import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
+import { profileStore } from './profile/profile-store'
 import { bootError, bootWarn } from './boot-log'
 import { installErrorReporter } from './engine/error-reporter'
 import { BOOT_PRELOAD_STAGE, revealBootFailure } from './game/game-ui-popups'
@@ -50,7 +51,10 @@ async function bootstrap(): Promise<void> {
           return null
         })
     : Promise.resolve(null)
-  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem(), machineLoading])
+  // A mirror the browser cleared is refilled from IndexedDB before the Game reads settings (#506
+  // slice 1); a normal boot finds the mirror stamped and returns without opening the database.
+  const profileRestoring = profileStore.restore()
+  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem(), machineLoading, profileRestoring])
   // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
   withBootError((m) => m.watchPreGame(loading))
   const [engine, physics, machine] = await loading
