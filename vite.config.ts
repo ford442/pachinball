@@ -209,10 +209,11 @@ function lazySchemaValibot(): Plugin {
 
 /**
  * Lazy glTF-loader chunks fetched on every model load (seen in the network log of a default boot):
- * the always-on `ExtrasAsMetadata` extension and the PBR material adapter. tests/offline-boot.spec.ts
+ * the always-on `ExtrasAsMetadata` extension, the PBR material adapter and, since the Babylon bump,
+ * the texture processor. tests/offline-boot.spec.ts
  * fails if another one joins them without being precached.
  */
-const GLTF_ALWAYS_LOADED_CHUNKS = ['ExtrasAsMetadata', 'pbrMaterialLoadingAdapter']
+const GLTF_ALWAYS_LOADED_CHUNKS = ['ExtrasAsMetadata', 'pbrMaterialLoadingAdapter', 'textureProcessor']
 
 /**
  * Every adventure track is a JSON file loaded through a non-eager `import.meta.glob`
@@ -326,8 +327,12 @@ export default defineConfig(({ mode, command }) => ({
           if (chunk.moduleIds.length > 0 && chunk.moduleIds.every((id) => id.endsWith('?lazy-schema'))) {
             return 'assets/valibot-lazy-[hash].js'
           }
+          // Rolldown's own runtime helper (`\0rolldown/runtime.js`, ~160 B) is in no module graph the
+          // walk above sees, but the entry imports it statically (and index.html modulepreloads it):
+          // it is a boot chunk, so it keeps a plain name and the service worker precaches it (#503 A1).
           const loaderOnly =
-            chunk.moduleIds.length > 0 && !chunk.moduleIds.some((id) => babylonChunks.isAppReachable(id))
+            chunk.moduleIds.length > 0 &&
+            !chunk.moduleIds.some((id) => id.startsWith('\0rolldown/') || babylonChunks.isAppReachable(id))
           if (!loaderOnly || chunk.name === 'babylon-loaders') return 'assets/[name]-[hash].js'
           // The glTF loader import()s these for every GLB, extensions or not, so the boot's cabinet
           // load needs them: they join the precached `babylon-loaders-` family (#519 A2).
@@ -393,6 +398,9 @@ export default defineConfig(({ mode, command }) => ({
         ],
       },
       workbox: {
+        // sw.js / workbox-*.js are not referenced by a source map comment anyway; the two .map files
+        // were ~0.26 MiB of dead weight in dist/ (bundle maps go to dist-sourcemaps/, #503 A5).
+        sourcemap: false,
         navigateFallback: 'index.html',
         // Unanchored: the game is served from /pachinball/, so its API paths are not at the root.
         navigateFallbackDenylist: [/\/api\//],

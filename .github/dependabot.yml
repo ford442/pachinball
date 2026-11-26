@@ -29,12 +29,15 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
-      # Rapier's 0.x minor releases break APIs and can change solver behavior.
-      # Upgrade these manually with fallback physics checks, not as routine dependency bumps.
+      # Rapier is the lazy dev / degrade physics path (`wasm-owner` is the default). 0.21.0 (#567) doubled
+      # its chunk (1.6 MB gzip vs the 800 KB budget; dist/ over 40 MiB), removed
+      # `numAdditionalFrictionIterations` (OP-1 tuning in src/game-elements/physics.ts) and its
+      # typings need `lib: ESNext.Disposable`. Stay on 0.15.x until someone upgrades on purpose:
+      # re-tune that path, re-baseline `rapierGzipMaxKb` / `distTotalMiBMax` in bundle-budget.json.
       - dependency-name: '@dimforge/rapier3d-compat'
         update-types:
-          - version-update:semver-major
           - version-update:semver-minor
+          - version-update:semver-major
     groups:
       babylon:
         patterns:

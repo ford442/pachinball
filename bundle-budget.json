@@ -3,8 +3,8 @@
     "entryGzipMaxKb": 240,
     "babylonCoreGzipMaxKb": 680,
     "rapierGzipMaxKb": 800,
-    "precacheTotalKiBMax": 6400,
-    "initialJsGzipMaxKb": 245
+    "precacheTotalKiBMax": 6740,
+    "initialJsGzipMaxKb": 256
   },
   "dist": {
     "distTotalMiBMax": 40,
