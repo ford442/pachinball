@@ -5,13 +5,9 @@
  */
 import { test, expect, type Page } from '@playwright/test'
 
-interface ProfileProbeWindow extends Window {
-  game?: { ready?: boolean }
-}
-
 async function boot(page: Page): Promise<void> {
   await page.goto('/')
-  await page.waitForFunction(() => !!(window as ProfileProbeWindow).game?.ready, undefined, { timeout: 90_000 })
+  await page.waitForFunction(() => !!window.game?.ready, undefined, { timeout: 90_000 })
 }
 
 /** What the IndexedDB copy holds, read straight from the database (not through the store). */
@@ -36,7 +32,7 @@ test.describe('profile persistence', () => {
     await boot(page)
 
     await page.evaluate(async () => {
-      const { profileStore } = await import('/src/profile/profile-store.ts')
+      const { profileStore } = await import('/src/profile/profile-store.ts' as string) as typeof import('../src/profile/profile-store')
       profileStore.set('settings', { muted: true, masterVolume: 0.35 })
       profileStore.setBest('vanilla', 31_337)
       await profileStore.flush()
@@ -46,7 +42,7 @@ test.describe('profile persistence', () => {
     // The browser drops localStorage; IndexedDB survives.
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForFunction(() => !!(window as ProfileProbeWindow).game?.ready, undefined, { timeout: 90_000 })
+    await page.waitForFunction(() => !!window.game?.ready, undefined, { timeout: 90_000 })
 
     const restored = await page.evaluate(() => ({
       settings: JSON.parse(localStorage.getItem('pachinball.settings') ?? 'null') as unknown,
@@ -60,7 +56,7 @@ test.describe('profile persistence', () => {
     test.setTimeout(180_000)
     await boot(page)
     await page.evaluate(async () => {
-      const { profileStore } = await import('/src/profile/profile-store.ts')
+      const { profileStore } = await import('/src/profile/profile-store.ts' as string) as typeof import('../src/profile/profile-store')
       profileStore.set('settings', { muted: true, masterVolume: 0.5 })
       profileStore.setBest('vanilla', 777)
       await profileStore.flush()
@@ -83,7 +79,7 @@ test.describe('profile persistence', () => {
       buffer: Buffer.from(JSON.stringify({ version: 2, settings: { muted: false, masterVolume: 0.9 }, bests: { vanilla: 42 } })),
     })
     await reloaded
-    await page.waitForFunction(() => !!(window as ProfileProbeWindow).game?.ready, undefined, { timeout: 90_000 })
+    await page.waitForFunction(() => !!window.game?.ready, undefined, { timeout: 90_000 })
     const after = await page.evaluate(() => ({
       settings: JSON.parse(localStorage.getItem('pachinball.settings') ?? 'null') as unknown,
       bests: JSON.parse(localStorage.getItem('pachinball.bests') ?? 'null') as unknown,
