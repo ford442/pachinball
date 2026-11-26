@@ -40,6 +40,7 @@ npm run record:replay     # Re-record stale tapes from their scenarios
 npm run test:verifier     # services/replay-verifier self-test (after `npm run build`)
 npm run test:verifier:node  # the same self-test on the headless Node runner (VERIFIER_RUNNER=node); Chromium is never launched
 npm run release:archive -- --to <dir>  # archive dist/ as a released build for the verifier, with its golden tapes (#490 B)
+node scripts/state-of-app.mjs --url <url> --out state-of-app  # console + menu / in-play screenshots on desktop and mobile (docs/STAGING.md)
 node scripts/verify-live.mjs   # after a deploy: live build-info.json = dist/build-info.json, COOP/COEP on index.html + wasm, sw.js and boot assets 200 (.github/workflows/deploy.yml runs it)
 supabase db start && supabase test db  # Arcade DB migrations + pgTAP RLS tests (supabase/)
 ```
