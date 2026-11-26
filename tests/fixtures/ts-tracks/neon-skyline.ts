@@ -6,9 +6,9 @@
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
-import { getLayoutRng } from '../../core/seeded-rng'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc, cylinderDesc } from '../../../src/adventure/track-collider-descriptors'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
 
 export function buildNeonSkyline(builder: TrackBuilderApi): void {
   const skylineMat = builder.getTrackMaterial("#111122")

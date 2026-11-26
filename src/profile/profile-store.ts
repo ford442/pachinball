@@ -23,7 +23,7 @@
  */
 
 import * as v from 'valibot'
-import { parseJsonWith } from '../schemas/schema-kit'
+import { parseJsonWith } from '../schemas/record-kit'
 import { StoredSettingsSchema } from '../schemas/settings'
 import { ScoringBreakdownSchema, StoredAdventureProgressSchema, StoredCampaignSchema } from '../schemas/storage'
 import { AchievementsSchema, BestsSchema, KeyBindingsSchema } from '../schemas/profile-core'

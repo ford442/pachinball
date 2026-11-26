@@ -13,32 +13,20 @@ import { MANIFEST_DATA } from './track-manifest-data'
 import { getDataTrackSourcePath } from '../track-data-registry'
 
 /**
- * Accept a manifest only if its declared build dispatch actually resolves.
- * A TS entry needs a callable builder; a JSON entry needs its `dataPath` to
- * match the file the data registry loaded for that id — so a typo or a renamed
- * JSON surfaces here at startup instead of as an empty track at play time.
+ * Accept a manifest only if its `dataPath` is a track file that exists for
+ * that id (`./track-data/<ID>.json`) — so a typo or a renamed JSON surfaces
+ * here at startup instead of as an empty track at play time. Answered from the
+ * glob's keys alone: the JSON and its schema stay lazy.
  */
 function isDispatchable(manifest: TrackManifest): boolean {
-  if (manifest.buildKind === 'ts') {
-    if (typeof manifest.loadBuilder !== 'function') {
-      console.error(`[track-manifest] Missing TS loadBuilder for ${manifest.id}`)
-      return false
-    }
-    return true
-  }
-
   const sourcePath = getDataTrackSourcePath(manifest.id)
   if (!sourcePath) {
-    console.error(
-      `[track-manifest] ${manifest.id} declares dataPath ${manifest.dataPath} but no valid ` +
-        'track JSON was loaded for that id',
-    )
+    console.error(`[track-manifest] ${manifest.id} declares dataPath ${manifest.dataPath} but no track JSON exists for that id`)
     return false
   }
   if (sourcePath !== manifest.dataPath) {
     console.error(
-      `[track-manifest] ${manifest.id} declares dataPath ${manifest.dataPath} but its ` +
-        `definition was loaded from ${sourcePath}`,
+      `[track-manifest] ${manifest.id} declares dataPath ${manifest.dataPath} but its track file is ${sourcePath}`,
     )
     return false
   }

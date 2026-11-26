@@ -38,8 +38,8 @@ export const CORE_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.PACHINKO_HALL,
     startAnchor: { x: 0, y: 8, z: 4 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/pachinko-hall').then((m) => m.buildPachinkoHall),
+    buildKind: 'json',
+    dataPath: './track-data/PACHINKO_HALL.json',
     zone: {
       name: 'Pachinko Hall',
       storyText: 'ENTERING: PACHINKO HALL\n\nThe neon parlor opens — follow the pin lanes to the exit arch...',

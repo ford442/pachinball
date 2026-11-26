@@ -45,7 +45,7 @@ import {
   TRACK_SCHEMA_VERSION,
   type TrackDefinition,
 } from '../src/schemas/track'
-import { compileTrackDefinition } from '../src/adventure/track-compiler'
+import { compileTrackDefinition, type TrackBuildApi, type TrackBuilderApi } from '../src/adventure/track-compiler'
 
 const TRACK_DATA_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -224,7 +224,7 @@ describe('compileTrackDefinition', () => {
     const start = new Vector3(0, 10, 0)
     let lastStraightEnd = start.clone()
 
-    const cursor = compileTrackDefinition(def, {
+    const api: TrackBuildApi = {
       currentStartPos: start,
       getTrackMaterial: (hex) => {
         calls.push(`mat:${hex}`)
@@ -279,7 +279,8 @@ describe('compileTrackDefinition', () => {
       createAxisPullWell: () => {
         calls.push('axisPullWell')
       },
-    })
+    }
+    const cursor = compileTrackDefinition(def, api as unknown as TrackBuilderApi)
 
     expect(calls.some((c) => c.startsWith('straight:'))).toBe(true)
     expect(calls.some((c) => c.startsWith('bucket:'))).toBe(true)

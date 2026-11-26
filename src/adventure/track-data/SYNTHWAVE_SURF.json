@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "id": "SYNTHWAVE_SURF",
+  "segments": [
+    { "type": "straight", "width": 8, "length": 15, "inclineDeg": 25, "material": "#110022" },
+    { "type": "straight", "width": 10, "length": 20, "inclineDeg": 0, "material": "#110022" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 1.5, "y": 3, "z": 1.5 } },
+      "orient": "heading",
+      "label": "eqPiston",
+      "motion": { "kind": "piston", "frequency": 4, "amplitude": 1.5 },
+      "items": [
+        {
+          "at": { "from": "rampStart", "along": 2, "lateral": -3, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": -1.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 2, "lateral": -1, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": -0.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 2, "lateral": 1, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 0.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 2, "lateral": 3, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 1.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 5, "lateral": -3, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": -0.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 5, "lateral": -1, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 0.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 5, "lateral": 1, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 1.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 5, "lateral": 3, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 2.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 8, "lateral": -3, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 0.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 8, "lateral": -1, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 1.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 8, "lateral": 1, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 2.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 8, "lateral": 3, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 3.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 11, "lateral": -3, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 1.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 11, "lateral": -1, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 2.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 11, "lateral": 1, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 3.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 11, "lateral": 3, "up": [1.5, -1.5] },
+          "material": "#FF0000",
+          "motion": { "phase": 4.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 14, "lateral": -3, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 2.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 14, "lateral": -1, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 3.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 14, "lateral": 1, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 4.5 }
+        },
+        {
+          "at": { "from": "rampStart", "along": 14, "lateral": 3, "up": [1.5, -1.5] },
+          "material": "#00FF00",
+          "motion": { "phase": 5.5 }
+        }
+      ]
+    },
+    {
+      "type": "curve",
+      "radius": 12,
+      "angleDeg": 180,
+      "inclineDeg": -5,
+      "width": 8,
+      "wallHeight": 2,
+      "material": "#00FFFF",
+      "segments": 20,
+      "bankingDeg": -15
+    },
+    {
+      "type": "curve",
+      "radius": 6,
+      "angleDeg": 360,
+      "inclineDeg": 15,
+      "width": 8,
+      "wallHeight": 2,
+      "material": "#110022",
+      "segments": 30,
+      "bankingDeg": -30
+    },
+    { "type": "bucket", "material": "#00FFFF", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}

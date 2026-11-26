@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "MAGNETIC_STORAGE",
+  "segments": [
+    { "type": "straight", "width": 6, "length": 12, "inclineDeg": 25, "material": "#222222" },
+    {
+      "type": "spinner",
+      "radius": 12,
+      "angVel": 2.5,
+      "at": { "along": 13, "up": [-1] },
+      "material": "#222222"
+    },
+    {
+      "type": "spinnerParts",
+      "points": [{ "angleDeg": 0, "radius": 6 }, { "angleDeg": 120, "radius": 9 }, { "angleDeg": 240, "radius": 4 }],
+      "y": 1.25,
+      "shape": { "kind": "box", "size": { "x": 2, "y": 2, "z": 2 } },
+      "yaw": true,
+      "label": "badSector",
+      "material": "#FF0000"
+    },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 10, "y": 1, "z": 1 } },
+      "local": { "x": 5, "y": 0, "z": 0 },
+      "label": "actuatorArm",
+      "material": "#222222",
+      "motion": {
+        "kind": "rotatingOscillator",
+        "frequency": 3.141592653589793,
+        "amplitude": 0.7853981633974483,
+        "phase": 0,
+        "axis": { "x": 0, "y": 1, "z": 0 }
+      },
+      "mesh": [
+        { "shape": { "kind": "sphere", "diameter": 2 } },
+        {
+          "shape": { "kind": "box", "size": { "x": 10, "y": 1, "z": 1 } },
+          "local": { "x": 5, "y": 0, "z": 0 }
+        }
+      ],
+      "items": [{ "at": { "from": "spinner", "lateral": -16, "up": [2] } }]
+    },
+    { "type": "bucket", "material": "#222222", "at": { "from": "spinner", "lateral": -18, "up": [-2] } }
+  ]
+}

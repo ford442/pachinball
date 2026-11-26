@@ -6,8 +6,8 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc } from '../track-collider-descriptors'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
 
 export function buildCpuCore(builder: TrackBuilderApi): void {
   const pcbMat = builder.getTrackMaterial("#004400")
@@ -47,7 +47,7 @@ export function buildCpuCore(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(fanCenter, fanRadius, -fanSpeed, pcbMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const fanBody = adventureBodies[adventureBodies.length - 1]!
+    const fanBody = adventureBodies[adventureBodies.length - 1]
     const bladeCount = 4
     const bladeLength = fanRadius - 1
     const bladeHeight = 1.5

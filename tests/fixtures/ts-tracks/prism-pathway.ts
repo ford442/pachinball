@@ -6,10 +6,10 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { convexMeshDesc, cylinderDesc } from '../track-collider-descriptors'
-import { triangularPrismLayout } from '../track-geometry'
-import { getLayoutRng } from '../../core/seeded-rng'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { convexMeshDesc, cylinderDesc } from '../../../src/adventure/track-collider-descriptors'
+import { triangularPrismLayout } from '../../../src/adventure/track-geometry'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
 
 export function buildPrismPathway(builder: TrackBuilderApi): void {
   const glassMat = builder.getTrackPBRMaterial("#E0FFFF")

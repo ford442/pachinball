@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "PACHINKO_HALL",
+  "initialHeadingDeg": 180,
+  "segments": [
+    { "type": "straight", "width": 8, "length": 10, "inclineDeg": 12, "material": "#ffdd00" },
+    {
+      "type": "straight",
+      "width": 5,
+      "length": 14,
+      "inclineDeg": 8,
+      "material": "#ffdd00",
+      "headingOffsetDeg": 30
+    },
+    {
+      "type": "pinRows",
+      "spacing": 2.2,
+      "evenOffsets": [-2.5, -0.8, 0.8, 2.5],
+      "oddOffsets": [-1.6, 0, 1.6],
+      "pinHeight": 0.45,
+      "pinRadius": 0.12,
+      "meshDiameter": 0.28,
+      "lift": 0.2,
+      "edgeMargin": 0.6,
+      "restitution": 0.75,
+      "label": "hallPin",
+      "material": "#ff66cc"
+    },
+    {
+      "type": "cylinder",
+      "diameter": 1.2,
+      "height": 3.5,
+      "offset": { "x": -5, "y": 1.5, "z": -3 },
+      "material": "#00ffff"
+    },
+    {
+      "type": "cylinder",
+      "diameter": 1.2,
+      "height": 3.5,
+      "offset": { "x": 5, "y": 1.5, "z": -3 },
+      "material": "#00ffff"
+    },
+    { "type": "straight", "width": 6, "length": 12, "inclineDeg": 5, "material": "#ffdd00" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 6, "y": 1, "z": 12 } },
+      "orient": "ramp",
+      "zone": { "kind": "rampConveyor", "force": 55 },
+      "label": "conveyorRamp",
+      "items": [{ "at": { "from": "rampCenter", "up": [0.4] } }]
+    },
+    { "type": "straight", "width": 7, "length": 18, "inclineDeg": 6, "material": "#ffdd00" },
+    {
+      "type": "pinRows",
+      "spacing": 2.2,
+      "evenOffsets": [-2.5, -0.8, 0.8, 2.5],
+      "oddOffsets": [-1.6, 0, 1.6],
+      "pinHeight": 0.45,
+      "pinRadius": 0.12,
+      "meshDiameter": 0.28,
+      "lift": 0.2,
+      "edgeMargin": 0.6,
+      "restitution": 0.75,
+      "label": "hallPin",
+      "material": "#ff66cc"
+    },
+    {
+      "type": "curve",
+      "radius": 14,
+      "angleDeg": 90,
+      "inclineDeg": 4,
+      "width": 6,
+      "wallHeight": 1.5,
+      "material": "#ffdd00",
+      "segments": 20,
+      "bankingDeg": -6
+    },
+    {
+      "type": "cylinder",
+      "diameter": 0.9,
+      "height": 2.8,
+      "offset": { "x": 4, "y": 1, "z": 2 },
+      "material": "#00ffff"
+    },
+    {
+      "type": "cylinder",
+      "diameter": 0.9,
+      "height": 2.8,
+      "offset": { "x": -4, "y": 1, "z": 2 },
+      "material": "#00ffff"
+    },
+    { "type": "straight", "width": 5, "length": 10, "inclineDeg": 0, "material": "#ffdd00" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 5, "y": 1, "z": 10 } },
+      "orient": "ramp",
+      "zone": { "kind": "rampConveyor", "force": 40 },
+      "label": "conveyorRamp",
+      "items": [{ "at": { "from": "rampCenter", "up": [0.4] } }]
+    },
+    { "type": "portal", "offset": { "x": 0, "y": 2, "z": 0 } },
+    { "type": "bucket", "material": "#ffdd00" }
+  ]
+}

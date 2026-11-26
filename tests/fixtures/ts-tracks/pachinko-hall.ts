@@ -7,11 +7,11 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
 import {
   boxDesc,
   cylinderDesc,
-} from '../track-collider-descriptors'
+} from '../../../src/adventure/track-collider-descriptors'
 
 function addPinLane(
   b: TrackBuilderApi,

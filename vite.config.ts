@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, renameSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
@@ -172,6 +172,41 @@ function babylonChunkGraph() {
 
 const babylonChunks = babylonChunkGraph()
 
+/** `src/schemas/` modules on the boot path; every other schema module loads with its loader. */
+const BOOT_SCHEMA_MODULES = new Set(['record-kit.ts', 'settings.ts', 'storage.ts', 'replay.ts', 'profile-core.ts'])
+const SCHEMAS_DIR = fileURLToPath(new URL('./src/schemas/', import.meta.url))
+const ARCADE_DIR = fileURLToPath(new URL('./src/arcade/', import.meta.url))
+
+/** True for a module that imports Valibot only from a lazily loaded chunk. */
+function isLazySchemaImporter(importer: string): boolean {
+  const file = importer.split('?')[0] ?? importer
+  if (file.startsWith(ARCADE_DIR)) return true
+  return file.startsWith(SCHEMAS_DIR) && !BOOT_SCHEMA_MODULES.has(file.slice(SCHEMAS_DIR.length))
+}
+
+/**
+ * Valibot ships as one ES module, and Rollup puts a module in one chunk with
+ * every export any chunk uses. Boot code imports it (settings, stored
+ * records), so the functions only the lazy track / machine / weekly / arcade
+ * schemas use (`variant`, `tuple`, `lazy`, `strictObject`, the bound checks)
+ * would land in the entry. Those schemas resolve `valibot` to a second
+ * module instance instead (`?lazy-schema`), tree-shaken on its own into their
+ * chunks: the entry carries only what boot reads (#505 §A, docs/SCHEMAS.md).
+ * Valibot schemas are plain objects, so the two instances compose.
+ */
+function lazySchemaValibot(): Plugin {
+  return {
+    name: 'lazy-schema-valibot',
+    apply: 'build',
+    enforce: 'pre',
+    async resolveId(source, importer, options) {
+      if (source !== 'valibot' || !importer || !isLazySchemaImporter(importer)) return null
+      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+      return resolved ? `${resolved.id}?lazy-schema` : null
+    },
+  }
+}
+
 /**
  * Lazy glTF-loader chunks fetched on every model load (seen in the network log of a default boot):
  * the always-on `ExtrasAsMetadata` extension and the PBR material adapter. tests/offline-boot.spec.ts
@@ -180,13 +215,13 @@ const babylonChunks = babylonChunkGraph()
 const GLTF_ALWAYS_LOADED_CHUNKS = ['ExtrasAsMetadata', 'pbrMaterialLoadingAdapter']
 
 /**
- * Per-track adventure builders are dynamic imports, so each is its own `assets/<file>-<hash>.js`
- * chunk; the service worker fetches them on first visit to a track instead of precaching all of
- * them. Derived from the directory so a new track is never precached by accident (#464 item 8).
+ * Every adventure track is a JSON file loaded through a non-eager `import.meta.glob`
+ * (`src/adventure/track-data-registry.ts`), so each is its own `assets/track-data-<ID>-<hash>.js`
+ * chunk, out of the entry. They ARE precached: all 29 together are ~34 KiB (~6 KiB gzip), and
+ * precaching keeps every track playable offline. The per-track ignores (#464 item 8) existed for
+ * the TS builder chunks, which are gone (#505 §A).
  */
-const trackChunkIgnores = readdirSync(fileURLToPath(new URL('./src/adventure/tracks', import.meta.url)))
-  .filter((file) => file.endsWith('.ts'))
-  .map((file) => `**/${file.slice(0, -'.ts'.length)}-*.js`)
+const TRACK_DATA_MODULE = /[\\/]src[\\/]adventure[\\/]track-data[\\/][^\\/]+\.json$/
 
 /** Runtime caching for the local `storage_manager` (src/config/api.ts DEV_*_BASE); dev only. */
 const localStorageManagerCaching = [
@@ -283,6 +318,14 @@ export default defineConfig(({ mode, command }) => ({
           return undefined
         },
         chunkFileNames(chunk) {
+          // One adventure track's JSON (a lazy glob entry), named for its track.
+          if (chunk.moduleIds.length === 1 && TRACK_DATA_MODULE.test(chunk.moduleIds[0] ?? '')) {
+            return 'assets/track-data-[name]-[hash].js'
+          }
+          // The lazy schemas' own Valibot instance (lazySchemaValibot): named for what it is, not `index`.
+          if (chunk.moduleIds.length > 0 && chunk.moduleIds.every((id) => id.endsWith('?lazy-schema'))) {
+            return 'assets/valibot-lazy-[hash].js'
+          }
           const loaderOnly =
             chunk.moduleIds.length > 0 && !chunk.moduleIds.some((id) => babylonChunks.isAppReachable(id))
           if (!loaderOnly || chunk.name === 'babylon-loaders') return 'assets/[name]-[hash].js'
@@ -302,6 +345,7 @@ export default defineConfig(({ mode, command }) => ({
     simBundle(),
     sourcemapsOutOfDist(),
     babylonChunks.plugin,
+    lazySchemaValibot(),
     VitePWA({
       // 'prompt': a new worker waits until the player accepts the update toast
       // (src/pwa/update-toast.ts). 'autoUpdate' reloaded the page whenever a new
@@ -381,8 +425,6 @@ export default defineConfig(({ mode, command }) => ({
           '**/rapier-*.js',
           // The update prompt only loads when a newer worker is waiting, i.e. online
           '**/update-toast-*.js',
-          // Per-track adventure builders (dynamic import)
-          ...trackChunkIgnores,
           // Canvas reel atlas — runtime-cached on first reel use
           '**/reel.png',
         ],

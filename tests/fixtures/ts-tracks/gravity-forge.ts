@@ -6,8 +6,8 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc } from '../track-collider-descriptors'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
 
 export function buildGravityForge(builder: TrackBuilderApi): void {
   const rustMat = builder.getTrackMaterial("#8B4513")
@@ -80,7 +80,7 @@ export function buildGravityForge(builder: TrackBuilderApi): void {
     const phases = [0, 1.5, 3.0]
 
     for (let i = 0; i < 3; i++) {
-      const dist = positions[i]!
+      const dist = positions[i]
       const pistonPos = crushStart.add(forward.scale(dist))
       const floorY = pistonPos.y
       const gap = 0.2
@@ -110,7 +110,7 @@ export function buildGravityForge(builder: TrackBuilderApi): void {
         basePos,
         frequency: 2.0,
         amplitude: amp,
-        phase: phases[i]!
+        phase: phases[i]
       })
     }
   }
@@ -135,7 +135,7 @@ export function buildGravityForge(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(castCenter, castRadius, castSpeed, steelMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platformBody = adventureBodies[adventureBodies.length - 1]!
+    const platformBody = adventureBodies[adventureBodies.length - 1]
     const wallHeight = 3.0
     const wallThickness = 0.5
     const gapAngle = (30 * Math.PI) / 180

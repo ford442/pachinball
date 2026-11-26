@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "GRAVITY_FORGE",
+  "segments": [
+    { "type": "straight", "width": 6, "length": 12, "inclineDeg": 30, "material": "#8B4513" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 6, "y": 2, "z": 12 } },
+      "orient": "ramp",
+      "zone": { "kind": "rampConveyor", "force": 50 },
+      "label": "conveyorFeed",
+      "items": [{ "at": { "from": "rampCenter", "up": [0.5] } }]
+    },
+    { "type": "straight", "width": 8, "length": 20, "inclineDeg": 0, "material": "#333333" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 6, "y": 4, "z": 3 } },
+      "material": "#333333",
+      "label": "forgePiston",
+      "motion": { "kind": "piston", "frequency": 2, "amplitude": 2 },
+      "items": [
+        { "at": { "from": "rampStart", "along": 5, "up": [0.2, 2, 2] }, "motion": { "phase": 0 } },
+        { "at": { "from": "rampStart", "along": 10, "up": [0.2, 2, 2] }, "motion": { "phase": 1.5 } },
+        { "at": { "from": "rampStart", "along": 15, "up": [0.2, 2, 2] }, "motion": { "phase": 3 } }
+      ]
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": -90,
+      "inclineDeg": 0,
+      "width": 2,
+      "wallHeight": 0,
+      "material": "#FF4500",
+      "segments": 15
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 90,
+      "inclineDeg": 0,
+      "width": 2,
+      "wallHeight": 0,
+      "material": "#FF4500",
+      "segments": 15
+    },
+    { "type": "spinner", "radius": 10, "angVel": 2, "at": { "along": 11 }, "material": "#333333" },
+    {
+      "type": "spinnerParts",
+      "ring": { "count": 21, "gapDeg": 30, "segments": 20 },
+      "radius": 10,
+      "y": 1.75,
+      "shape": { "kind": "box", "size": { "x": 0.5, "y": 3, "z": "arc" }, "arcPad": 0.1 },
+      "yaw": true,
+      "label": "castingWall",
+      "material": "#333333",
+      "mesh": { "y": 1.5 }
+    },
+    { "type": "bucket", "material": "#0088FF", "at": { "from": "spinner", "along": 14, "up": [-5] } }
+  ]
+}

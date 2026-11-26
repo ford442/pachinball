@@ -6,9 +6,9 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc, cylinderDesc, sphereDesc } from '../track-collider-descriptors'
-import { getLayoutRng } from '../../core/seeded-rng'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc, cylinderDesc, sphereDesc } from '../../../src/adventure/track-collider-descriptors'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
 
 export function buildNeuralNetwork(builder: TrackBuilderApi): void {
   const netMat = builder.getTrackMaterial("#FFFFFF")

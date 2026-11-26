@@ -6,9 +6,9 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc } from '../track-collider-descriptors'
-import { getLayoutRng } from '../../core/seeded-rng'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
 
 export function buildOrbitalJunkyard(builder: TrackBuilderApi): void {
   const junkMat = builder.getTrackMaterial("#888888")

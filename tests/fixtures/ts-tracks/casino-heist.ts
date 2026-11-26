@@ -6,10 +6,10 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
-import type { EmittedCollider } from '../track-collider-emitter'
-import { getLayoutRng } from '../../core/seeded-rng'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc, cylinderDesc } from '../../../src/adventure/track-collider-descriptors'
+import type { EmittedCollider } from '../../../src/adventure/track-collider-emitter'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
 
 export function buildCasinoHeist(builder: TrackBuilderApi): void {
   const feltMat = builder.getTrackMaterial("#880000")
@@ -64,7 +64,7 @@ export function buildCasinoHeist(builder: TrackBuilderApi): void {
       const chip = MeshBuilder.CreateCylinder("pokerChip", { diameter: chipRadius * 2, height: stackHeight }, scene)
       chip.position.copyFrom(pos)
       // Cosmetic: chip colour never reaches physics.
-      chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]!
+      chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]
       adventureTrack.push(chip)
 
       const { body } = builder.emitCollider(
@@ -125,7 +125,7 @@ export function buildCasinoHeist(builder: TrackBuilderApi): void {
 
       const marker = MeshBuilder.CreateCylinder("zeroPocket", { diameter: 2, height: 0.1 }, scene)
       if (kinematicBindings.length > 0) {
-        const platformBinding = kinematicBindings[kinematicBindings.length - 1]!
+        const platformBinding = kinematicBindings[kinematicBindings.length - 1]
         marker.parent = platformBinding.mesh
         marker.position.set(lx, 0.55, lz)
         marker.material = chipMatBlack

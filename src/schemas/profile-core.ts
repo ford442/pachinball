@@ -4,11 +4,11 @@
  * machine schema and live in IndexedDB only. `./profile.ts` builds the full
  * export schema from these entries.
  *
- * Boot-safe: only `./settings`, `./storage` and Valibot.
+ * Boot-safe: only `./record-kit`, `./settings`, `./storage` and Valibot.
  */
 
 import * as v from 'valibot'
-import { strict } from './schema-kit'
+import { strict } from './record-kit'
 import { StoredSettingsSchema } from './settings'
 import { ScoringBreakdownSchema, StoredAdventureProgressSchema, StoredCampaignSchema } from './storage'
 

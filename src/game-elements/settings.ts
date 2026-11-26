@@ -1,8 +1,7 @@
 import { GameConfig } from '../config'
 import type { AudioSourceMode } from '../audio/audio-sample-bank'
-import { pickDefined } from '../schemas/schema-kit'
+import { pickDefined } from '../schemas/record-kit'
 import { profileStore } from '../profile/profile-store'
-
 
 
 export interface GameSettings {

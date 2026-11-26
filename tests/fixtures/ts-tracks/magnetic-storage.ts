@@ -6,8 +6,8 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc } from '../track-collider-descriptors'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
 
 export function buildMagneticStorage(builder: TrackBuilderApi): void {
   const storageMat = builder.getTrackMaterial("#222222")
@@ -41,7 +41,7 @@ export function buildMagneticStorage(builder: TrackBuilderApi): void {
 
   // 3. Bad Sectors
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platterBody = adventureBodies[adventureBodies.length - 1]!
+    const platterBody = adventureBodies[adventureBodies.length - 1]
     const binding = kinematicBindings.find(b => b.body === platterBody)
 
     const positions = [

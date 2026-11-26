@@ -6,8 +6,8 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc } from '../track-collider-descriptors'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
 
 export function buildBioHazardLab(builder: TrackBuilderApi): void {
   const hazardMat = builder.getTrackMaterial("#39FF14")
@@ -41,7 +41,7 @@ export function buildBioHazardLab(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(centrifugeCenter, centrifugeRadius, centrifugeSpeed, hazardMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platformBody = adventureBodies[adventureBodies.length - 1]!
+    const platformBody = adventureBodies[adventureBodies.length - 1]
     const wallHeight = 0.5
     const wallThickness = 0.5
 

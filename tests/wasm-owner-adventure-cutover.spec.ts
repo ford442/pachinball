@@ -31,7 +31,7 @@ interface CutoverGame {
     }
   }
   levelLoader?: {
-    loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => { success: boolean }
+    loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => Promise<{ success: boolean }>
   }
   startAdventureMode: () => void
   endAdventureMode: () => void
@@ -78,7 +78,8 @@ test.describe('wasm-owner adventure cutover', () => {
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
       await wait(400)
-      g.levelLoader?.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
+      // The track's JSON chunk loads on first use: await the load, then let physics take it over.
+      await g.levelLoader?.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
       await wait(800)
 
       const ownership = g.physicsController?.getAdventureOwnership?.()
@@ -133,7 +134,7 @@ test.describe('wasm-owner adventure cutover', () => {
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
       await wait(400)
-      g.levelLoader?.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
+      await g.levelLoader?.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
       await wait(600)
       return {
         adventureActive: g.adventureMode?.isActive() ?? false,

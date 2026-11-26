@@ -6,10 +6,10 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc } from '../track-collider-descriptors'
-import { getLayoutRng } from '../../core/seeded-rng'
-import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../adventure-types'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
+import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../../../src/adventure/adventure-types'
 
 export function buildPolychromeVoid(builder: TrackBuilderApi): void {
   const whiteMat = builder.getTrackMaterial("#FFFFFF")

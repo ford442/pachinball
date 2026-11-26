@@ -6,8 +6,8 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilderApi } from '../track-builder-api'
-import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc, cylinderDesc } from '../../../src/adventure/track-collider-descriptors'
 
 export function buildNeonStronghold(builder: TrackBuilderApi): void {
   const stoneMat = builder.getTrackMaterial("#2F2F2F")
@@ -114,7 +114,7 @@ export function buildNeonStronghold(builder: TrackBuilderApi): void {
   builder.createRotatingPlatform(courtCenter, courtRadius, courtSpeed, stoneMat)
 
   if (builder.hasWorld && adventureBodies.length > 0) {
-    const platformBody = adventureBodies[adventureBodies.length - 1]!
+    const platformBody = adventureBodies[adventureBodies.length - 1]
     const turretCount = 2
     const turretDist = 6.0
 

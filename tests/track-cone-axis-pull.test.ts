@@ -25,7 +25,7 @@ import {
   type AdventureColliderDesc,
 } from '../src/adventure/track-collider-descriptors'
 import { TrackColliderEmitter } from '../src/adventure/track-collider-emitter'
-import { compileTrackDefinition, type TrackBuildApi } from '../src/adventure/track-compiler'
+import { compileTrackDefinition, type TrackBuilderApi } from '../src/adventure/track-compiler'
 import {
   validateTrackDefinition,
   type TrackDefinition,
@@ -175,7 +175,7 @@ describe('compiler → TrackBuildApi', () => {
         if (key === 'getTrackMaterial' || key === 'getThemedTrackMaterial') return () => ({})
         return record(key)
       },
-    }) as unknown as TrackBuildApi
+    }) as unknown as TrackBuilderApi
     return { api, calls }
   }
 
