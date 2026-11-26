@@ -13,14 +13,18 @@ test.describe('Basic Gameplay Physics Smoke', () => {
 
     // 1. Navigate and wait for bootstrap (WebGL2 for reliable headless physics)
     await page.goto('/?renderer=webgl2');
-    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 });
 
-    // Wait for the game object to be fully initialized before clicking
+    // Wait for the game object to be fully initialized before clicking. Boot budget, not a gameplay
+    // tolerance: on a 2-worker CI runner the wasm-owner build boots on software GL at < 1 fps and a
+    // page.evaluate can sit behind a multi-second main-thread stall (CI run 45854211966, wasm=true leg:
+    // Game init done at 6.6 s, the poll's third evaluate still outstanding at the old 15 s limit).
+    // preview-boot.spec.ts gives the same boot 60 s.
     await expect.poll(async () => {
       return page.evaluate(() => !!(window as any).game?.stateManager);
     }, {
       intervals: [200],
-      timeout: 15_000,
+      timeout: 60_000,
     }).toBe(true);
 
     // 2. Click START GAME and poll until state becomes PLAYING
