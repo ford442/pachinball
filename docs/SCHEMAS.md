@@ -87,8 +87,11 @@ their loaders. `npm run check:bundle` holds the entry inside `bundle-budget.json
 ## JSON Schema
 
 `scripts/json-schemas.ts` converts the schemas with `@valibot/to-json-schema`
-(a dev dependency only) into `public/schemas/{track,machine,rules,weekly,profile,arcade}.json`,
-as draft-07. Rewrite them after a schema change:
+(a dev dependency only) into `public/schemas/{track,machine,machine-index,rules,weekly,profile,arcade}.json`,
+as draft-07. `machine-index.json` is `MachineIndexSchema` (`src/schemas/machine.ts`):
+`public/machines/index.json`, `{ schemaVersion: 1, machines: [{ id, name, cabinet }] }`,
+unknown keys rejected, ids unique, at most `MACHINE_LIMITS.indexMax` entries.
+Rewrite them after a schema change:
 
 ```bash
 npm run schemas:json

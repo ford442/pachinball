@@ -24,12 +24,29 @@ opened from a link cannot point the page at another host.
 
 ## Booting a machine
 
-- `?machine=<id>` loads `public/machines/<id>.json` (shipped: `classic`, `neo`, `vertical`, `wide`; listed in `index.json`).
+- `?machine=<id>` loads `public/machines/<id>.json` (shipped: `classic`, `neo`, `vertical`, `wide`, `weeks-on-fire`; listed in `index.json`, which parses with `MachineIndexSchema`).
 - `?machine=<path>.json` loads a same-origin JSON file (an exported `.machine.json`).
 - `#machine=v1.<payload>` is a share link: `base64url(deflate-raw(JSON))` via the native `CompressionStream` (`src/machine/machine-share.ts`). It takes precedence over `?machine=`.
 
 `main.ts` imports the loader chunk only when the URL names a machine. A machine
 that fails to load or validate boots the vanilla table with a `bootWarn`.
+
+## Weeks on Fire (#518)
+
+`public/machines/weeks-on-fire.json` is the first machine that is data only:
+no table-specific TypeScript. It is the classic cabinet with the vanilla rules
+and seed policy, the `NEON_HELIX` track and an orange border (`#ff5a1f`).
+
+**Placeholder clips:** its `backbox` reuses the default
+`public/backbox/{attract,reach,fever}` clips (its `name` says so) until the
+real Weeks on Fire clips exist. Its own scoring, modes and wizard wait on
+machine rules beyond the v1 economy; `BUILTIN_TABLE_MAPS` has no entry for it.
+
+## Offline
+
+`workbox.globPatterns` (`vite.config.ts`) precaches `machines/**/*.json` and
+`schemas/**/*.json`, so `?machine=<id>` for a shipped machine loads offline
+after one online visit (`tests/weeks-on-fire-machine.spec.ts`, preview config).
 
 ## The weekly machine
 
@@ -43,4 +60,4 @@ reads it back.
 `npm run machine:validate` runs the weekly golden plus `tests/machine-schema.test.ts`
 (shipped machines, media on disk, every ISO week of 2027 round-tripping),
 `tests/machine-share.test.ts` (every shipped machine, and every shipped track inlined,
-≤ 8 KB as a link; crafted links rejected) and `tests/machine-loader.test.ts`.
+≤ 8 KB as a link; crafted links rejected) and `tests/machine-loader.test.ts`. `tests/machine-data-audit.test.ts` parses every shipped machine, every `src/adventure/track-data/*.json` and `index.json` (each entry resolves to a file with its `id`, `name` and `cabinet`), checks that unknown keys are rejected, and checks the share-link caps against oversized, compression-bomb and deeply nested payloads.
