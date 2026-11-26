@@ -54,8 +54,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@babylonjs/core": "^9.37.1",
-    "@babylonjs/loaders": "^9.36.0",
+    "@babylonjs/core": "^9.37.2",
+    "@babylonjs/loaders": "^9.37.2",
     "@dimforge/rapier3d-compat": "^0.15.1",
     "idb-keyval": "^6.2.2",
     "valibot": "^1.5.0"
