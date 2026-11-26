@@ -14,6 +14,8 @@
  *   node scripts/state-of-app.mjs --url http://localhost:4174/ --out /tmp/x --executable /opt/pw-browsers/chromium
  *
  * `--executable` (or $CHROMIUM_PATH) points at a Chromium when Playwright's own download is absent.
+ * `--only desktop|mobile` captures one viewport (and rewrites report.json with just that one); a host
+ * that rate-limits per client (HTTP 429) is easier on one boot at a time.
  * The renderer is whatever the browser negotiates (WebGPU, else WebGL2); `--renderer webgl2` forces one.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -21,7 +23,7 @@ import path from 'node:path'
 import { chromium, devices } from '@playwright/test'
 
 function parseArgs(argv) {
-  const opts = { url: '', out: 'state-of-app', executable: process.env.CHROMIUM_PATH || undefined, renderer: '', playMs: 5000 }
+  const opts = { url: '', out: 'state-of-app', executable: process.env.CHROMIUM_PATH || undefined, renderer: '', playMs: 5000, only: '' }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--url') opts.url = argv[++i] ?? ''
@@ -29,6 +31,7 @@ function parseArgs(argv) {
     else if (a === '--executable') opts.executable = argv[++i]
     else if (a === '--renderer') opts.renderer = argv[++i] ?? ''
     else if (a === '--play-ms') opts.playMs = Number(argv[++i])
+    else if (a === '--only') opts.only = argv[++i] ?? ''
     else throw new Error(`unknown argument ${a}`)
   }
   if (!opts.url) throw new Error('--url is required')
@@ -52,6 +55,18 @@ async function capture(browser, viewport, opts) {
     if (res.status() >= 400) result.failedRequests.push({ url: res.url(), error: `HTTP ${res.status()}` })
   })
 
+  try {
+    await bootAndPlay(page, viewport, opts, result)
+  } catch (err) {
+    // Keep what was observed up to the failure: the console of a page that never booted is the evidence.
+    result.error = err instanceof Error ? err.message : String(err)
+    await page.screenshot({ path: path.join(opts.out, `${viewport.name}-failed.png`) }).catch(() => {})
+  }
+  await context.close()
+  return result
+}
+
+async function bootAndPlay(page, viewport, opts, result) {
   const target = new URL(opts.url)
   if (opts.renderer) target.searchParams.set('renderer', opts.renderer)
   await page.goto(target.href, { waitUntil: 'load', timeout: 90_000 })
@@ -74,8 +89,6 @@ async function capture(browser, viewport, opts) {
     menuHidden: document.getElementById('menu-overlay')?.classList.contains('hidden') ?? false,
   }))
   await page.screenshot({ path: path.join(opts.out, `${viewport.name}-play.png`) })
-  await context.close()
-  return result
 }
 
 async function main() {
@@ -96,13 +109,10 @@ async function main() {
   })
   let failed = false
   try {
-    for (const viewport of VIEWPORTS) {
-      try {
-        report.viewports.push(await capture(browser, viewport, opts))
-      } catch (err) {
-        failed = true
-        report.viewports.push({ viewport: viewport.name, error: err instanceof Error ? err.message : String(err) })
-      }
+    for (const viewport of VIEWPORTS.filter((v) => !opts.only || v.name === opts.only)) {
+      const result = await capture(browser, viewport, opts)
+      if (result.error) failed = true
+      report.viewports.push(result)
     }
   } finally {
     await browser.close()
@@ -113,7 +123,7 @@ async function main() {
     const warnings = v.console?.filter((m) => m.type === 'warning' || m.type === 'warn').length ?? 0
     const errors = (v.console?.filter((m) => m.type === 'error').length ?? 0) + (v.pageErrors?.length ?? 0)
     console.log(
-      `${v.viewport}: ${v.error ? `FAILED ${v.error}` : `engine=${v.boot.engine} renderer=${v.boot.renderer} isolated=${v.boot.isolated} playing=${v.play.playing} errors=${errors} warnings=${warnings}`}`,
+      `${v.viewport}: ${v.error ? `FAILED ${v.error.split('\n')[0]}` : `engine=${v.boot.engine} renderer=${v.boot.renderer} isolated=${v.boot.isolated} playing=${v.play.playing} errors=${errors} warnings=${warnings}`}`,
     )
   }
   console.log(`wrote ${path.join(opts.out, 'report.json')}`)
