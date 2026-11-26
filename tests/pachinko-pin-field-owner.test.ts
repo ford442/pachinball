@@ -8,16 +8,12 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@babylonjs/core/Maths/math.vector', () => ({
-  Vector3: class {
-    constructor(public x = 0, public y = 0, public z = 0) {}
-  },
-}))
-vi.mock('@babylonjs/core/Meshes/abstractMesh', () => ({ AbstractMesh: class {} }))
-vi.mock('@babylonjs/core/scene', () => ({ Scene: class {} }))
-
-function meshModuleStub() {
+// All Babylon deep paths resolve to this one module in vitest.config.ts.
+// Separate path mocks race to replace the same module, losing unrelated exports.
+vi.mock('./mocks/babylon-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./mocks/babylon-core')>()
   return {
+    ...actual,
     MeshBuilder: {
       CreateCylinder: (name: string) => stubMesh(name),
       CreateSphere: (name: string) => stubMesh(name),
@@ -25,7 +21,7 @@ function meshModuleStub() {
     },
     Mesh: { MergeMeshes: (meshes: { name: string }[]) => stubMesh(`${meshes[0]!.name}_merged`) },
   }
-}
+})
 
 function stubMesh(name: string): Record<string, unknown> {
   return {
@@ -47,10 +43,6 @@ function stubMesh(name: string): Record<string, unknown> {
   }
 }
 
-// One stub for both mesh modules: vitest matches the `Meshes/mesh` mock for
-// `Meshes/meshBuilder` imports too, so each must carry both exports.
-vi.mock('@babylonjs/core/Meshes/meshBuilder', () => meshModuleStub())
-vi.mock('@babylonjs/core/Meshes/mesh', () => meshModuleStub())
 vi.mock('../src/materials', () => ({
   getMaterialLibrary: () => ({
     getEnhancedPinMaterial: () => null,
