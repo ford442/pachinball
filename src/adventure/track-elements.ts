@@ -63,7 +63,7 @@ export interface CursorMark {
 }
 
 /** Cursor state the element segments read (a subset of `TrackCursor`). */
-export interface ElementCursor {
+interface ElementCursor {
   pos: Vector3
   heading: number
   lastRampStart?: Vector3

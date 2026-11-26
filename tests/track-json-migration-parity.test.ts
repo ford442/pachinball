@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { compileTrackDefinition, type TrackBuildApi, type TrackMaterial } from '../src/adventure/track-compiler'
+import { compileTrackDefinition, type TrackBuildApi, type TrackBuilderApi, type TrackMaterial } from '../src/adventure/track-compiler'
 import { validateTrackDefinition } from '../src/schemas/track'
 import quantumGridJson from '../src/adventure/track-data/QUANTUM_GRID.json'
 import chronoCoreJson from '../src/adventure/track-data/CHRONO_CORE.json'
@@ -421,7 +421,7 @@ function runJson(raw: unknown, startPos: Vector3): Call[] {
   expect(result.ok, `definition must validate: ${JSON.stringify('errors' in result ? result.errors : [])}`).toBe(true)
   if (!result.ok) throw new Error('unreachable')
   const { api, calls } = makeRecorder(startPos)
-  compileTrackDefinition(result.definition, api)
+  compileTrackDefinition(result.definition, api as unknown as TrackBuilderApi)
   return calls
 }
 

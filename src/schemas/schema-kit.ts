@@ -18,7 +18,7 @@
 import * as v from 'valibot'
 import { isRecord } from './record-kit'
 
-export { isRecord, lenient, parseJsonWith, pickDefined, strict } from './record-kit'
+export { isRecord, parseJsonWith, strict } from './record-kit'
 
 /** One validation error: a dotted / indexed path into the value and what is wrong there. */
 export interface SchemaIssue {
