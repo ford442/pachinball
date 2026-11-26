@@ -140,17 +140,16 @@ test.describe('DisplayState transitions', () => {
 
   test('IDLE -> JACKPOT', async () => {
     await resetToIdle();
-    await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as {
-        eventBus: { emit: (event: string, payload: string) => void };
-      };
-      g.eventBus.emit('display:set', 'jackpot');
-    });
-
+    // Set and read inside ONE evaluate. A bare `display:set jackpot` has no effects jackpot sequence behind
+    // it, so the next physics tick / render frame leaves JACKPOT again (`finishJackpotIfDone`,
+    // src/game/physics/step-gameplay.ts: the state is only held while `effects.isJackpotActive`). A read in a
+    // separate evaluate races that tick and sees 'idle' (the 2026-11-19 "cause unknown" failure).
     const state = await page.evaluate(() => {
       const g = (window as unknown as Record<string, unknown>).game as {
+        eventBus: { emit: (event: string, payload: string) => void };
         display: { getDisplayState: () => string };
       };
+      g.eventBus.emit('display:set', 'jackpot');
       return g.display.getDisplayState();
     });
     expect(state).toBe('jackpot');

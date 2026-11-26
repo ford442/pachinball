@@ -401,8 +401,17 @@ test.describe('render hygiene (#443)', () => {
         (window as ProbeWindow).game!.scene.materials.filter((m) => m.isFrozen).map((m) => m.name).sort(),
       )
     const gateState = () => page.evaluate(() => (window as ProbeWindow).game!.staticSceneGate!.getStats().state)
+    // Frozen for three samples in a row, not merely frozen once: after Start / a tier change the
+    // atmosphere's fog lerp (effects-atmosphere.ts) is still converging, and the gate legitimately
+    // refreezes and thaws again while a fog channel crosses a 1e-4 quantisation step (measured at
+    // frames 55 / 60 after Start on software GL). Returning on the first 'frozen' reads the frozen
+    // set in that window and sees an empty list (the 2026-11-19 "frozen decor list empty" failure).
     const waitFrozen = async () => {
-      for (let i = 0; i < 40 && (await gateState()) !== 'frozen'; i++) await renderFrames(page, 2)
+      let stable = 0
+      for (let i = 0; i < 80 && stable < 3; i++) {
+        stable = (await gateState()) === 'frozen' ? stable + 1 : 0
+        if (stable < 3) await renderFrames(page, 2)
+      }
     }
 
     await waitFrozen()
