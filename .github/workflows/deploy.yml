@@ -6,8 +6,8 @@
 #
 # Secrets (repository → Settings → Secrets and variables → Actions):
 #   DEPLOY_TOKEN   the storage manager's deploy token (deploy.py sends it as X-Deploy-Token)
-# Optional repository variables: DEPLOY_BASE_URL (default https://storage.noahcohn.com) and
-# LIVE_URL (default https://test.1ink.us/pachinball/).
+# Optional repository variables: DEPLOY_BASE_URL (default https://storage.noahcohn.com),
+# LIVE_URL (default https://test.1ink.us/pachinball/) and VITE_ARCADE_URL.
 #
 # The release archive (dist/ + golden tapes, replayed on the copy) is uploaded as an artifact; the
 # replay verifier on the storage host installs it under $VERIFIER_BUILDS (docs/API_CONTRACT.md),
@@ -83,6 +83,7 @@ jobs:
       - name: Production build
         env:
           CI: 'true'
+          VITE_ARCADE_URL: ${{ vars.VITE_ARCADE_URL }}
         run: |
           source emsdk/emsdk_env.sh
           npm run build
@@ -104,6 +105,13 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Verify golden replays against the production WASM
+        env:
+          CI: 'true'
+        run: |
+          npm run verify:replay
+          npm run verify:replay:node
+
       # The built bundle on WebGL2 (the preview smoke set) and on WebGPU (a WebGPU boot that
       # compiles no GLSL), the same specs ci.yml blocks on.
       - name: Preview smoke (WebGL2, built bundle)
@@ -119,6 +127,15 @@ jobs:
         env:
           CI: 'true'
         run: npx playwright test --project=chromium tests/webgpu-boot.spec.ts tests/webgpu-no-glslang.spec.ts
+
+      - name: Production runtime smoke (preview bundle)
+        env:
+          CI: 'true'
+          ARCADE_SMOKE_URL: ${{ vars.VITE_ARCADE_URL }}
+          WEBGPU_CI: '1'
+        run: >
+          npx playwright test --config=playwright.production.config.ts
+          --project=chromium --project=mobile-chrome
 
       - name: Archive the release for the replay verifier (replays the goldens on the copy)
         run: npm run release:archive -- --to release-archive
@@ -156,6 +173,17 @@ jobs:
         env:
           LIVE_URL: ${{ vars.LIVE_URL }}
         run: node scripts/verify-live.mjs
+
+      - name: Production runtime smoke (live URL)
+        if: env.DRY_RUN != 'true'
+        env:
+          BASE_URL: ${{ vars.LIVE_URL || 'https://test.1ink.us/pachinball/' }}
+          ARCADE_SMOKE_URL: ${{ vars.VITE_ARCADE_URL }}
+          WEBGPU_CI: '1'
+          CI: 'true'
+        run: >
+          npx playwright test --config=playwright.production.config.ts
+          --project=chromium --project=mobile-chrome
 
       - name: Upload the release archive
         uses: actions/upload-artifact@v7

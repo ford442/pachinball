@@ -3,15 +3,15 @@
 # this workflow never uploads to the `pachinball` project and has no path to it (DEPLOY_PROJECT_NAME is
 # pinned below). See docs/STAGING.md for the server-side requirements (COOP/COEP, `.wasm` MIME).
 #
-#   pinned emsdk → npm run build → check:dist-wasm → check:bundle → check-dist-console
-#   → deploy.py (project pachinball-staging) → verify-live (STAGING_URL) → state-of-app capture
+#   pinned emsdk → npm run build → check:dist-wasm → check:bundle → replay + preview smoke
+#   → deploy.py (project pachinball-staging) → verify-live + production runtime smoke (STAGING_URL)
 #
 # Run it: Actions → "Deploy staging" → Run workflow → pick the ref.
 #
 # Configuration (repository → Settings → Environments → `staging`):
 #   secret   DEPLOY_TOKEN   the storage manager's deploy token (same service as production)
 #   variable STAGING_URL    where the host serves the project, e.g. https://test.1ink.us/pachinball-staging/
-#   (optional) variable DEPLOY_BASE_URL   default https://storage.noahcohn.com
+#   (optional) variables DEPLOY_BASE_URL (default https://storage.noahcohn.com), VITE_ARCADE_URL
 
 name: Deploy staging
 
@@ -58,6 +58,7 @@ jobs:
       - name: Production build
         env:
           CI: 'true'
+          VITE_ARCADE_URL: ${{ vars.VITE_ARCADE_URL }}
         run: |
           source emsdk/emsdk_env.sh
           npm run build
@@ -71,6 +72,33 @@ jobs:
 
       - name: Production bundle keeps boot-error reporting
         run: node scripts/check-dist-console.mjs
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify golden replays against the production WASM
+        env:
+          CI: 'true'
+        run: |
+          npm run verify:replay
+          npm run verify:replay:node
+
+      - name: Built-bundle production smoke
+        env:
+          CI: 'true'
+          PREVIEW_EXPECT_ENGINE: wasm-owner
+        run: >
+          npx playwright test --config=playwright.preview.config.ts
+          tests/preview-boot.spec.ts tests/preview-sw.spec.ts tests/offline-boot.spec.ts
+
+      - name: Production runtime smoke (preview bundle)
+        env:
+          CI: 'true'
+          ARCADE_SMOKE_URL: ${{ vars.VITE_ARCADE_URL }}
+          WEBGPU_CI: '1'
+        run: >
+          npx playwright test --config=playwright.production.config.ts
+          --project=chromium --project=mobile-chrome
 
       - uses: actions/setup-python@v7
         with:
@@ -124,9 +152,16 @@ jobs:
           LIVE_URL: ${{ vars.STAGING_URL }}
         run: node scripts/verify-live.mjs
 
-      - name: Install Playwright Chromium
+      - name: Production runtime smoke (staging URL)
         if: env.DRY_RUN != 'true'
-        run: npx playwright install --with-deps chromium
+        env:
+          BASE_URL: ${{ vars.STAGING_URL }}
+          ARCADE_SMOKE_URL: ${{ vars.VITE_ARCADE_URL }}
+          WEBGPU_CI: '1'
+          CI: 'true'
+        run: >
+          npx playwright test --config=playwright.production.config.ts
+          --project=chromium --project=mobile-chrome
 
       - name: State of the App capture (console, menu + in-play screenshots, desktop and mobile)
         if: env.DRY_RUN != 'true'
@@ -138,5 +173,14 @@ jobs:
         with:
           name: state-of-app-${{ github.sha }}
           path: state-of-app/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Playwright results
+        if: always() && env.DRY_RUN != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-playwright-${{ github.sha }}
+          path: test-results/
           retention-days: 30
           if-no-files-found: ignore

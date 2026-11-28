@@ -21,6 +21,7 @@ async function bootAndCollect(page: Page, url: string): Promise<{
   degradeLogs: string[]
   engine: string | null
   degradeReason: string | null
+  renderer: string | null
 }> {
   const degradeLogs: string[] = []
   page.on('console', (msg) => {
@@ -38,6 +39,7 @@ async function bootAndCollect(page: Page, url: string): Promise<{
   const boot = await page.evaluate(() => ({
     engine: (window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? null,
     degradeReason: (window as unknown as { physicsDegradeReason?: string }).physicsDegradeReason ?? null,
+    renderer: document.getElementById('pachinball-canvas')?.dataset.renderer ?? null,
   }))
   return { degradeLogs, ...boot }
 }
@@ -67,6 +69,7 @@ test('missing WASM bundle: default wasm-owner degrades to Rapier with marker', a
   const boot = await bootAndCollect(page, '/?renderer=webgl2')
 
   expect(boot.engine).toBe('rapier')
+  expect(boot.renderer).toBe('webgl2')
   expectMarker(boot)
   // One rung: the default never starts a worker, so the owner gives way to Rapier.
   const workerRung = boot.degradeLogs.findIndex((line) => /worker failed/i.test(line))
@@ -82,6 +85,7 @@ test('missing WASM bundle: ?physics=wasm-worker degrades worker → owner → Ra
   const boot = await bootAndCollect(page, '/?renderer=webgl2&physics=wasm-worker')
 
   expect(boot.engine).toBe('rapier')
+  expect(boot.renderer).toBe('webgl2')
   expectMarker(boot)
   // Both rungs, in order: the worker gives way to the owner, then the owner to Rapier.
   const workerRung = boot.degradeLogs.findIndex((line) => /worker failed/i.test(line))
