@@ -101,7 +101,7 @@ test.describe('WebGPU boot fetches no GLSL translator (#488)', () => {
         if (SHADER_ERROR.test(err.message)) shaderErrors.push(`pageerror: ${err.message}`)
       })
 
-      await page.goto('/?renderer=webgpu&noopt=1')
+      await page.goto(new URL('?renderer=webgpu&noopt=1', origin).href)
       await page.waitForFunction(() => !!(window as ProbeWindow).game?.ready, undefined, { timeout: 120_000 })
       await page.waitForFunction(
         () => {

@@ -38,7 +38,7 @@ test.describe('WebGPU boot (opt-in)', () => {
       page.on('console', (m) => {
         if (m.type() === 'error') errors.push(m.text())
       })
-      await page.goto('/?renderer=webgpu&debug=1&noopt=1')
+      await page.goto(new URL('?renderer=webgpu&debug=1&noopt=1', origin).href)
       await page.waitForFunction(
         () => window.game?.ready === true,
         undefined,

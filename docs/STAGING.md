@@ -28,14 +28,16 @@ unset or points at the production project; `verify-live.mjs` would otherwise fal
    - `sw.js` as JavaScript, served from the project root (the service worker scope is its folder).
    The build uses `base: './'`, so it works from any sub-path.
 3. **GitHub**: Settings → Environments → `staging`: secret `DEPLOY_TOKEN`, variable `STAGING_URL`
-   (with a trailing slash), optionally `DEPLOY_BASE_URL`.
+   (with a trailing slash), optionally `DEPLOY_BASE_URL` and `VITE_ARCADE_URL`. The latter is embedded in
+   the production build and enables the smoke test's read-only leaderboard fetch.
 
 ## Deploy
 
 Actions → **Deploy staging** → Run workflow → choose the branch/tag. `dry_run` builds, gates and prints the
 transfer plan without uploading. The job runs the same gates as production
-(`build` with the pinned emsdk, `check:dist-wasm`, `check:bundle`, `check-dist-console`), uploads, runs
-`scripts/verify-live.mjs` against `STAGING_URL` and uploads a `state-of-app-<sha>` artifact (see below).
+(`build` with the pinned emsdk, `check:dist-wasm`, `check:bundle`, `check-dist-console`, golden replay
+verification and preview runtime smoke), uploads, runs `scripts/verify-live.mjs` and the Chromium +
+mobile production smoke against `STAGING_URL`, then uploads the captures.
 
 By hand, from a machine that has the token:
 
@@ -60,4 +62,7 @@ node scripts/state-of-app.mjs --url https://<host>/pachinball-staging/ --out sta
 Boots the URL on a desktop and a Pixel 7 viewport and writes `report.json` (every console message, page
 errors, failed requests, `crossOriginIsolated`, the engine and renderer that booted, `build-info.json`, the
 state reached after START) plus `desktop-menu.png`, `desktop-play.png`, `mobile-menu.png`, `mobile-play.png`.
-It only reads the site. Use `--executable` / `$CHROMIUM_PATH` when Playwright's own Chromium is not installed.
+The `staging-playwright-<sha>` artifact also contains the production smoke's menu, playing and game-over
+screenshots and Playwright diagnostics. The smoke checks offline service-worker boot, runtime errors and
+HTTP failures, and—when `VITE_ARCADE_URL` is configured—a leaderboard read. Use `--executable` /
+`$CHROMIUM_PATH` when Playwright's own Chromium is not installed.
